@@ -699,7 +699,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const c = card(state, ev.payload.iid);
       if (!c.attachedTo) fail("that card is not attached");
       c.effect = ev.payload.effect ? cleanEffect(ev.payload.effect) : null;
-      log(state, ev, `${actorName} sets ${describe(c, false)} to grant ${c.effect ? effectText(c.effect) : "nothing"}`);
+      log(state, ev, `${actorName} set ${describe(c, false)} to grant ${c.effect ? effectText(c.effect) : "nothing"}`);
       break;
     }
     case "CardModifierSet": {
@@ -708,14 +708,14 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (c.zone.kind !== "battlefield") fail("only permanents take modifiers");
       const m = ev.payload.modifier;
       c.modifier = m ? { power: Math.trunc(m.power) || 0, toughness: Math.trunc(m.toughness) || 0, keywords: cleanKeywords(m.keywords), removedKeywords: cleanKeywords(m.removedKeywords) } : null;
-      log(state, ev, `${actorName} adjusts ${describe(c, false)}: ${c.modifier ? effectText(c.modifier, c.modifier.removedKeywords) : "cleared"}`);
+      log(state, ev, `${actorName} adjusted ${describe(c, false)}: ${c.modifier ? effectText(c.modifier, c.modifier.removedKeywords) : "cleared"}`);
       break;
     }
     case "AnthemDismissed": {
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
       c.anthemDismissed = Boolean(ev.payload.dismissed);
-      log(state, ev, `${actorName} ${c.anthemDismissed ? "hides" : "restores"} the anthem from ${describe(c, false)}`);
+      log(state, ev, `${actorName} ${c.anthemDismissed ? "hid" : "restored"} the anthem from ${describe(c, false)}`);
       break;
     }
     case "ManualAnthemAdded": {
@@ -724,7 +724,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const id = uniqueId(state, "a");
       const anthem = { id, power: Math.trunc(ev.payload.power) || 0, toughness: Math.trunc(ev.payload.toughness) || 0, keywords: cleanKeywords(ev.payload.keywords), note: String(ev.payload.note ?? "").slice(0, 60) };
       p.manualAnthems.push(anthem);
-      log(state, ev, `${actorName} adds an anthem for ${p.id === ev.actor ? "their" : `${p.name}'s`} creatures: ${effectText(anthem)}${anthem.note ? ` (${anthem.note})` : ""}`);
+      log(state, ev, `${actorName} added an anthem for ${p.id === ev.actor ? "their" : `${p.name}'s`} creatures: ${effectText(anthem)}${anthem.note ? ` (${anthem.note})` : ""}`);
       break;
     }
     case "ManualAnthemRemoved": {
@@ -733,7 +733,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const i = p.manualAnthems.findIndex((a) => a.id === ev.payload.id);
       if (i < 0) fail("no such anthem");
       const [gone] = p.manualAnthems.splice(i, 1);
-      log(state, ev, `${actorName} removes the anthem ${gone?.note || effectText(gone!)}`);
+      log(state, ev, `${actorName} removed the anthem ${gone?.note || effectText(gone!)}`);
       break;
     }
     case "TriggerResolved": {
@@ -747,7 +747,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const p = player(state, ev.payload.player);
       const before = state.pendingTriggers.length;
       state.pendingTriggers = state.pendingTriggers.filter((t) => t.controller !== p.id);
-      if (before !== state.pendingTriggers.length) log(state, ev, `${p.name} dismisses ${before - state.pendingTriggers.length} trigger${before - state.pendingTriggers.length === 1 ? "" : "s"}`);
+      if (before !== state.pendingTriggers.length) log(state, ev, `${p.name} dismissed ${before - state.pendingTriggers.length} trigger${before - state.pendingTriggers.length === 1 ? "" : "s"}`);
       break;
     }
     case "ManaChanged": {
@@ -769,7 +769,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (!MANA_COLORS.includes(to)) fail("bad mana colour");
       const total = MANA_COLORS.reduce((n, c) => n + p.mana[c], 0);
       p.mana = { ...EMPTY_MANA, [to]: total };
-      log(state, ev, `${p.name} converts their mana to ${manaString(to, total)}`);
+      log(state, ev, `${p.name} converted their mana to ${manaString(to, total)}`);
       break;
     }
     case "ManaEmptied": {
@@ -783,7 +783,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requirePlaying(state);
       const p = player(state, ev.payload.player);
       p.keepMana = Boolean(ev.payload.keep);
-      log(state, ev, `${p.name} ${p.keepMana ? "keeps" : "no longer keeps"} mana between steps`);
+      log(state, ev, `${p.name} ${p.keepMana ? "now keeps" : "no longer keeps"} mana between steps`);
       break;
     }
     case "TurnAdvanced": {
