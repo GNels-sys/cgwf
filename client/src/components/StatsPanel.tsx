@@ -8,6 +8,7 @@ import {
   parseManaSymbol,
   type DeckStats,
   type DeckStatsResponse,
+  type FunctionalKey,
   type PipColor,
 } from "@cgwf/shared";
 import { ManaDotView } from "./ManaCost";
@@ -304,6 +305,10 @@ function Functional({ s }: { s: DeckStats }) {
   );
 }
 
+function count(s: DeckStats, key: FunctionalKey): number {
+  return s.functional.find((f) => f.key === key)?.count ?? 0;
+}
+
 export function StatsBody({ s }: { s: DeckStats }) {
   const total = s.manaValue;
   return (
@@ -320,7 +325,7 @@ export function StatsBody({ s }: { s: DeckStats }) {
       <Section title="Breakdowns" aside={`${total.landCount} lands · ${s.breakdowns.creatures.count} creatures`}>
         <BreakdownsView s={s} />
       </Section>
-      <Section title="What the deck does" aside={s.functional.map((f) => `${f.count}`).join(" · ")}>
+      <Section title="What the deck does" aside={`${count(s, "ramp")} ramp · ${count(s, "draw")} draw · ${count(s, "removal")} removal`}>
         <Functional s={s} />
       </Section>
     </>

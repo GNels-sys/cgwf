@@ -201,7 +201,9 @@ function rawText(card: AnalysisCard): string {
  */
 export function manaSource(card: AnalysisCard): ManaSourceCard | null {
   if (isInstantOrSorcery(card) && !isLand(card)) return null;
-  const t = rawText(card);
+  // Lands keep their reminder text (a basic's only text is "({T}: Add {G}.)"); other cards drop it so
+  // Treasure reminders ("Sacrifice this artifact: Add one mana of any color") do not count.
+  const t = isLand(card) ? rawText(card) : text(card);
   const tl = card.typeLine.toLowerCase().split(" // ")[0] ?? "";
   const produces = new Set<PipColor | "any">();
 
@@ -344,7 +346,7 @@ const TYPE_RES: Record<CardTypeKey, RegExp> = {
   land: /\bland\b/,
 };
 
-const TOKEN_MAKER = /\bcreates? (?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|x|that many|twice that many|\d+|a number of|one or more) (?:[^.]*?\b)?tokens?\b/;
+const TOKEN_MAKER = /(?<!would )\bcreates? (?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|x|that many|\d+|a number of|one or more) (?:[^.]*?\b)?tokens?\b/; // "would create" / "creates twice that many" (doublers) are excluded
 
 function numeric(v: string | null): number | null {
   if (v === null) return null;

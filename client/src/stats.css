@@ -89,7 +89,7 @@
 }
 .stat-bar-row {
   display: grid;
-  grid-template-columns: minmax(44px, auto) 1fr auto;
+  grid-template-columns: minmax(28px, max-content) 1fr auto;
   align-items: center;
   column-gap: 10px;
 }

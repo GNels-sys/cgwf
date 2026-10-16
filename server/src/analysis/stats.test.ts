@@ -117,7 +117,7 @@ describe("mana production (heuristic)", () => {
     expect(manaSource(card("Talisman of Dominance", "Artifact", "{T}: Add {C}.\n{T}: Add {U} or {B}. Talisman of Dominance deals 1 damage to you.", { manaCost: "{2}", cmc: 2 }))).toMatchObject({ kind: "rock", produces: ["U", "B", "C"] });
     expect(manaSource(card("Dark Ritual", "Instant", "Add {B}{B}{B}.", { manaCost: "{B}", cmc: 1 }))).toBeNull();
     expect(manaSource(card("Lightning Bolt", "Instant", "Lightning Bolt deals 3 damage to any target.", { manaCost: "{R}", cmc: 1 }))).toBeNull();
-    expect(manaSource(card("Smothering Tithe", "Enchantment", "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token.", { manaCost: "{3}{W}", cmc: 4 }))).toBeNull();
+    expect(manaSource(card("Smothering Tithe", "Enchantment", "Whenever an opponent draws a card, that player may pay {2}. If the player doesn't, you create a Treasure token. (It's an artifact with \"{T}, Sacrifice this artifact: Add one mana of any color.\")", { manaCost: "{3}{W}", cmc: 4 }))).toBeNull();
   });
   it("uses the commander's colour identity for any-colour sources", () => {
     expect(deckIdentity(DECK)).toEqual(["W", "U", "G"]);
@@ -229,6 +229,8 @@ describe("functional counts (heuristic, names listed)", () => {
     expect(n("ramp")).toEqual(["Thought Vessel"]);
     expect(n("draw")).toEqual(["Phyrexian Arena"]); // Howling Mine draws for everyone -> not counted
     expect(s.breakdowns.tokenMakers.names).toEqual(["Beast Within"]);
+    const doubler = computeStats([card("Doubling Season", "Enchantment", "If an effect would create one or more tokens under your control, it creates twice that many of those tokens instead.\nIf an effect would put one or more counters on a permanent you control, it puts twice that many of those counters on that permanent instead.", { manaCost: "{4}{G}", cmc: 5 })]);
+    expect(doubler.breakdowns.tokenMakers.count).toBe(0); // doublers are not makers
   });
 });
 
