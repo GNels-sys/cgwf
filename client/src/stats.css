@@ -231,3 +231,8 @@
     transition: width 220ms ease-out;
   }
 }
+
+/* Quiet surfaces keep the numbers prominent. */
+.stat-facts { padding: 12px; background: var(--bg-elev-2); border-radius: 8px; }
+.stat-facts dd, .stat-bar-value { font-variant-numeric: tabular-nums; }
+.stat-section > summary { padding-block: 6px; }

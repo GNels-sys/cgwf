@@ -9,7 +9,7 @@ export function Header() {
   return (
     <header className="top-nav">
       <NavLink to="/" className="brand">
-        CGwF
+        <span className="brand-mark" aria-hidden="true">◇</span> CGwF
       </NavLink>
       <nav>
         <NavLink to="/" end>

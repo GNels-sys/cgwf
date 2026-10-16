@@ -57,10 +57,12 @@ function DeckList() {
 export function DecksPage() {
   const { user } = useUser();
   return (
-    <main className="page">
-      <header className="page-header">
-        <h1>CGwF</h1>
-        <p className="tagline">{user ? `Hi ${user.displayName}` : "Card Games with Friends"}</p>
+    <main className="page collection-page">
+      <header className="collection-hero">
+        <p className="eyebrow">Your collection · Your possibilities</p>
+        <h1>{user ? `Welcome back, ${user.displayName}.` : "Card Games with Friends"}</h1>
+        <p className="tagline">Choose your deck. Gather your friends. Make a little history.</p>
+        <Link to="/play" className="btn btn-primary">Find your table <span aria-hidden="true">↗</span></Link>
       </header>
       <RequireUser>
         <Tour />

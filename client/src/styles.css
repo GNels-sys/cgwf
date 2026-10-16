@@ -1,14 +1,14 @@
 :root {
-  --bg: #121a16;
-  --bg-elev: #1b2620;
-  --bg-elev-2: #243129;
-  --fg: #ecefe9;
-  --fg-muted: #9faea4;
-  --accent: #d9a441;
+  --bg: #101918;
+  --bg-elev: #192523;
+  --bg-elev-2: #253532;
+  --fg: #f3eee2;
+  --fg-muted: #b4c0b7;
+  --accent: #dfb76d;
   --accent-ink: #1a1408;
   --danger: #e06c5b;
-  --border: #31413a;
-  --radius: 10px;
+  --border: #40514a;
+  --radius: 12px;
   --card-ratio: 63 / 88;
   /* Mana colours for charts: the same hues as the mana dots (ManaCost.tsx). White and black are
      nudged per theme so a bar stays visible on the panel surface; the dots themselves are unchanged. */
@@ -27,7 +27,7 @@
   --bg-elev: #ffffff;
   --bg-elev-2: #e9e3d3;
   --fg: #1e2420;
-  --fg-muted: #5f6a63;
+  --fg-muted: #526057;
   --danger: #b8392a;
   --border: #d4ccb8;
   --mana-W: #d9c98a;
@@ -406,3 +406,26 @@ a {
     transition: none !important;
   }
 }
+
+/* Game-night foundations. Headings use an installed literary serif; no font request. */
+:root { --font-display: Georgia, "Times New Roman", serif; --brass: #dfb76d; --shadow: 0 14px 36px #0003; --space: 8px; }
+body { background-image: radial-gradient(ellipse at 15% 0%, #9d783014, transparent 55%); line-height: 1.5; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
+button, input, select, textarea { touch-action: manipulation; }
+:where(button, a, input, textarea, select, summary):focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.btn { box-shadow: inset 0 1px 0 #ffffff0c; font-weight: 600; transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease; }
+.btn:hover:not(:disabled) { border-color: var(--accent); box-shadow: 0 3px 14px #0002; }
+.btn:disabled { cursor: default; }
+.card-image { box-shadow: 0 3px 8px #0005; }
+.modal { box-shadow: var(--shadow); }
+.site-footer { background: var(--bg-elev); margin-top: 24px; }
+.eyebrow { font: 600 .7rem/1.5 system-ui, sans-serif; text-transform: uppercase; letter-spacing: .19em; color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+/* Accents on pale surfaces need darker text; filled actions retain the saved accent. */
+:root[data-ui="light"] a:not(.btn):not(.deck-tile):not(.room-row):not(.library-row):not(.nav-user),
+:root[data-ui="light"] .eyebrow,
+:root[data-ui="light"] .warn { color: #805b21; }
+:root[data-ui="light"] .page-header h1 { color: #805b21; }
