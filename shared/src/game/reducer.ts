@@ -1,14 +1,21 @@
 import type { CardPrinting } from "../cards.js";
 import { nextId, nextInt, seedFromString, shuffle, type RngState } from "./rng.js";
+import { defaultSection } from "./sections.js";
+import { detectTriggers } from "./triggers.js";
 import {
+  EMPTY_MANA,
   HAND_SIZE,
+  MANA_COLORS,
+  SECTIONS,
   STEPS,
   STEP_LABELS,
   SYSTEM_ACTOR,
+  type Battlefield,
   type CardInstance,
   type CustomToken,
   type GameEvent,
   type GameState,
+  type ManaColor,
   type MoveTarget,
   type PlayerId,
   type PlayerState,
@@ -48,6 +55,8 @@ function clone(s: GameState): GameState {
       zone: { ...c.zone },
       counters: { ...c.counters },
       revealedTo: Array.isArray(c.revealedTo) ? c.revealedTo.slice() : c.revealedTo,
+      effect: c.effect ? { ...c.effect, keywords: c.effect.keywords.slice() } : null,
+      modifier: c.modifier ? { ...c.modifier, keywords: c.modifier.keywords.slice(), removedKeywords: c.modifier.removedKeywords.slice() } : null,
     };
   }
   const players: Record<string, PlayerState> = {};
@@ -57,21 +66,25 @@ function clone(s: GameState): GameState {
       counters: { ...p.counters },
       commanderDamage: { ...p.commanderDamage },
       commanderTax: { ...p.commanderTax },
+      mana: { ...p.mana },
+      manualAnthems: p.manualAnthems.map((a) => ({ ...a, keywords: a.keywords.slice() })),
       zones: {
         library: p.zones.library.slice(),
         hand: p.zones.hand.slice(),
         graveyard: p.zones.graveyard.slice(),
         exile: p.zones.exile.slice(),
         command: p.zones.command.slice(),
-        battlefield: {
-          lands: p.zones.battlefield.lands.slice(),
-          creatures: p.zones.battlefield.creatures.slice(),
-          other: p.zones.battlefield.other.slice(),
-        },
+        battlefield: emptyBattlefield(p.zones.battlefield),
       },
     };
   }
-  return { ...s, cards, players, turnOrder: s.turnOrder.slice(), stack: s.stack.slice(), log: s.log.slice() };
+  return { ...s, cards, players, turnOrder: s.turnOrder.slice(), stack: s.stack.slice(), log: s.log.slice(), pendingTriggers: s.pendingTriggers.slice() };
+}
+
+function emptyBattlefield(from?: Battlefield): Battlefield {
+  const out = {} as Battlefield;
+  for (const sec of SECTIONS) out[sec] = from ? from[sec].slice() : [];
+  return out;
 }
 
 function fail(msg: string): never {
@@ -140,11 +153,32 @@ function zoneLabel(kind: ZoneKind, owner: PlayerState, actorIsOwner: boolean, ro
   }
 }
 
-function defaultRow(printing: CardPrinting | null, custom: CustomToken | null): Row {
-  const type = (custom?.typeLine ?? printing?.typeLine ?? "").split(" // ")[0] ?? "";
-  if (/\bCreature\b/.test(type)) return "creatures";
-  if (/\bLand\b/.test(type)) return "lands";
-  return "other";
+function defaultRow(printing: CardPrinting | null, custom: CustomToken | null, face: 0 | 1 = 0): Row {
+  const f = printing ? (printing.faces[face] ?? printing.faces[0]) : undefined;
+  return defaultSection(custom?.typeLine ?? f?.typeLine ?? printing?.typeLine ?? "");
+}
+
+/** Put an unattached card back in its default section (equipment -> artifacts, auras -> enchantments). */
+function reSection(state: GameState, c: CardInstance): void {
+  if (c.zone.kind !== "battlefield") return;
+  const row = defaultRow(c.printing, c.custom, c.face);
+  if (c.zone.row === row) return;
+  removeFromZone(state, c);
+  c.zone = { kind: "battlefield", owner: c.zone.owner, row };
+  zoneList(player(state, c.zone.owner), "battlefield", row).push(c.iid);
+}
+
+function manaString(color: ManaColor, n: number): string {
+  return color.repeat(Math.max(1, n));
+}
+
+function emptyMana(state: GameState, ev: GameEvent, reason: string): void {
+  for (const p of Object.values(state.players)) {
+    const total = MANA_COLORS.reduce((n, c) => n + p.mana[c], 0);
+    if (!total || p.keepMana) continue;
+    p.mana = { ...EMPTY_MANA };
+    log(state, ev, `${p.name}'s mana emptied (${reason})`);
+  }
 }
 
 function log(state: GameState, ev: GameEvent, text: string): void {
@@ -175,6 +209,9 @@ function newInstance(state: GameState, owner: PlayerId, printing: CardPrinting |
     revealedTo: null,
     isToken: false,
     isCommander: false,
+    effect: null,
+    modifier: null,
+    anthemDismissed: false,
   };
   state.cards[c.iid] = c;
   return c;
@@ -185,7 +222,7 @@ function moveCard(state: GameState, c: CardInstance, to: MoveTarget): void {
   const dest = player(state, to.owner);
   removeFromZone(state, c);
 
-  const row: Row | undefined = to.kind === "battlefield" ? (to.row ?? defaultRow(c.printing, c.custom)) : undefined;
+  const row: Row | undefined = to.kind === "battlefield" ? (to.row ?? defaultRow(c.printing, c.custom, c.face)) : undefined;
   c.zone = row ? { kind: to.kind, owner: to.owner, row } : { kind: to.kind, owner: to.owner };
 
   const list = zoneList(dest, to.kind, row);
@@ -206,6 +243,9 @@ function moveCard(state: GameState, c: CardInstance, to: MoveTarget): void {
     c.face = 0;
     c.counters = {};
     c.attachedTo = null;
+    c.effect = null;
+    c.modifier = null;
+    c.anthemDismissed = false;
   }
 
   // Attachments: follow the host around the battlefield; drop off when it leaves.
@@ -219,6 +259,8 @@ function moveCard(state: GameState, c: CardInstance, to: MoveTarget): void {
       }
     } else {
       other.attachedTo = null;
+      other.effect = null;
+      reSection(state, other);
     }
   }
 
@@ -319,6 +361,7 @@ function start(ev: Extract<GameEvent, { type: "GameStarted" }>, seed: string): G
     log: [],
     seq: 0,
     winner: null,
+    pendingTriggers: [],
   };
 
   for (const p of sorted) {
@@ -334,7 +377,10 @@ function start(ev: Extract<GameEvent, { type: "GameStarted" }>, seed: string): G
       kept: false,
       toBottom: 0,
       conceded: false,
-      zones: { library: [], hand: [], graveyard: [], exile: [], command: [], battlefield: { lands: [], creatures: [], other: [] } },
+      zones: { library: [], hand: [], graveyard: [], exile: [], command: [], battlefield: emptyBattlefield() },
+      mana: { ...EMPTY_MANA },
+      keepMana: false,
+      manualAnthems: [],
     };
   }
 
@@ -627,17 +673,112 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
         if (host.zone.kind !== "battlefield") fail("the host must be on the battlefield");
         if (host.iid === c.iid || host.attachedTo === c.iid) fail("cannot attach a card to itself");
         c.attachedTo = host.iid;
+        if (ev.payload.effect !== undefined) c.effect = ev.payload.effect ? cleanEffect(ev.payload.effect) : null;
         // Sit next to the host so the client can draw it underneath.
         if (host.zone.owner !== c.zone.owner || host.zone.row !== c.zone.row) {
           removeFromZone(state, c);
           c.zone = { kind: "battlefield", owner: host.zone.owner, row: host.zone.row ?? "other" };
           zoneList(player(state, host.zone.owner), "battlefield", host.zone.row).push(c.iid);
         }
-        log(state, ev, `${actorName} attaches ${describe(c, false)} to ${describe(host, false)}`);
+        log(state, ev, `${actorName} attaches ${describe(c, false)} to ${describe(host, false)}${c.effect ? ` (${effectText(c.effect)})` : ""}`);
       } else {
         c.attachedTo = null;
+        c.effect = null;
+        reSection(state, c);
         log(state, ev, `${actorName} unattaches ${describe(c, false)}`);
       }
+      break;
+    }
+    case "AttachmentEffectSet": {
+      requirePlaying(state);
+      const c = card(state, ev.payload.iid);
+      if (!c.attachedTo) fail("that card is not attached");
+      c.effect = ev.payload.effect ? cleanEffect(ev.payload.effect) : null;
+      log(state, ev, `${actorName} sets ${describe(c, false)} to grant ${c.effect ? effectText(c.effect) : "nothing"}`);
+      break;
+    }
+    case "CardModifierSet": {
+      requirePlaying(state);
+      const c = card(state, ev.payload.iid);
+      if (c.zone.kind !== "battlefield") fail("only permanents take modifiers");
+      const m = ev.payload.modifier;
+      c.modifier = m ? { power: Math.trunc(m.power) || 0, toughness: Math.trunc(m.toughness) || 0, keywords: cleanKeywords(m.keywords), removedKeywords: cleanKeywords(m.removedKeywords) } : null;
+      log(state, ev, `${actorName} adjusts ${describe(c, false)}: ${c.modifier ? effectText(c.modifier, c.modifier.removedKeywords) : "cleared"}`);
+      break;
+    }
+    case "AnthemDismissed": {
+      requirePlaying(state);
+      const c = card(state, ev.payload.iid);
+      c.anthemDismissed = Boolean(ev.payload.dismissed);
+      log(state, ev, `${actorName} ${c.anthemDismissed ? "hides" : "restores"} the anthem from ${describe(c, false)}`);
+      break;
+    }
+    case "ManualAnthemAdded": {
+      requirePlaying(state);
+      const p = player(state, ev.payload.player);
+      const id = uniqueId(state, "a");
+      const anthem = { id, power: Math.trunc(ev.payload.power) || 0, toughness: Math.trunc(ev.payload.toughness) || 0, keywords: cleanKeywords(ev.payload.keywords), note: String(ev.payload.note ?? "").slice(0, 60) };
+      p.manualAnthems.push(anthem);
+      log(state, ev, `${actorName} adds an anthem for ${p.id === ev.actor ? "their" : `${p.name}'s`} creatures: ${effectText(anthem)}${anthem.note ? ` (${anthem.note})` : ""}`);
+      break;
+    }
+    case "ManualAnthemRemoved": {
+      requirePlaying(state);
+      const p = player(state, ev.payload.player);
+      const i = p.manualAnthems.findIndex((a) => a.id === ev.payload.id);
+      if (i < 0) fail("no such anthem");
+      const [gone] = p.manualAnthems.splice(i, 1);
+      log(state, ev, `${actorName} removes the anthem ${gone?.note || effectText(gone!)}`);
+      break;
+    }
+    case "TriggerResolved": {
+      const i = state.pendingTriggers.findIndex((t) => t.id === ev.payload.id);
+      if (i < 0) fail("that trigger is gone");
+      const [t] = state.pendingTriggers.splice(i, 1);
+      log(state, ev, `${actorName} resolved ${t!.name}'s ${t!.kind.toLowerCase()} trigger`);
+      break;
+    }
+    case "TriggersDismissed": {
+      const p = player(state, ev.payload.player);
+      const before = state.pendingTriggers.length;
+      state.pendingTriggers = state.pendingTriggers.filter((t) => t.controller !== p.id);
+      if (before !== state.pendingTriggers.length) log(state, ev, `${p.name} dismisses ${before - state.pendingTriggers.length} trigger${before - state.pendingTriggers.length === 1 ? "" : "s"}`);
+      break;
+    }
+    case "ManaChanged": {
+      requirePlaying(state);
+      const p = player(state, ev.payload.player);
+      const color = ev.payload.color;
+      if (!MANA_COLORS.includes(color)) fail("bad mana colour");
+      const delta = Math.trunc(ev.payload.delta);
+      const next = Math.max(0, Math.min(99, p.mana[color] + delta));
+      const applied = next - p.mana[color];
+      p.mana[color] = next;
+      if (applied !== 0) log(state, ev, `${p.name} ${applied > 0 ? "added" : "spent"} ${manaString(color, Math.abs(applied))}`);
+      break;
+    }
+    case "ManaConverted": {
+      requirePlaying(state);
+      const p = player(state, ev.payload.player);
+      const to = ev.payload.to;
+      if (!MANA_COLORS.includes(to)) fail("bad mana colour");
+      const total = MANA_COLORS.reduce((n, c) => n + p.mana[c], 0);
+      p.mana = { ...EMPTY_MANA, [to]: total };
+      log(state, ev, `${p.name} converts their mana to ${manaString(to, total)}`);
+      break;
+    }
+    case "ManaEmptied": {
+      requirePlaying(state);
+      const p = player(state, ev.payload.player);
+      p.mana = { ...EMPTY_MANA };
+      log(state, ev, `${p.name}'s mana emptied`);
+      break;
+    }
+    case "KeepManaToggled": {
+      requirePlaying(state);
+      const p = player(state, ev.payload.player);
+      p.keepMana = Boolean(ev.payload.keep);
+      log(state, ev, `${p.name} ${p.keepMana ? "keeps" : "no longer keeps"} mana between steps`);
       break;
     }
     case "TurnAdvanced": {
@@ -646,9 +787,11 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       state.activePlayer = nextActivePlayer(state);
       state.turn++;
       state.step = "untap";
+      state.pendingTriggers = [];
       const p = player(state, state.activePlayer);
       const n = untapAll(state, p);
       log(state, ev, `Turn ${state.turn}: ${p.name}${n ? ` (untapped ${n})` : ""}`);
+      emptyMana(state, ev, "new turn");
       break;
     }
     case "StepAdvanced": {
@@ -666,12 +809,14 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
         state.step = STEPS[i + 1] as Step;
         log(state, ev, `${STEP_LABELS[state.step]}`);
       }
+      emptyMana(state, ev, "step change");
       break;
     }
     case "StepSet": {
       requirePlaying(state);
       state.step = ev.payload.step;
       log(state, ev, `${actorName} moves to ${STEP_LABELS[state.step]}`);
+      emptyMana(state, ev, "step change");
       break;
     }
     case "DiceRolled": {
@@ -720,7 +865,30 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       fail(`unknown event ${(never as { type: string }).type}`);
     }
   }
+  // Advisory triggers for whatever just happened (deterministic, so every replay agrees).
+  const found = detectTriggers(state, ev);
+  if (found.length) {
+    state.pendingTriggers.push(...found);
+    if (state.pendingTriggers.length > 30) state.pendingTriggers.splice(0, state.pendingTriggers.length - 30);
+  }
   return state;
+}
+
+function cleanKeywords(list: unknown): string[] {
+  if (!Array.isArray(list)) return [];
+  return [...new Set(list.filter((k): k is string => typeof k === "string").map((k) => k.trim().toLowerCase().slice(0, 40)).filter(Boolean))].slice(0, 12);
+}
+
+function cleanEffect(e: { power: number; toughness: number; keywords: string[] }): { power: number; toughness: number; keywords: string[] } {
+  return { power: Math.trunc(e.power) || 0, toughness: Math.trunc(e.toughness) || 0, keywords: cleanKeywords(e.keywords) };
+}
+
+function effectText(e: { power: number; toughness: number; keywords: string[] }, removed: string[] = []): string {
+  const parts: string[] = [];
+  if (e.power || e.toughness) parts.push(`${e.power >= 0 ? "+" : ""}${e.power}/${e.toughness >= 0 ? "+" : ""}${e.toughness}`);
+  if (e.keywords.length) parts.push(e.keywords.join(", "));
+  if (removed.length) parts.push(`without ${removed.join(", ")}`);
+  return parts.join(" and ") || "nothing";
 }
 
 /**

@@ -547,5 +547,252 @@
     "digital": false,
     "booster": false,
     "scryfall_uri": "https://scryfall.com/card/c20/234/arcane-signet"
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000013",
+    "oracle_id": "11111111-0000-4000-8000-000000000013",
+    "name": "Lotus Cobra",
+    "lang": "en",
+    "released_at": "2020-09-25",
+    "set": "znr",
+    "set_name": "Zendikar Rising",
+    "set_type": "expansion",
+    "collector_number": "193",
+    "rarity": "rare",
+    "layout": "normal",
+    "mana_cost": "{1}{G}",
+    "cmc": 2,
+    "type_line": "Creature — Snake",
+    "oracle_text": "Landfall — Whenever a land you control enters, add one mana of any color.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "keywords": [
+      "Landfall"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000013.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000013.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000013.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Someone",
+    "promo": false,
+    "digital": false,
+    "booster": true,
+    "scryfall_uri": "https://scryfall.com/card/znr/193",
+    "power": "2",
+    "toughness": "1"
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000014",
+    "oracle_id": "11111111-0000-4000-8000-000000000014",
+    "name": "Glorious Anthem",
+    "lang": "en",
+    "released_at": "2009-07-17",
+    "set": "m10",
+    "set_name": "Magic 2010",
+    "set_type": "expansion",
+    "collector_number": "15",
+    "rarity": "rare",
+    "layout": "normal",
+    "mana_cost": "{1}{W}{W}",
+    "cmc": 3,
+    "type_line": "Enchantment",
+    "oracle_text": "Creatures you control get +1/+1.",
+    "colors": [
+      "W"
+    ],
+    "color_identity": [
+      "W"
+    ],
+    "keywords": [],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000014.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000014.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000014.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Someone",
+    "promo": false,
+    "digital": false,
+    "booster": true,
+    "scryfall_uri": "https://scryfall.com/card/m10/15"
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000015",
+    "oracle_id": "11111111-0000-4000-8000-000000000015",
+    "name": "Lightning Greaves",
+    "lang": "en",
+    "released_at": "2003-10-02",
+    "set": "mrd",
+    "set_name": "Mirrodin",
+    "set_type": "expansion",
+    "collector_number": "199",
+    "rarity": "uncommon",
+    "layout": "normal",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact — Equipment",
+    "oracle_text": "Equipped creature has haste and shroud. (It can't be the target of spells or abilities.)\nEquip {0}",
+    "colors": [],
+    "color_identity": [],
+    "keywords": [
+      "Equip"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000015.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000015.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000015.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Someone",
+    "promo": false,
+    "digital": false,
+    "booster": true,
+    "scryfall_uri": "https://scryfall.com/card/mrd/199"
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000016",
+    "oracle_id": "11111111-0000-4000-8000-000000000016",
+    "name": "Rancor",
+    "lang": "en",
+    "released_at": "1999-02-15",
+    "set": "ulg",
+    "set_name": "Urza's Legacy",
+    "set_type": "expansion",
+    "collector_number": "110",
+    "rarity": "common",
+    "layout": "normal",
+    "mana_cost": "{G}",
+    "cmc": 1,
+    "type_line": "Enchantment — Aura",
+    "oracle_text": "Enchant creature\nEnchanted creature gets +2/+0 and has trample.\nWhen Rancor is put into a graveyard from the battlefield, return Rancor to its owner's hand.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "keywords": [
+      "Enchant"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000016.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000016.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000016.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Someone",
+    "promo": false,
+    "digital": false,
+    "booster": true,
+    "scryfall_uri": "https://scryfall.com/card/ulg/110"
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000017",
+    "oracle_id": "11111111-0000-4000-8000-000000000017",
+    "name": "Scute Swarm",
+    "lang": "en",
+    "released_at": "2020-09-25",
+    "set": "znr",
+    "set_name": "Zendikar Rising",
+    "set_type": "expansion",
+    "collector_number": "203",
+    "rarity": "rare",
+    "layout": "normal",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Insect",
+    "oracle_text": "Landfall — Whenever a land you control enters, create a 1/1 green Insect creature token. If you control six or more lands, create a token that's a copy of Scute Swarm instead.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "keywords": [
+      "Landfall"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000017.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000017.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000017.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Someone",
+    "promo": false,
+    "digital": false,
+    "booster": true,
+    "scryfall_uri": "https://scryfall.com/card/znr/203",
+    "power": "1",
+    "toughness": "1"
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000018",
+    "oracle_id": "11111111-0000-4000-8000-000000000018",
+    "name": "Tireless Tracker",
+    "lang": "en",
+    "released_at": "2016-04-08",
+    "set": "soi",
+    "set_name": "Shadows over Innistrad",
+    "set_type": "expansion",
+    "collector_number": "233",
+    "rarity": "rare",
+    "layout": "normal",
+    "mana_cost": "{2}{G}",
+    "cmc": 3,
+    "type_line": "Creature — Human Scout",
+    "oracle_text": "Landfall — Whenever a land you control enters, investigate. (Create a Clue token. It's an artifact with \"{2}, Sacrifice this artifact: Draw a card.\")\nWhenever you sacrifice a Clue, put a +1/+1 counter on Tireless Tracker.",
+    "colors": [
+      "G"
+    ],
+    "color_identity": [
+      "G"
+    ],
+    "keywords": [
+      "Landfall",
+      "Investigate"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000018.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000018.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000018.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Someone",
+    "promo": false,
+    "digital": false,
+    "booster": true,
+    "scryfall_uri": "https://scryfall.com/card/soi/233",
+    "power": "3",
+    "toughness": "2"
   }
 ]

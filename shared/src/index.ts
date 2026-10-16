@@ -10,3 +10,6 @@ export * from "./game/types.js";
 export * from "./game/reducer.js";
 export * from "./game/view.js";
 export * from "./game/protocol.js";
+export * from "./game/sections.js";
+export * from "./game/effects.js";
+export * from "./game/triggers.js";

@@ -30,7 +30,7 @@ describe("API over an ingested fixture", () => {
   it("imports English cards only and reports status", async () => {
     const res = await ctx.app.inject({ method: "GET", url: "/api/status" });
     const body = res.json() as StatusResponse;
-    expect(body.cardCount).toBe(11);
+    expect(body.cardCount).toBe(17);
     expect(body.lastIngestAt).not.toBeNull();
   });
 
