@@ -124,11 +124,18 @@ export class AgentManager {
   removeAgents(room: LiveRoom): number {
     if (room.status !== "lobby") throw new RoomError("agents can only be changed in the lobby");
     const agents = this.agentMembers(room);
+    const hostId = room.refreshRow().hostUserId;
     for (const { user } of agents) {
+      if (user.id === hostId) continue; // a bot never keeps the host role for long, but never delete a room's host row
       room.leave(user.id);
       this.d.handle.db.delete(deckCards).where(inArray(deckCards.deckId, this.d.handle.db.select({ id: decks.id }).from(decks).where(eq(decks.userId, user.id)))).run();
       this.d.handle.db.delete(decks).where(eq(decks.userId, user.id)).run();
-      this.d.handle.db.delete(users).where(eq(users.id, user.id)).run();
+      try {
+        this.d.handle.db.delete(users).where(eq(users.id, user.id)).run();
+      } catch (err) {
+        // Referenced by an older room (it hosted one once): keep the row, it is harmless.
+        this.d.log?.warn({ err, user: user.id }, "agent user row kept (still referenced)");
+      }
     }
     if (agents.length) room.broadcastRoom();
     return agents.length;

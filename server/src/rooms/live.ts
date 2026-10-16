@@ -215,7 +215,9 @@ export class LiveRoom {
     }
     this.handle.db.delete(roomMembers).where(and(eq(roomMembers.roomId, this.id), eq(roomMembers.userId, userId))).run();
     if (this.row.hostUserId === userId) {
-      const next = this.members().find((o) => o.role === "player") ?? this.members()[0];
+      const bots = new Set(this.agentMemberIds());
+      const rest = this.members();
+      const next = rest.find((o) => o.role === "player" && !bots.has(o.userId)) ?? rest.find((o) => !bots.has(o.userId)) ?? rest[0];
       if (next) this.handle.db.update(rooms).set({ hostUserId: next.userId }).where(eq(rooms.id, this.id)).run();
     }
     this.touch();
