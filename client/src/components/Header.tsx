@@ -1,9 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { Avatar } from "./Avatar";
-import { useUser } from "../user";
+import { isOwner, useUser } from "../user";
 
 export function Header() {
   const { user } = useUser();
+  const owner = isOwner(user);
   return (
     <header className="top-nav">
       <NavLink to="/" className="brand">
@@ -15,6 +16,7 @@ export function Header() {
         </NavLink>
         <NavLink to="/cards">Cards</NavLink>
         <NavLink to="/play">Play</NavLink>
+        {owner && <NavLink to="/admin/library">Library</NavLink>}
       </nav>
       <NavLink to="/me" className="nav-user" aria-label="Your profile">
         {user ? (

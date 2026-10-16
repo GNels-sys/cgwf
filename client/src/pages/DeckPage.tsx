@@ -7,6 +7,7 @@ import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
 import { ManaCost } from "../components/ManaCost";
 import { RequireUser } from "../components/RequireUser";
+import { isOwner, useUser } from "../user";
 
 const TYPE_ORDER = ["Creature", "Planeswalker", "Battle", "Instant", "Sorcery", "Artifact", "Enchantment", "Land", "Other"] as const;
 
@@ -41,11 +42,13 @@ function CardLine({ entry, onOpen }: { entry: DeckCardEntry; onOpen: (id: string
 
 function DeckView({ id }: { id: string }) {
   const navigate = useNavigate();
+  const { user } = useUser();
   const [deck, setDeck] = useState<DeckDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState("");
+  const [libraryNote, setLibraryNote] = useState<string | null>(null);
 
   useEffect(() => {
     api.decks
@@ -78,6 +81,16 @@ function DeckView({ id }: { id: string }) {
     if (!confirm(`Delete "${deck.name}"? This cannot be undone.`)) return;
     await api.decks.remove(deck.id);
     navigate("/");
+  };
+  const addToLibrary = async () => {
+    setLibraryNote("Adding...");
+    try {
+      const r = await api.library.fromDeck(deck.id);
+      setLibraryNote(`Added to the library as Bracket ${r.deck.bracket}.`);
+      setTimeout(() => navigate(`/admin/library/${r.deck.id}`), 600);
+    } catch (e) {
+      setLibraryNote((e as Error).message);
+    }
   };
 
   return (
@@ -112,11 +125,17 @@ function DeckView({ id }: { id: string }) {
           >
             Rename
           </button>
+          {isOwner(user) && (
+            <button className="btn btn-small" onClick={() => void addToLibrary()}>
+              Add to library
+            </button>
+          )}
           <button className="btn btn-small btn-danger" onClick={() => void remove()}>
             Delete
           </button>
         </div>
       </div>
+      {libraryNote && <p className="small muted">{libraryNote}</p>}
       <p className="muted small">
         {deck.cardCount} cards &middot; Commander
         {deck.sourceUrl && (

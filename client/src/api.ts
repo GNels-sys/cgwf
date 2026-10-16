@@ -8,6 +8,10 @@ import type {
   DeckDetail,
   DeckSummary,
   ImportUrlResponse,
+  LibraryDeckDetail,
+  LibraryImportState,
+  LibraryListResponse,
+  LibraryPatchRequest,
   RegisterRequest,
   RegisterResponse,
   ResolveResponse,
@@ -98,6 +102,25 @@ export const api = {
     parse: (text: string) => request<ResolveResponse>("/api/decks/parse", { json: { text } }),
     analysis: (id: string, refresh = false) => request<DeckAnalysisResponse>(`/api/decks/${encodeURIComponent(id)}/analysis${refresh ? "?refresh=1" : ""}`),
     importUrl: (url: string) => request<ImportUrlResponse>(`/api/decks/import-url?url=${encodeURIComponent(url)}`),
+  },
+
+  /** Owner-only deck library (Phase 6). */
+  library: {
+    list: (filters: { bracket?: number; tag?: string; q?: string; source?: string; agent?: string } = {}) => {
+      const qs = Object.entries(filters)
+        .filter(([, v]) => v !== undefined && v !== "" && v !== 0)
+        .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+        .join("&");
+      return request<LibraryListResponse>(`/api/library${qs ? `?${qs}` : ""}`);
+    },
+    importStatus: () => request<{ importState: LibraryImportState }>("/api/library/import-status"),
+    importPrecons: (opts: { force?: boolean; combos?: boolean } = {}) => request<{ started: boolean; importState: LibraryImportState }>("/api/library/import-precons", { json: opts }),
+    fromDeck: (deckId: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/from-deck/${encodeURIComponent(deckId)}`, { json: {} }),
+    get: (id: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}`),
+    patch: (id: string, body: LibraryPatchRequest) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}`, { method: "PATCH", json: body }),
+    remove: (id: string) => request<{ ok: true }>(`/api/library/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    analyze: (id: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}/analyze`, { method: "POST", json: {} }),
+    primerSkeleton: (id: string) => request<{ primer: string }>(`/api/library/${encodeURIComponent(id)}/primer-skeleton`),
   },
 
   tokens: (q: string, signal?: AbortSignal) => request<TokenSearchResponse>(`/api/tokens?q=${encodeURIComponent(q)}`, { ...(signal ? { signal } : {}) }),
