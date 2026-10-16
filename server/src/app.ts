@@ -10,6 +10,7 @@ import { registerImageRoutes } from "./images.js";
 import { AgentManager } from "./agents/manager.js";
 import { AnthropicLlm } from "./agents/llm.js";
 import { DeckAnalyzer } from "./analysis/service.js";
+import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAgentRoutes } from "./routes/agents.js";
 import { SpellbookClient, type FetchLike } from "./analysis/spellbook.js";
 import { PreconImporter } from "./library/precons.js";
@@ -100,6 +101,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   registerLibraryRoutes(app, { handle, library, precons });
   registerStatsRoutes(app, { handle, analyzer, library });
   registerAgentRoutes(app, { handle, agents, roomsManager });
+  registerAdminRoutes(app, { handle, roomsManager, presence });
   registerImageRoutes(app, handle);
   registerMeRoutes(app, handle);
   registerAuthRoutes(app, handle);

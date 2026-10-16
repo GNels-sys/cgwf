@@ -14,8 +14,13 @@ export class Presence {
   }
 
   isOnline(userId: string, now = Date.now()): boolean {
+    return this.seenWithin(userId, PRESENCE_ONLINE_MS, now);
+  }
+
+  /** Heard from within `ms` (the admin overview uses a longer window than the friends list). */
+  seenWithin(userId: string, ms: number, now = Date.now()): boolean {
     const t = this.lastSeen.get(userId);
-    return t !== undefined && now - t < PRESENCE_ONLINE_MS;
+    return t !== undefined && now - t < ms;
   }
 
   /** Drop stale entries so the map never grows past the active population. */
