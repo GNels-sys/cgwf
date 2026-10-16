@@ -127,7 +127,69 @@ at all sizes, and collection/lobby at portrait and desktop in dark mode.
 
 ## Review and release
 
-Review branch: `design-refresh`. No deploy and no merge into main. The owner reviews
-and deploys. The referenced side-session-notes directory was absent from this checkout;
+Review branch: `design-refresh`. The owner subsequently authorized deployment, and the
+first refresh was deployed to https://cgwf.fly.dev/ on 2026-10-16. No merge into main. The referenced side-session-notes directory was absent from this checkout;
 CLAUDE.md, README.md, and docs/DESIGN-BRIEF.md were read instead. The repository brief's
 current test count (193) supersedes the pasted brief's older count (185).
+
+
+## Interior-page follow-through (2026-10-16)
+
+The second pass extends the game-room design throughout the app:
+
+- `PageHeading` supplies a shared eyebrow, title, supporting description, geometric
+  emblem, and optional action. Play and Personalize reuse the original sanctuary
+  illustration; content-heavy pages use a quieter divider and emblem.
+- Play separates hosting from joining. Friends separates invitation codes, requests,
+  presence, and table links. Profiles group identity, connections, and account controls.
+- Card search has a clear starting state and framed result tiles; card details retain
+  complete images. Import has dedicated input/review surfaces and portrait rows that
+  put board/skip controls below card text. Sticky review actions remain available.
+- Deck and library editors share a workshop heading and consistent analysis/list
+  surfaces. Library filters and queue actions remain complete. Statistics retain their
+  labels, color order, calculations, and collapsible content.
+- Personalize groups mats, sleeves, room, and layout in two columns on desktop and one
+  on phones. Account forms, sessions, notifications, agent history, and the owner
+  dashboard use the same form spacing, panels, and control sizes. Admin totals use four
+  columns at desktop widths and two on narrow phones.
+- On phones the header uses a brand/profile row followed by a scrollable navigation
+  row. Personalize is directly accessible from navigation. The existing full-screen
+  gameplay treatment remains in place.
+
+No new artwork or dependency was introduced. The original ImageGen asset above is
+reused. Gameplay, API, identity, socket logic, tests, server code, and shared models are
+unchanged. All modifications are presentational JSX, navigation links, or CSS.
+
+Interior QA uses representative synthetic accounts, friends, decks, library entries,
+agent games, and admin totals through browser request interception. Card summaries
+and complete card images use the existing local Scryfall catalogue/image pipeline.
+The private preview data never wrote to the local or production database. Owner-only
+routes were rendered with an intercepted owner session, not production credentials.
+
+The matrix covers 16 page views at 375×812, 812×375, and 1440×1000 in dark/light
+interfaces with reduced motion, plus import-review states at each size. Supplemental
+checks cover empty friends/play/library/agent pages, a failed friends request, and
+notifications with normal motion. Card-result and card-detail overlays were captured;
+deck rename/cancel, password-form opening, and admin-row expansion were exercised.
+The existing table, lobby, and mana-popover matrix was also repeated. This remains
+browser emulation, not a physical iOS/Android device test or live multiplayer test.
+
+A compact selection of current screenshots is retained in
+[interior previews](design-previews/interiors/); `qa.json` there records the full
+interior matrix. Additional local captures are available at
+`C:/Users/nelso/OneDrive/Documents/Playground/output/cgwf-interior/`.
+
+| Page | Preview |
+| --- | --- |
+| Play | [Desktop](design-previews/interiors/play-desktop-dark.jpg) |
+| Friends | [Phone](design-previews/interiors/friends-portrait-dark.jpg) |
+| Personalize | [Desktop](design-previews/interiors/settings-desktop-dark.jpg) |
+| Profile | [Phone](design-previews/interiors/profile-portrait-dark.jpg) |
+| Sign in | [Light desktop](design-previews/interiors/signin-desktop-light.jpg) |
+| Card search | [Results](design-previews/interiors/card-results-desktop-dark.jpg) |
+| Import | [Phone review](design-previews/interiors/import-review-portrait-dark.jpg) |
+| Deck | [Desktop](design-previews/interiors/deck-desktop-dark.jpg) |
+| Library | [Light desktop](design-previews/interiors/library-desktop-light.jpg) |
+| Library editor | [Desktop](design-previews/interiors/library-deck-desktop-dark.jpg) |
+| Computer opponents | [Desktop](design-previews/interiors/agents-desktop-dark.jpg) |
+| Admin | [Desktop](design-previews/interiors/admin-desktop-dark.jpg) |

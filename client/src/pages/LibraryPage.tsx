@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type LibraryDeckSummary, type LibraryImportState, type SubmissionInfo } from "@cgwf/shared";
@@ -270,7 +271,7 @@ function LibraryList() {
       {!decks ? (
         <p className="muted">Loading library...</p>
       ) : decks.length === 0 ? (
-        <p className="muted">Nothing here yet. Import the precons, or open one of your decks and press "Add to library".</p>
+        <div className="empty-state"><span className="empty-state-mark" aria-hidden="true">◇</span><h2>Make room for a few favorites.</h2><p className="muted">Nothing here yet. Import the precons, or open one of your decks and press "Add to library".</p></div>
       ) : (
         <>
           <p className="muted small">{decks.length} decks</p>
@@ -311,11 +312,9 @@ function LibraryList() {
 export function LibraryPage() {
   const { user } = useUser();
   return (
-    <main className="page">
+    <main className="page library-page">
       <RequireUser>
-        <div className="row-between">
-          <h1>Deck library</h1>
-        </div>
+        <PageHeading title="Deck library" eyebrow="A shelf of possibilities">Browse preconstructed decks and player lists. Prepare the next table.</PageHeading>
         {isOwner(user) ? <LibraryList /> : <p className="muted">The library is for the owner only.</p>}
       </RequireUser>
     </main>

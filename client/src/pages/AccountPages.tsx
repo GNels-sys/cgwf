@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { PASSWORD_MIN, type SignInRequest, type SignUpRequest } from "@cgwf/shared";
@@ -148,8 +149,8 @@ export function SignUpPage() {
   const { user, signUp } = useUser();
   const navigate = useNavigate();
   return (
-    <main className="page narrow">
-      <h1>Create an account</h1>
+    <main className="page narrow account-page">
+      <PageHeading title="Create an account" eyebrow="Keep your seat">Take your decks, friends, and table with you to another device.</PageHeading>
       <RequireUser>
         {user?.email ? (
           <Navigate to="/me" replace />
@@ -194,12 +195,12 @@ export function SignUpPage() {
 export function SignInPage() {
   const { user, loading, signIn } = useUser();
   const navigate = useNavigate();
-  if (loading) return <main className="page narrow">Loading...</main>;
+  if (loading) return <main className="page narrow account-page">Loading...</main>;
   if (user?.email) return <Navigate to="/me" replace />;
   const deviceProfile = user && !user.email ? user : null;
   return (
-    <main className="page narrow">
-      <h1>Sign in</h1>
+    <main className="page narrow account-page">
+      <PageHeading title="Welcome back" eyebrow="Your table is waiting">Sign in to find your decks, friends, and familiar table.</PageHeading>
       {deviceProfile && (
         <div className="notice">
           <p>

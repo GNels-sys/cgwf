@@ -56,14 +56,17 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
 
   return (
     <main className="page narrow lobby">
-      <div className="row-between">
-        <h1>
-          Table <span className="room-code">{room.code}</span>
-        </h1>
-        <button className="btn btn-small" onClick={() => void share()}>
-          {copied ? "Link copied" : "Share link"}
-        </button>
-      </div>
+      <header className="detail-heading">
+        <p className="eyebrow">Your game-night table</p>
+        <div className="row-between">
+          <h1>
+            Table <span className="room-code">{room.code}</span>
+          </h1>
+          <button className="btn btn-small" onClick={() => void share()}>
+            {copied ? "Link copied" : "Share link"}
+          </button>
+        </div>
+      </header>
       <p className="muted small">
         Friends join with the code or the link. <a href="/settings">Personalize</a> your playmat and sleeves while you wait. {sock.status !== "open" && <span className="warn">({sock.status})</span>}
       </p>

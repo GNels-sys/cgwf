@@ -236,3 +236,16 @@
 .stat-facts { padding: 12px; background: var(--bg-elev-2); border-radius: 8px; }
 .stat-facts dd, .stat-bar-value { font-variant-numeric: tabular-nums; }
 .stat-section > summary { padding-block: 6px; }
+
+/* Deck analysis shares the page rhythm without competing with the cards. */
+.analysis-row { gap: 20px; margin-block: 24px; }
+.stat-section { margin-top: 16px; padding-top: 8px; }
+.stat-section > summary { gap: 8px; }
+.stat-section-body { padding-block: 8px 16px; }
+.stat-sublist > summary { min-height: 44px; }
+.stat-facts { padding: 16px; gap: 12px; }
+@media (max-width: 600px) {
+  .stat-section-aside { max-width: 45%; }
+  .stat-facts > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .stat-facts dd { overflow-wrap: anywhere; }
+}

@@ -207,46 +207,49 @@ function DeckView({ id }: { id: string }) {
 
   return (
     <>
-      <div className="row-between">
-        {renaming ? (
-          <form
-            className="inline-field"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void rename();
-            }}
-          >
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={60} autoFocus />
-            <button className="btn btn-small" type="submit">
-              Save
-            </button>
-            <button className="btn btn-small" type="button" onClick={() => setRenaming(false)}>
-              Cancel
-            </button>
-          </form>
-        ) : (
-          <h1>{deck.name}</h1>
-        )}
-        <div className="actions">
-          <button
-            className="btn btn-small"
-            onClick={() => {
-              setNewName(deck.name);
-              setRenaming(true);
-            }}
-          >
-            Rename
-          </button>
-          {isOwner(user) && (
-            <button className="btn btn-small" onClick={() => void addToLibrary()}>
-              Add to library
-            </button>
+      <header className="detail-heading">
+        <p className="eyebrow">Your deck workshop</p>
+        <div className="row-between">
+          {renaming ? (
+            <form
+              className="inline-field"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void rename();
+              }}
+            >
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={60} autoFocus />
+              <button className="btn btn-small" type="submit">
+                Save
+              </button>
+              <button className="btn btn-small" type="button" onClick={() => setRenaming(false)}>
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <h1>{deck.name}</h1>
           )}
-          <button className="btn btn-small btn-danger" onClick={() => void remove()}>
-            Delete
-          </button>
+          <div className="actions">
+            <button
+              className="btn btn-small"
+              onClick={() => {
+                setNewName(deck.name);
+                setRenaming(true);
+              }}
+            >
+              Rename
+            </button>
+            {isOwner(user) && (
+              <button className="btn btn-small" onClick={() => void addToLibrary()}>
+                Add to library
+              </button>
+            )}
+            <button className="btn btn-small btn-danger" onClick={() => void remove()}>
+              Delete
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
       {libraryNote && <p className="small muted">{libraryNote}</p>}
       <p className="muted small">
         {deck.cardCount} cards &middot; Commander
@@ -323,7 +326,7 @@ function DeckView({ id }: { id: string }) {
 export function DeckPage() {
   const { id } = useParams();
   return (
-    <main className="page">
+    <main className="page deck-page">
       <p>
         <Link to="/" className="muted small">
           &larr; All decks
