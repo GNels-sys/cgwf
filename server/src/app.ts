@@ -16,6 +16,7 @@ import { PreconImporter } from "./library/precons.js";
 import { LibraryService } from "./library/service.js";
 import { registerAnalysisRoutes } from "./routes/analysis.js";
 import { registerLibraryRoutes } from "./routes/library.js";
+import { registerStatsRoutes } from "./routes/stats.js";
 import { registerCardRoutes } from "./routes/cards.js";
 import { registerDeckRoutes } from "./routes/decks.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -87,6 +88,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   registerCardRoutes(app, { handle, index, ingestor });
   registerAnalysisRoutes(app, { handle, analyzer });
   registerLibraryRoutes(app, { handle, library, precons });
+  registerStatsRoutes(app, { handle, analyzer, library });
   registerAgentRoutes(app, { handle, agents, roomsManager });
   registerImageRoutes(app, handle);
   registerMeRoutes(app, handle);

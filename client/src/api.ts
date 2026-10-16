@@ -9,6 +9,7 @@ import type {
   CreateDeckRequest,
   CreateRoomResponse,
   DeckAnalysisResponse,
+  DeckStatsResponse,
   MyRoomsResponse,
   RoomResponse,
   DeckDetail,
@@ -122,6 +123,7 @@ export const api = {
     remove: (id: string) => request<{ ok: true }>(`/api/decks/${encodeURIComponent(id)}`, { method: "DELETE" }),
     parse: (text: string) => request<ResolveResponse>("/api/decks/parse", { json: { text } }),
     analysis: (id: string, refresh = false) => request<DeckAnalysisResponse>(`/api/decks/${encodeURIComponent(id)}/analysis${refresh ? "?refresh=1" : ""}`),
+    stats: (id: string) => request<DeckStatsResponse>(`/api/decks/${encodeURIComponent(id)}/stats`),
     importUrl: (url: string) => request<ImportUrlResponse>(`/api/decks/import-url?url=${encodeURIComponent(url)}`),
   },
 
@@ -138,6 +140,7 @@ export const api = {
     importPrecons: (opts: { force?: boolean; combos?: boolean } = {}) => request<{ started: boolean; importState: LibraryImportState }>("/api/library/import-precons", { json: opts }),
     fromDeck: (deckId: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/from-deck/${encodeURIComponent(deckId)}`, { json: {} }),
     get: (id: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}`),
+    stats: (id: string) => request<DeckStatsResponse>(`/api/library/${encodeURIComponent(id)}/stats`),
     patch: (id: string, body: LibraryPatchRequest) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}`, { method: "PATCH", json: body }),
     remove: (id: string) => request<{ ok: true }>(`/api/library/${encodeURIComponent(id)}`, { method: "DELETE" }),
     analyze: (id: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}/analyze`, { method: "POST", json: {} }),
