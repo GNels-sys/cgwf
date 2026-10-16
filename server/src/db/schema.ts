@@ -58,9 +58,11 @@ export const meta = sqliteTable("meta", {
 });
 
 /**
- * Players. v1 identity is a per-device secret (we store only its hash); the
- * email / password_hash columns are reserved so real sign-in can be added
- * later without a migration of existing rows.
+ * Players. Every visitor starts as a device-only profile (name + avatar, no
+ * password). Adding an email + password turns it into an account that can sign
+ * in from other devices. Credentials live here; the tokens that identify a
+ * device live in `sessions`. `is_owner` is granted only through the one-time
+ * claim code (never by email alone).
  */
 export const users = sqliteTable(
   "users",
@@ -71,13 +73,35 @@ export const users = sqliteTable(
     avatar: text("avatar").notNull(),
     /** One of the preset colour keys (see shared AVATAR_COLORS). */
     color: text("color").notNull(),
-    deviceTokenHash: text("device_token_hash").notNull(),
+    /** Lower-cased; null for a device-only profile. */
     email: text("email"),
+    /** scrypt record (see auth/password.ts); null for a device-only profile. */
     passwordHash: text("password_hash"),
+    isOwner: integer("is_owner", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
   },
-  (t) => [uniqueIndex("users_device_token_idx").on(t.deviceTokenHash), uniqueIndex("users_email_idx").on(t.email)],
+  (t) => [uniqueIndex("users_email_idx").on(t.email)],
+);
+
+/**
+ * One row per signed-in device. The client holds the random token; we store
+ * only its SHA-256 hash. Deleting a row signs that device out.
+ */
+export const sessions = sqliteTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    /** Human label derived from the User-Agent ("iPhone / Safari"). */
+    device: text("device").notNull().default(""),
+    createdAt: text("created_at").notNull(),
+    lastSeenAt: text("last_seen_at").notNull(),
+  },
+  (t) => [uniqueIndex("sessions_token_idx").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],
 );
 
 export const decks = sqliteTable(
@@ -217,6 +241,7 @@ export const uploads = sqliteTable(
 export type CardRow = typeof cards.$inferSelect;
 export type NewCardRow = typeof cards.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
+export type SessionRow = typeof sessions.$inferSelect;
 export type DeckRow = typeof decks.$inferSelect;
 export type DeckCardRow = typeof deckCards.$inferSelect;
 export type RoomRow = typeof rooms.$inferSelect;

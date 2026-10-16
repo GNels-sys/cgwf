@@ -9,6 +9,7 @@ import { openDb, type DbHandle } from "./db/index.js";
 import { registerImageRoutes } from "./images.js";
 import { registerCardRoutes } from "./routes/cards.js";
 import { registerDeckRoutes } from "./routes/decks.js";
+import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMeRoutes } from "./routes/me.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
@@ -53,6 +54,7 @@ export async function buildApp(opts: { dbFile?: string; logger?: boolean | "plai
   registerCardRoutes(app, { handle, index, ingestor });
   registerImageRoutes(app, handle);
   registerMeRoutes(app, handle);
+  registerAuthRoutes(app, handle);
   registerDeckRoutes(app, { handle, index });
   registerRoomRoutes(app, { handle, roomsManager });
   registerSettingsRoutes(app, { handle, onSettingsChanged: (userId) => roomsManager.userChanged(userId) });

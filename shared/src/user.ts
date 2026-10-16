@@ -50,12 +50,65 @@ export const AVATAR_COLORS = {
 } as const;
 export type AvatarColorKey = keyof typeof AVATAR_COLORS;
 
+/** The signed-in player's own view of themself (never sent for other players). */
 export interface User {
   id: string;
   displayName: string;
   avatar: AvatarKey;
   color: AvatarColorKey;
   createdAt: string;
+  /** Lower-cased account email, or null for a device-only profile. */
+  email: string | null;
+  /** Granted only through the one-time owner claim code. */
+  isOwner: boolean;
+}
+
+/** Add an email + password to the current (device) profile. */
+export interface SignUpRequest {
+  email: string;
+  password: string;
+}
+
+export interface SignInRequest {
+  email: string;
+  password: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+/** One signed-in device of the current account. */
+export interface SessionInfo {
+  id: string;
+  device: string;
+  createdAt: string;
+  lastSeenAt: string;
+  /** True for the session making the request. */
+  current: boolean;
+}
+
+export const EMAIL_MAX = 254;
+export const PASSWORD_MIN = 8;
+export const PASSWORD_MAX = 128;
+export const OWNER_CODE_MAX = 128;
+
+/** Lower-cased, trimmed email or null when it does not look like one. */
+export function normalizeEmail(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const email = v.trim().toLowerCase();
+  if (email.length < 3 || email.length > EMAIL_MAX) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+/** Why a password is not acceptable, or null when it is. */
+export function passwordProblem(v: unknown): string | null {
+  if (typeof v !== "string") return "enter a password";
+  if (v.length < PASSWORD_MIN) return `use at least ${PASSWORD_MIN} characters`;
+  if (v.length > PASSWORD_MAX) return `use at most ${PASSWORD_MAX} characters`;
+  return null;
 }
 
 export interface RegisterRequest {

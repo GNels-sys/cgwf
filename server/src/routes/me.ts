@@ -9,7 +9,7 @@ import {
   type RegisterResponse,
   type User,
 } from "@cgwf/shared";
-import { hashToken, newDeviceToken, requireUser, toPublicUser } from "../auth.js";
+import { createSession, requireUser, toPublicUser } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
 import { users } from "../db/schema.js";
 
@@ -21,7 +21,7 @@ function cleanName(v: unknown): string | null {
 }
 
 export function registerMeRoutes(app: FastifyInstance, handle: DbHandle): void {
-  /** Create a device identity. The token is returned exactly once. */
+  /** First run: create a device-only profile and its first session. The token is returned exactly once. */
   app.post<{ Body: Partial<RegisterRequest> }>(
     "/api/me/register",
     { config: { rateLimit: { max: 10, timeWindow: "1 hour" } } },
@@ -30,18 +30,12 @@ export function registerMeRoutes(app: FastifyInstance, handle: DbHandle): void {
       const { avatar, color } = req.body ?? {};
       if (!displayName) return reply.code(400).send({ error: `name must be 1-${DISPLAY_NAME_MAX} characters` });
       if (!isAvatarKey(avatar) || !isAvatarColorKey(color)) return reply.code(400).send({ error: "pick an avatar and a colour" });
-      const token = newDeviceToken();
       const now = new Date().toISOString();
-      const row = {
-        id: randomUUID(),
-        displayName,
-        avatar,
-        color,
-        deviceTokenHash: hashToken(token),
-        createdAt: now,
-        lastSeenAt: now,
-      };
-      handle.db.insert(users).values(row).run();
+      const row = { id: randomUUID(), displayName, avatar, color, createdAt: now, lastSeenAt: now };
+      const token = handle.sqlite.transaction(() => {
+        handle.db.insert(users).values(row).run();
+        return createSession(handle, row.id, req.headers["user-agent"]).token;
+      })();
       const user = handle.db.select().from(users).where(eq(users.id, row.id)).get()!;
       return { token, user: toPublicUser(user) };
     },
