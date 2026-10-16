@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type LibraryDeckSummary, type LibraryImportState } from "@cgwf/shared";
+import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type LibraryDeckSummary, type LibraryImportState, type SubmissionInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { RequireUser } from "../components/RequireUser";
 import { isOwner, useUser } from "../user";
@@ -59,6 +59,138 @@ function ImportBox({ state, onStart }: { state: LibraryImportState; onStart: (fo
   );
 }
 
+/** Owner: decks players submitted for the agent library. Approve copies the frozen list in; reject sends a short reason. */
+function SubmissionQueue({ onChanged }: { onChanged: () => void }) {
+  const [subs, setSubs] = useState<SubmissionInfo[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      setSubs((await api.social.queue()).submissions);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const approve = async (s: SubmissionInfo) => {
+    setBusy(s.id);
+    setError(null);
+    try {
+      await api.social.approve(s.id);
+      await load();
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const reject = async (s: SubmissionInfo) => {
+    setBusy(s.id);
+    setError(null);
+    try {
+      await api.social.reject(s.id, reason);
+      setRejecting(null);
+      setReason("");
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!subs) return null;
+  const pending = subs.filter((s) => s.status === "pending");
+  const decided = subs.filter((s) => s.status !== "pending");
+  return (
+    <section className="notice queue-admin">
+      <div className="row-between">
+        <strong>Agent deck queue</strong>
+        <span className="muted small">{pending.length === 0 ? "nothing waiting" : `${pending.length} waiting`}</span>
+      </div>
+      {error && <p className="error small">{error}</p>}
+      {pending.length > 0 && (
+        <ul className="queue-list">
+          {pending.map((s) => (
+            <li key={s.id}>
+              <div className="queue-main">
+                <strong>{s.deckName}</strong>{" "}
+                <span className="muted small">
+                  from {s.submitter.name} &middot; {s.commanders.join(" / ") || "no commander"} &middot; {s.cardCount} cards
+                  {s.bracketSuggested ? ` · engine suggests B${s.bracketSuggested}` : ""} &middot; {new Date(s.createdAt).toLocaleDateString()}
+                </span>
+                {s.tags && s.tags.length > 0 && (
+                  <span className="library-row-tags">
+                    {s.tags.slice(0, 4).map((t) => (
+                      <span key={t} className="chip tag-chip small">
+                        {ARCHETYPE_LABELS[t]}
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {s.note && <p className="small queue-note">&ldquo;{s.note}&rdquo;</p>}
+              </div>
+              {rejecting === s.id ? (
+                <form
+                  className="inline-field"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    void reject(s);
+                  }}
+                >
+                  <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Short reason for the player" maxLength={300} autoFocus required />
+                  <button className="btn btn-small btn-danger" type="submit" disabled={busy === s.id || !reason.trim()}>
+                    Reject
+                  </button>
+                  <button className="btn btn-small" type="button" onClick={() => setRejecting(null)}>
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <span className="actions">
+                  <button className="btn btn-small btn-primary" disabled={busy === s.id} onClick={() => void approve(s)}>
+                    {busy === s.id ? "Adding..." : "Approve"}
+                  </button>
+                  <button className="btn btn-small" disabled={busy === s.id} onClick={() => setRejecting(s.id)}>
+                    Reject
+                  </button>
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {decided.length > 0 && (
+        <details>
+          <summary className="small">Recent decisions ({decided.length})</summary>
+          <ul className="small queue-decided">
+            {decided.map((s) => (
+              <li key={s.id}>
+                {s.status === "approved" ? "Approved" : "Rejected"}: <strong>{s.deckName}</strong> from {s.submitter.name}
+                {s.reason ? ` (${s.reason})` : ""}
+                {s.libraryDeckId && (
+                  <>
+                    {" "}
+                    &middot; <Link to={`/admin/library/${s.libraryDeckId}`}>library</Link>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <p className="muted small">Approving copies the list as submitted into the library, agent-eligible, with the engine&apos;s bracket and tags, credited to the player. You can still edit it afterwards.</p>
+    </section>
+  );
+}
+
 function LibraryList() {
   const [decks, setDecks] = useState<LibraryDeckSummary[] | null>(null);
   const [state, setState] = useState<LibraryImportState | null>(null);
@@ -104,6 +236,7 @@ function LibraryList() {
   if (error) return <p className="error">{error}</p>;
   return (
     <>
+      <SubmissionQueue onChanged={() => void load()} />
       {state && <ImportBox state={state} onStart={(f) => void start(f)} />}
       <div className="library-filters">
         <select value={bracket} onChange={(e) => setBracket(Number(e.target.value))} aria-label="Bracket">
@@ -151,7 +284,8 @@ function LibraryList() {
                     <span className="muted small">
                       {d.commanders.join(" / ") || "no commander"}
                       {d.setCode ? ` · ${d.setCode.toUpperCase()}` : ""}
-                      {d.releaseDate ? ` · ${d.releaseDate.slice(0, 4)}` : ""} · {d.cardCount} cards
+                      {d.releaseDate ? ` · ${d.releaseDate.slice(0, 4)}` : ""}
+                      {d.createdByName ? ` · from ${d.createdByName}` : ""} · {d.cardCount} cards
                       {d.floor !== null && d.suggested !== null ? ` · floor ${d.floor}, suggested ${d.suggested}` : ""}
                     </span>
                   </span>

@@ -4,6 +4,7 @@ import type { DeckSummary } from "@cgwf/shared";
 import { api } from "../api";
 import { CardImage } from "../components/CardImage";
 import { RequireUser } from "../components/RequireUser";
+import { Tour } from "../components/Tour";
 import { useUser } from "../user";
 
 function DeckList() {
@@ -62,6 +63,7 @@ export function DecksPage() {
         <p className="tagline">{user ? `Hi ${user.displayName}` : "Card Games with Friends"}</p>
       </header>
       <RequireUser>
+        <Tour />
         <DeckList />
       </RequireUser>
     </main>

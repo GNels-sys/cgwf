@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { Board, DeckCardEntry, DeckDetail } from "@cgwf/shared";
+import { SUBMISSION_NOTE_MAX, type Board, type DeckCardEntry, type DeckDetail, type SubmissionInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { BracketPanel } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
@@ -37,6 +37,115 @@ function CardLine({ entry, onOpen }: { entry: DeckCardEntry; onOpen: (id: string
         <ManaCost cost={entry.card.manaCost} size={13} />
       </button>
     </li>
+  );
+}
+
+/** Offer this deck for the owner's agent library; shows the current status once submitted. */
+function QueuePanel({ deck }: { deck: DeckDetail }) {
+  const [sub, setSub] = useState<SubmissionInfo | null | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.social
+      .deckSubmission(deck.id)
+      .then((r) => setSub(r.submission))
+      .catch(() => setSub(null));
+  }, [deck.id]);
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.social.submitDeck(deck.id, note);
+      setSub(r.submission);
+      setOpen(false);
+      setNote("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const withdraw = async () => {
+    if (!sub || !confirm("Take this deck out of the queue?")) return;
+    setBusy(true);
+    try {
+      await api.social.withdraw(sub.id);
+      const r = await api.social.deckSubmission(deck.id);
+      setSub(r.submission);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sub === undefined) return null;
+  return (
+    <section className="notice queue-panel">
+      <div className="row-between">
+        <strong>Agent deck queue</strong>
+        {sub?.status === "pending" ? (
+          <span className="tag">In the queue</span>
+        ) : sub?.status === "approved" ? (
+          <span className="tag tag-ok">Approved</span>
+        ) : sub?.status === "rejected" ? (
+          <span className="tag tag-no">Not added</span>
+        ) : null}
+      </div>
+      {sub?.status === "pending" && (
+        <>
+          <p className="small muted">
+            Submitted {new Date(sub.createdAt).toLocaleDateString()}
+            {sub.note ? ` with the note "${sub.note}"` : ""}. The owner reviews the list as it was when you submitted it; edits here do not change it.
+          </p>
+          <button className="btn btn-small" disabled={busy} onClick={() => void withdraw()}>
+            Withdraw
+          </button>
+        </>
+      )}
+      {sub?.status === "approved" && <p className="small muted">This list is in the library now and computer opponents can pilot it. Thank you!</p>}
+      {sub?.status === "rejected" && (
+        <p className="small muted">
+          The owner&apos;s note: <em>{sub.reason}</em>. You can submit it again after changes.
+        </p>
+      )}
+      {(!sub || sub.status === "rejected") && !open && (
+        <>
+          <p className="small muted">Offer this deck for the computer opponents to play. The owner reviews it; nothing about your deck changes.</p>
+          <button className="btn btn-small btn-primary" onClick={() => setOpen(true)}>
+            Submit to the queue
+          </button>
+        </>
+      )}
+      {open && (
+        <form
+          className="profile-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
+          <label className="field">
+            <span>Note for the owner (optional)</span>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={SUBMISSION_NOTE_MAX} rows={3} placeholder="What the deck does, which bracket you would call it, anything a pilot should know" />
+          </label>
+          {error && <p className="error small">{error}</p>}
+          <div className="actions">
+            <button className="btn btn-primary btn-small" type="submit" disabled={busy}>
+              {busy ? "Submitting..." : "Submit"}
+            </button>
+            <button className="btn btn-small" type="button" onClick={() => setOpen(false)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+      {error && !open && <p className="error small">{error}</p>}
+    </section>
   );
 }
 
@@ -170,6 +279,8 @@ function DeckView({ id }: { id: string }) {
       </section>
 
       <BracketPanel deckId={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} />
+
+      <QueuePanel deck={deck} />
 
       <div className="deck-columns">
         {sections.main.map((g) => (

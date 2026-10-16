@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { RegisterRequest, SignInRequest, SignUpRequest, User } from "@cgwf/shared";
 import { api, ApiError, getToken, setToken } from "./api";
+import { setTourState } from "./tour";
 
 /**
  * Identity on this device. The session token lives in localStorage; the user
@@ -56,6 +57,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (body: RegisterRequest) => {
     const r = await api.register(body);
     setToken(r.token);
+    setTourState("pending");
     setUser(r.user);
   }, []);
 
