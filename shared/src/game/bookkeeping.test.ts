@@ -345,7 +345,7 @@ describe("reducer: mana bank", () => {
     s = g.push(A, { type: "ManaChanged", payload: { player: A, color: "U", delta: 2 } });
     s = g.push(A, { type: "ManaConverted", payload: { player: A, to: "C" } });
     expect(s.players[A]!.mana).toEqual({ W: 0, U: 0, B: 0, R: 0, G: 0, C: 3 });
-    expect(s.log.at(-1)!.text).toBe("Alex converts their mana to CCC");
+    expect(s.log.at(-1)!.text).toBe("Alex converted their mana to CCC");
     s = g.push(A, { type: "StepAdvanced", payload: {} });
     expect(s.players[A]!.mana.C).toBe(0);
     expect(s.log.at(-1)!.text).toBe("Alex's mana emptied (step change)");
