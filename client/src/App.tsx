@@ -4,6 +4,7 @@ import { Header } from "./components/Header";
 import { DeckPage } from "./pages/DeckPage";
 import { DecksPage } from "./pages/DecksPage";
 import { ImportPage } from "./pages/ImportPage";
+import { AdminPage } from "./pages/AdminPage";
 import { AgentsPage } from "./pages/AgentsPage";
 import { LibraryDeckPage } from "./pages/LibraryDeckPage";
 import { LibraryPage } from "./pages/LibraryPage";
@@ -41,6 +42,7 @@ export function App() {
             <Route path="/play" element={<PlayPage />} />
             <Route path="/room/:code" element={<RoomPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/library" element={<LibraryPage />} />
             <Route path="/admin/library/:id" element={<LibraryDeckPage />} />
             <Route path="/admin/agents" element={<AgentsPage />} />

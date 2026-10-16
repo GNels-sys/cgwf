@@ -1,5 +1,8 @@
 import type {
   AddAgentsResponse,
+  AdminStatsQuery,
+  AdminStatsResponse,
+  AdminUserDetail,
   AgentGamesResponse,
   AgentsStatus,
   CardResponse,
@@ -161,6 +164,20 @@ export const api = {
     remove: (code: string) => request<{ removed: number }>(`/api/rooms/${encodeURIComponent(code)}/agents`, { method: "DELETE" }),
     room: (code: string) => request<RoomAgentsResponse>(`/api/rooms/${encodeURIComponent(code)}/agents`),
     draftPrimer: (libraryDeckId: string, force = false) => request<DraftPrimerResponse>(`/api/library/${encodeURIComponent(libraryDeckId)}/draft-primer`, { json: { force } }),
+  },
+
+  /** Owner-only platform overview (who is on the platform, who is using it). */
+  admin: {
+    stats: (query: AdminStatsQuery & { refresh?: boolean } = {}, signal?: AbortSignal) => {
+      const qs = new URLSearchParams();
+      if (query.sort) qs.set("sort", query.sort);
+      if (query.q) qs.set("q", query.q);
+      if (query.limit) qs.set("limit", String(query.limit));
+      if (query.refresh) qs.set("refresh", "1");
+      const s = qs.toString();
+      return request<AdminStatsResponse>(`/api/admin/stats${s ? `?${s}` : ""}`, { ...(signal ? { signal } : {}) });
+    },
+    user: (id: string) => request<AdminUserDetail>(`/api/admin/users/${encodeURIComponent(id)}`),
   },
 
   /** Phase 8: friends, invites, the bell and the agent deck queue. */

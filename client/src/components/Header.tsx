@@ -20,6 +20,11 @@ export function Header() {
         {user && <NavLink to="/friends">Friends</NavLink>}
         {owner && <NavLink to="/admin/library">Library</NavLink>}
         {owner && <NavLink to="/admin/agents">Agents</NavLink>}
+        {owner && (
+          <NavLink to="/admin" end>
+            Admin
+          </NavLink>
+        )}
       </nav>
       {user && <Bell />}
       <NavLink to="/me" className="nav-user" aria-label="Your profile">

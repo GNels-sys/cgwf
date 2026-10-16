@@ -1,0 +1,365 @@
+/* ---- Admin page (owner only): stat tiles, two weekly column charts, the players table ---- */
+.admin-privacy {
+  line-height: 1.45;
+}
+
+/* Stat tiles */
+.admin-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.admin-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.admin-tile-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+}
+.admin-tile-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.admin-tile-note {
+  line-height: 1.35;
+}
+
+/* Weekly column charts: one series, accent colour, baseline at the bottom */
+.admin-charts {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+}
+@media (min-width: 720px) {
+  .admin-charts {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.admin-chart {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  min-width: 0;
+}
+.admin-chart-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.admin-chart-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  column-gap: 4px;
+  height: 120px;
+  border-bottom: 1px solid var(--border);
+}
+.admin-chart-bar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 0;
+}
+.admin-chart-fill {
+  display: block;
+  width: 100%;
+  max-width: 28px;
+  min-height: 2px;
+  background: var(--accent);
+  border-radius: 4px 4px 0 0;
+  opacity: 0.75;
+}
+.admin-chart-bar.is-latest .admin-chart-fill {
+  opacity: 1;
+}
+.admin-chart-value {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+.admin-chart-tick {
+  position: absolute;
+  top: 100%;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+.admin-chart-bar:first-child .admin-chart-tick {
+  left: 0;
+}
+.admin-chart-bar:last-child .admin-chart-tick {
+  right: 0;
+}
+.admin-chart-table {
+  margin-top: 26px;
+}
+.admin-chart-table summary {
+  cursor: pointer;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  color: var(--accent);
+}
+.admin-chart-table table {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+.admin-chart-table th,
+.admin-chart-table td {
+  text-align: left;
+  padding: 2px 12px 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.admin-generated {
+  margin: 4px 0 16px;
+}
+.admin-link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  min-height: 32px;
+}
+.admin-link-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Players: toolbar + table */
+.admin-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 10px;
+}
+.admin-toolbar h2 {
+  margin: 0;
+  flex: 1 1 auto;
+}
+.admin-filter input,
+.admin-sort select {
+  min-height: 40px;
+  padding: 6px 10px;
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg);
+}
+.admin-filter input {
+  width: min(260px, 70vw);
+}
+.admin-filter input:focus,
+.admin-sort select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.admin-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 8px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.admin-table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.admin-table .is-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.admin-row.is-open td {
+  border-bottom: 0;
+  background: var(--bg-elev);
+}
+.admin-row-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px 0 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  max-width: 100%;
+}
+.admin-row-toggle::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--fg-muted);
+  border-bottom: 2px solid var(--fg-muted);
+  transform: rotate(-45deg);
+  flex: none;
+  margin-right: 2px;
+}
+.admin-row-toggle[aria-expanded="true"]::before {
+  transform: rotate(45deg);
+}
+.admin-row-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-online {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  flex: none;
+}
+.admin-online.is-on {
+  background: var(--mana-G);
+  border-color: var(--mana-G);
+}
+.admin-cell-email {
+  overflow-wrap: anywhere;
+}
+.admin-pending {
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+.admin-row-detail td {
+  background: var(--bg-elev);
+  padding: 0 12px 12px 36px;
+}
+.admin-detail {
+  display: grid;
+  gap: 14px;
+}
+@media (min-width: 720px) {
+  .admin-detail {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.admin-detail h4 {
+  margin: 8px 0 6px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--fg-muted);
+}
+.admin-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.admin-detail-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.admin-status {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--bg-elev-2);
+  color: var(--fg-muted);
+  vertical-align: middle;
+}
+.admin-status.is-approved {
+  color: var(--mana-G);
+}
+.admin-status.is-rejected {
+  color: var(--danger);
+}
+.admin-status.is-pending {
+  color: var(--accent);
+}
+
+/* Phones (portrait and landscape): each row becomes a card with labelled values */
+@media (max-width: 839px) {
+  .admin-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .admin-table,
+  .admin-table tbody,
+  .admin-table tr,
+  .admin-table td {
+    display: block;
+  }
+  .admin-table tr.admin-row {
+    padding: 8px 0 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .admin-table td {
+    border: 0;
+    padding: 2px 0;
+  }
+  .admin-table td[data-label]:not(:first-child) {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 0.9rem;
+  }
+  .admin-table td[data-label]:not(:first-child)::before {
+    content: attr(data-label);
+    color: var(--fg-muted);
+    flex: none;
+  }
+  .admin-table .is-num {
+    text-align: right;
+  }
+  .admin-row.is-open td {
+    background: none;
+  }
+  .admin-row-detail td {
+    padding: 4px 0 12px;
+  }
+}
