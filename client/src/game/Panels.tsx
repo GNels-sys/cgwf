@@ -87,6 +87,22 @@ export function OpponentPanel({
           </button>
         )}
       </div>
+      <div className="zone-btns">
+        <button className="btn btn-small" onClick={() => onShowCards(`${player.name}'s command zone`, player.command)}>
+          Command {player.command.length}
+        </button>
+        <button className="btn btn-small" onClick={() => onShowCards(`${player.name}'s graveyard`, player.graveyard)}>
+          Graveyard {player.graveyard.length}
+        </button>
+        <button className="btn btn-small" onClick={() => onShowCards(`${player.name}'s exile`, player.exile)}>
+          Exile {player.exile.length}
+        </button>
+        {player.library.known.length > 0 && (
+          <button className="btn btn-small" onClick={() => onShowCards(`Revealed from ${player.name}'s library`, player.library.known)}>
+            Revealed {player.library.known.length}
+          </button>
+        )}
+      </div>
       {player.hand.cards.length > 0 && (
         <div className="opp-row">
           <span className="row-label">Revealed</span>
@@ -104,22 +120,6 @@ export function OpponentPanel({
           ))}
         </div>
       ))}
-      <div className="zone-btns">
-        <button className="btn btn-small" onClick={() => onShowCards(`${player.name}'s command zone`, player.command)}>
-          Command {player.command.length}
-        </button>
-        <button className="btn btn-small" onClick={() => onShowCards(`${player.name}'s graveyard`, player.graveyard)}>
-          Graveyard {player.graveyard.length}
-        </button>
-        <button className="btn btn-small" onClick={() => onShowCards(`${player.name}'s exile`, player.exile)}>
-          Exile {player.exile.length}
-        </button>
-        {player.library.known.length > 0 && (
-          <button className="btn btn-small" onClick={() => onShowCards(`Revealed from ${player.name}'s library`, player.library.known)}>
-            Revealed {player.library.known.length}
-          </button>
-        )}
-      </div>
       {Object.keys(player.commanderDamage).length > 0 && (
         <p className="muted small">
           Commander damage taken:{" "}
@@ -139,7 +139,9 @@ export function OpponentPanel({
 
 export function LogPanel({ log, canRevert, onRevert, onClose }: { log: LogEntry[]; canRevert: boolean; onRevert: (seq: number) => void; onClose: () => void }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [log.length]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end" });
+  }, [log.length]);
   const lastSeq = log.at(-1)?.seq ?? 0;
   return (
     <Panel title="Game log" subtitle={canRevert ? "Tap a line to rewind the game to just after it" : undefined} onClose={onClose}>

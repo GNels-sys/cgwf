@@ -39,6 +39,7 @@ export interface ViewPlayer {
   commanderTax: Record<string, number>;
   mulligans: number;
   kept: boolean;
+  toBottom: number;
   conceded: boolean;
   library: { count: number; known: ViewCard[] };
   hand: { count: number; cards: ViewCard[] };
@@ -144,6 +145,7 @@ export function viewFor(state: GameState, viewer: PlayerId | null, logLimit = 20
       commanderTax: p.commanderTax,
       mulligans: p.mulligans,
       kept: p.kept,
+      toBottom: p.toBottom,
       conceded: p.conceded,
       library: { count: p.zones.library.length, known },
       hand: { count: p.zones.hand.length, cards: handCards },
@@ -181,6 +183,6 @@ export function viewCardName(c: ViewCard, printings: Record<string, CardPrinting
   if (!c.printingId) return "Card";
   const p = printings[c.printingId];
   if (!p) return "Card";
-  const face = p.faces[c.face];
-  return c.face === 1 && face ? face.name : p.name;
+  const face = p.faces[c.face] ?? p.faces[0];
+  return face ? face.name : p.name;
 }

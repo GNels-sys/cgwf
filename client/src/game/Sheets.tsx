@@ -75,7 +75,7 @@ export function DialogView({ dialog, onClose }: { dialog: Dialog; onClose: () =>
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop dialog-backdrop" onClick={onClose}>
       <div className="modal dialog" role="dialog" aria-modal="true" aria-label={dialog.title} onClick={(e) => e.stopPropagation()}>
         <h3>{dialog.title}</h3>
         {dialog.kind === "number" && (

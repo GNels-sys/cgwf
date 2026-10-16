@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { HAND_SIZE, STEP_LABELS, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
+import { STEP_LABELS, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
 import { cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
 import { CardTile } from "./CardTile";
@@ -23,6 +23,8 @@ interface CardsPanel {
   title: string;
   subtitle?: string;
   cards: ViewCard[];
+  /** "library": the panel follows my known library cards and offers Shuffle. */
+  follow?: "library";
 }
 
 const ROW_LABEL: Record<Row, string> = { lands: "Lands", creatures: "Creatures", other: "Other" };
@@ -60,10 +62,19 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
   const closeSheet = useCallback(() => setSheet(null), []);
   const showCards = useCallback((title: string, cards: ViewCard[], subtitle?: string) => setCardsPanel(subtitle ? { title, cards, subtitle } : { title, cards }), []);
+  const awaitingLibrary = useRef(false);
+  const openLibraryWhenKnown = useCallback(() => {
+    awaitingLibrary.current = true;
+  }, []);
+  useEffect(() => {
+    if (!awaitingLibrary.current || !mePlayer || mePlayer.library.known.length === 0) return;
+    awaitingLibrary.current = false;
+    setCardsPanel({ title: "Your library (top first)", subtitle: "Only you can see these until you shuffle", cards: mePlayer.library.known, follow: "library" });
+  }, [mePlayer]);
 
   const ctx: Ctx = useMemo(
-    () => ({ view, printings, me, dispatch: sock.dispatch, send: sock.send, dialog: setDialog, zoom: setZoom, showCards, close: closeSheet }),
-    [view, printings, me, sock.dispatch, sock.send, showCards, closeSheet],
+    () => ({ view, printings, me, dispatch: sock.dispatch, send: sock.send, dialog: setDialog, zoom: setZoom, showCards, openLibraryWhenKnown, close: closeSheet }),
+    [view, printings, me, sock.dispatch, sock.send, showCards, openLibraryWhenKnown, closeSheet],
   );
 
   const tapCard = useCallback((card: ViewCard) => setSheet({ kind: "card", card }), []);
@@ -72,6 +83,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   // Keep panels in sync with the live view (a card list opened from a zone follows that zone).
   const liveCardsPanel = useMemo(() => {
     if (!cardsPanel) return null;
+    if (cardsPanel.follow === "library") return mePlayer ? { ...cardsPanel, cards: mePlayer.library.known } : null;
     const ids = new Set(cardsPanel.cards.map((c) => c.iid));
     const all = Object.values(view.players).flatMap((p) => [...p.graveyard, ...p.exile, ...p.command, ...p.hand.cards, ...p.library.known, ...p.battlefield.lands, ...p.battlefield.creatures, ...p.battlefield.other]);
     return { ...cardsPanel, cards: all.filter((c) => ids.has(c.iid)) };
@@ -101,9 +113,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const canAct = Boolean(mePlayer && !mePlayer.conceded && view.phase !== "ended");
 
   // ---- mulligan overlay ------------------------------------------------
-  const mulliganing = view.phase === "mulligan" && mePlayer && !mePlayer.conceded;
-  const needBottom = mePlayer && mePlayer.kept ? Math.max(0, mePlayer.hand.count - (HAND_SIZE - mePlayer.mulligans)) : 0;
-  const showMulligan = Boolean(mulliganing && (!mePlayer!.kept || needBottom > 0));
+  const needBottom = mePlayer?.toBottom ?? 0;
+  const showMulligan = Boolean(mePlayer && !mePlayer.conceded && ((view.phase === "mulligan" && !mePlayer.kept) || needBottom > 0));
 
   // ---- sheet contents ----------------------------------------------------
   let sheetView: React.ReactNode = null;
@@ -329,7 +340,23 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       {zoom && <CardZoom card={zoom} printings={printings} onClose={() => setZoom(null)} />}
       {liveCardsPanel && (
         <Panel title={liveCardsPanel.title} {...(liveCardsPanel.subtitle ? { subtitle: liveCardsPanel.subtitle } : {})} onClose={() => setCardsPanel(null)} wide>
-          <CardList cards={liveCardsPanel.cards} printings={printings} onTap={tapCard} onHold={holdCard} />
+          {liveCardsPanel.follow === "library" && me && (
+            <div className="actions" style={{ marginBottom: 10 }}>
+              <button
+                className="btn btn-small btn-primary"
+                onClick={() => {
+                  sock.dispatch({ type: "LibraryShuffled", payload: { player: me } });
+                  setCardsPanel(null);
+                }}
+              >
+                Done, shuffle
+              </button>
+              <button className="btn btn-small" onClick={() => setCardsPanel(null)}>
+                Done, keep order
+              </button>
+            </div>
+          )}
+          <CardList cards={liveCardsPanel.cards} printings={printings} onTap={tapCard} onHold={holdCard} empty="No cards here." />
         </Panel>
       )}
       {opponent && view.players[opponent] && (

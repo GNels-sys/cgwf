@@ -101,8 +101,8 @@ function requirePlaying(state: GameState): void {
 function cardName(c: CardInstance): string {
   if (c.custom) return c.custom.name;
   if (!c.printing) return "a card";
-  const face = c.printing.faces[c.face];
-  return c.face === 1 && face ? face.name : c.printing.name;
+  const face = c.printing.faces[c.face] ?? c.printing.faces[0];
+  return face ? face.name : c.printing.name;
 }
 
 /** Is the card's identity public right now (so the log may name it)? */
@@ -332,6 +332,7 @@ function start(ev: Extract<GameEvent, { type: "GameStarted" }>, seed: string): G
       commanderTax: {},
       mulligans: 0,
       kept: false,
+      toBottom: 0,
       conceded: false,
       zones: { library: [], hand: [], graveyard: [], exile: [], command: [], battlefield: { lands: [], creatures: [], other: [] } },
     };
@@ -398,6 +399,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requireActor(ev, p.id, "that player");
       if (state.phase !== "mulligan") fail("mulligans are over");
       p.kept = true;
+      p.toBottom = Math.min(p.mulligans, p.zones.hand.length);
       log(state, ev, p.mulligans ? `${p.name} keeps and will put ${p.mulligans} on the bottom` : `${p.name} keeps`);
       maybeFinishMulligans(state, ev);
       break;
@@ -422,7 +424,9 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const publicBefore = isPublic(c);
       const fromKind = c.zone.kind;
       const fromOwner = c.zone.owner;
+      const bottoming = fromKind === "hand" && to.kind === "library" && to.position === "bottom" && fromOwner === to.owner && dest.toBottom > 0;
       moveCard(state, c, to);
+      if (bottoming) dest.toBottom--;
       const alive = state.cards[c.iid];
       const name = alive ? describe(alive, publicBefore) : cardName(c);
       const toLabel = zoneLabel(to.kind, dest, ev.actor === to.owner, to.kind === "battlefield" ? alive?.zone.row : undefined);

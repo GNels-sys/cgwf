@@ -18,6 +18,8 @@ export interface Ctx {
   zoom: (c: ViewCard) => void;
   /** Show a list of cards (zone viewer). */
   showCards: (title: string, cards: ViewCard[], subtitle?: string) => void;
+  /** Open the library viewer as soon as the next view shows known cards (after look/search). */
+  openLibraryWhenKnown: () => void;
   close: () => void;
 }
 
@@ -201,9 +203,29 @@ export function libraryActions(ctx: Ctx, p: ViewPlayer): Action[] {
     {
       label: "Look at top...",
       disabled: count === 0,
-      run: () => dialog({ kind: "number", title: "Look at how many?", initial: 3, min: 1, max: 50, submitLabel: "Look", onSubmit: (n) => act({ type: "LibraryLooked", payload: { player: me, count: n } }) }),
+      run: () =>
+        dialog({
+          kind: "number",
+          title: "Look at how many?",
+          initial: 3,
+          min: 1,
+          max: 50,
+          submitLabel: "Look",
+          onSubmit: (n) => {
+            ctx.openLibraryWhenKnown();
+            act({ type: "LibraryLooked", payload: { player: me, count: n } });
+          },
+        }),
     },
-    { label: "Search library", hint: "shows every card to you only", run: () => act({ type: "LibrarySearched", payload: { player: me } }), disabled: count === 0 },
+    {
+      label: "Search library",
+      hint: "shows every card to you only",
+      disabled: count === 0,
+      run: () => {
+        ctx.openLibraryWhenKnown();
+        act({ type: "LibrarySearched", payload: { player: me } });
+      },
+    },
     {
       label: "Mill...",
       disabled: count === 0,

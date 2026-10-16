@@ -81,6 +81,8 @@ export interface PlayerState {
   commanderTax: Record<string, number>;
   mulligans: number;
   kept: boolean;
+  /** Cards still to put on the bottom after keeping a mulliganed hand. */
+  toBottom: number;
   conceded: boolean;
   zones: PlayerZones;
 }

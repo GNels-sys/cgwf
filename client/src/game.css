@@ -590,8 +590,14 @@
 .sheet-action small {
   font-size: 0.72rem;
 }
+.dialog-backdrop {
+  z-index: 80;
+}
 .dialog {
   width: min(100%, 420px);
+}
+.zoom-backdrop {
+  z-index: 85;
 }
 .dialog h3 {
   margin: 0 0 10px;
@@ -660,7 +666,7 @@
   --tile-w: calc(84px * 63 / 88);
 }
 .panel .zone-btns {
-  margin-top: 10px;
+  margin: 0 0 8px;
   flex-wrap: wrap;
 }
 .log-list {

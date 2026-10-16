@@ -15,12 +15,13 @@ keep the repo readable.
    request goes through `server/src/scryfall/client.ts` (User-Agent + Accept headers, 100 ms gap).
    Card data cached 24 h+. Images proxied and cached on the volume (`server/src/images.ts`),
    served byte-for-byte: never cropped, resized, recoloured or watermarked.
-3. **Hidden information is server-enforced.** (Phase 3) The server holds the only true state; each
-   client gets a per-player view that never contains identities of cards in libraries, other hands,
-   or face-down cards. A test must prove this.
-4. **Server-authoritative, event-sourced.** (Phase 3) Every action is an event appended to a log;
-   state is a pure reducer over the log plus a stored RNG seed (seeded shuffle). Reducer and event
-   types live in `/shared` so client and server never disagree.
+3. **Hidden information is server-enforced.** The server holds the only true state; each client
+   gets a per-player view (`shared/src/game/view.ts`) that never contains identities of cards in
+   libraries, other hands, or face-down cards. Proved by `shared/src/game/game.test.ts` (view
+   serialisation) and `server/src/rooms/rooms.test.ts` (every frame on the wire).
+4. **Server-authoritative, event-sourced.** Every action is an event appended to `room_events`;
+   state is a pure reducer over the log plus a stored RNG seed (seeded shuffle, dice, ids). Reducer
+   and event types live in `/shared` so client and server never disagree.
 
 ## Locked decisions (owner, 2026-10-15)
 
@@ -39,9 +40,10 @@ keep the repo readable.
 ## Layout
 
 ```
-shared/   types shared by both sides: card types, mana parser, API shapes (later: events, reducer)
-server/   Fastify + better-sqlite3 + Drizzle; Scryfall ingest; image proxy; REST (later: WebSocket)
-client/   React + Vite PWA (vite-plugin-pwa); plain CSS, mobile-first
+shared/   types shared by both sides: card types, mana parser, API shapes, game model + reducer + view
+server/   Fastify + better-sqlite3 + Drizzle; Scryfall ingest; image proxy; REST + WebSocket rooms
+client/   React + Vite PWA (vite-plugin-pwa); plain CSS, mobile-first; the table under client/src/game
+scripts/  bots.mjs: dev harness that seats three scripted players (see "Testing alone")
 ```
 
 Scripts (root): `npm run dev` (server :8080 + client :5173 with proxy), `npm test`,
@@ -96,9 +98,86 @@ bounded edit distance.
 - Client routes: `/` decks, `/decks/new` import (paste or Archidekt link -> review/fix -> save),
   `/decks/:id`, `/cards` search, `/me` profile. `RequireUser` shows the first-run profile form.
 
+## The game (Phase 3)
+
+### Model (`shared/src/game/`)
+
+- `types.ts`: `GameState` = players (life, counters, commanderDamage, commanderTax, mulligans, kept,
+  toBottom, conceded, zones) + `cards` (one `CardInstance` per physical card or token: full
+  `CardPrinting`, owner, zone {kind, owner, row}, tapped, faceDown, face, counters, attachedTo,
+  revealedTo) + turnOrder / activePlayer / turn / step + `rng` + `log` + `seq`. Zones: library
+  (index 0 = top), hand, graveyard, exile, command, battlefield rows lands | creatures | other.
+  `stack` and `priority` exist but are never used (reserved for a rules engine).
+- Events (`EventPayloads`): GameStarted, Mulligan, HandKept, CardsDrawn, CardMoved, CardTapped,
+  UntapAll, CardFlipped, CardTurned, CardRevealed, CounterChanged, LifeChanged,
+  PlayerCounterChanged, CommanderDamage, CommanderTaxChanged, LibraryShuffled, LibraryRevealed,
+  LibraryLooked, LibrarySearched, Milled, TokenCreated, CardCopied, Attached, TurnAdvanced,
+  StepAdvanced, StepSet, DiceRolled, CoinFlipped, RandomOpponent, PlayerConceded, Revert.
+  Clients send `{type, payload}`; the server stamps `seq` (1-based, contiguous), `actor`, `ts`.
+- `reducer.ts`: `applyEvent(state, event, seed)` is pure and throws `GameError` for illegal
+  actions (nobody touches another player's hand or library; only the host starts). `replay(events,
+  seed)` rebuilds state; a `Revert {toSeq}` replays the prefix up to `toSeq` and later events
+  continue from there. Log lines name a card only when its identity is public.
+- `rng.ts`: mulberry32 seeded from the room's secret seed (FNV-1a). Shuffles, dice, coins, random
+  opponent and instance ids all come from the stream, so replays agree. The seed never leaves the
+  server.
+- Visibility (`revealedTo`): library cards are hidden from everyone until LibraryLooked/Searched
+  (owner only) or LibraryRevealed (all); a shuffle forgets. Hand cards are visible to their owner
+  only unless CardRevealed. Face-down battlefield/exile cards are visible to owner/controller.
+  Any move resets reveals.
+- `view.ts`: `viewFor(state, viewerId | null)` -> `PlayerView` + the printings it references.
+  Hidden cards have `printingId: null` and are not listed at all when in a library or another
+  hand (counts only). Spectators get `viewer: null`.
+
+### Server (`server/src/rooms/`)
+
+- Tables: `rooms` (code, host, status lobby|playing|ended, seed, last_seq), `room_members`
+  (role player|spectator, seat 0-3, deck_id), `room_events` (append-only, unique room_id+seq).
+- `live.ts`: `RoomManager` creates/loads rooms; `LiveRoom` caches events + reduced state while
+  anyone is connected (evicted after 30 min idle), validates every client event with the reducer
+  before persisting (one SQLite transaction: insert event + bump rooms.last_seq/status), then
+  fans out per-connection views. `TokenCreated.printing` is replaced by the real printing from
+  `cards` (clients cannot forge card data); custom tokens are length-capped.
+- Undo = a `Revert` to `last.seq - 1`, allowed only when the requester made the last event.
+  Explicit revert from the log is open to any seated player and is itself logged.
+- REST: `POST /api/rooms` (10/hour per user), `GET /api/rooms/mine`, `GET /api/rooms/decks`,
+  `GET /api/rooms/:code`, `POST /api/rooms/:code/join`.
+- WebSocket `GET /api/rooms/:code/ws?token=<device token>` (`@fastify/websocket`, 256 KB frames,
+  25 msgs/s per socket). Client -> server: `seat {seat, deckId}`, `unseat`, `start` (host),
+  `event {event, cid?}`, `undo`, `revert {toSeq}`, `leave`, `ping`. Server -> client:
+  `room {room}` (members, seats, decks, online flags, `you`), `state {view, printings}` where
+  `printings` holds only printings not yet sent on this connection (the client keeps a
+  catalogue keyed by printing id), `error {message, cid?}`, `pong`.
+- Reconnect: a new socket gets `room` + a full `state` (and its printings again). Nothing is
+  kept client-side, so a phone that force-quits simply rejoins.
+- Leaving during a game concedes first; the host role passes to the next player.
+
+### Client (`client/src/game/`)
+
+- `/play` create/join/recent, `/room/:code` = `Lobby` (seats, own-deck picker, share link, host
+  start) or `Table` once playing. `socket.ts` reconnects with backoff and on tab wake.
+- Table: opponents across the top (tap -> `OpponentPanel` with their rows and zones), my three
+  battlefield rows, hand drawer, zone buttons, life widget. Tap a card -> `ActionSheet`
+  (`actions.ts` builds the list per zone); press-and-hold -> `CardZoom`. `@dnd-kit` drag onto
+  rows/zone buttons is the secondary path. Menu: log (tap a line to revert), dice, tokens
+  (Scryfall token search or custom text token), undo, untap all, concede, leave.
+- Mulligan overlay handles London mulligans; `toBottom` in the state drives the "put N on the
+  bottom" step. Pass turn untaps the new active player's permanents automatically (re-tap what
+  should stay tapped).
+- Hidden cards draw a plain striped CGwF back, never the official card back.
+
+### Testing alone
+
+`node scripts/bots.mjs http://localhost:8080` registers "Georgie" + three bots with small decks,
+creates a room, seats the bots and prints a device token: put it in localStorage as `cgwf.token`
+and open `/room/<code>` to play seat 1. Bots keep, play a land and pass on their turns; press
+Enter in that terminal to force-drop and rejoin Blair (reconnect drill). Works against
+https://cgwf.fly.dev too. The Vite proxy needs `ws: true` for `/api` (already set).
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
 2. Device identity, decks, decklist parser with per-site fixtures, printing resolution. **(done)**
-3. Rooms, join codes, WebSocket sync, event log + reducer, the table, hidden info, reconnect.
-4. Undo/revert, token finder, log panel, personalization, light animations.
+3. Rooms, join codes, WebSocket sync, event log + reducer, the table, hidden info, reconnect. **(done)**
+4. Polish: smarter token finder, personalization, light animations, play-again from a finished
+   table, per-event view deltas if bandwidth matters.

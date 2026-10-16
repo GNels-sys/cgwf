@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { RequireUser } from "../components/RequireUser";
 import { Lobby } from "../game/Lobby";
 import { useRoomSocket } from "../game/socket";
@@ -38,7 +39,11 @@ function Room({ code }: { code: string }) {
     );
   }
   if (sock.room.status === "lobby" || !sock.view) return <Lobby room={sock.room} sock={sock} />;
-  return <Table room={sock.room} view={sock.view} printings={sock.printings} sock={sock} />;
+  return (
+    <ErrorBoundary>
+      <Table room={sock.room} view={sock.view} printings={sock.printings} sock={sock} />
+    </ErrorBoundary>
+  );
 }
 
 export function RoomPage() {
