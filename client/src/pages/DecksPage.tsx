@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { DeckSummary } from "@cgwf/shared";
 import { api } from "../api";
 import { CardImage } from "../components/CardImage";
+import { deckScenery } from "../components/deckScenery";
 import { RequireUser } from "../components/RequireUser";
 import { Tour } from "../components/Tour";
 import { useUser } from "../user";
@@ -35,7 +36,7 @@ function DeckList() {
       <ul className="deck-grid">
         {decks.map((d) => (
           <li key={d.id}>
-            <Link to={`/decks/${d.id}`} className="deck-tile">
+            <Link to={`/decks/${d.id}`} className="deck-tile" data-realm={deckScenery(d.id)}>
               <div className={`deck-tile-art n${Math.min(d.commanders.length, 2)}`}>
                 {d.commanders.length === 0 && <div className="deck-tile-blank">No commander</div>}
                 {d.commanders.slice(0, 2).map((c) => (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { deckScenery } from "../components/deckScenery";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { SUBMISSION_NOTE_MAX, type Board, type DeckCardEntry, type DeckDetail, type SubmissionInfo } from "@cgwf/shared";
 import { api } from "../api";
@@ -326,7 +327,7 @@ function DeckView({ id }: { id: string }) {
 export function DeckPage() {
   const { id } = useParams();
   return (
-    <main className="page deck-page">
+    <main className="page deck-page" data-realm={deckScenery(id ?? "")}>
       <p>
         <Link to="/" className="muted small">
           &larr; All decks

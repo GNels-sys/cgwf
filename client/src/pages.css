@@ -1369,8 +1369,6 @@ input[type="checkbox"] { accent-color: var(--accent); }
   box-shadow: 0 8px 26px #0003, inset 0 1px 0 #ffffff1a;
   --realm-position: 0%;
 }
-.deck-grid > li:nth-child(3n + 2) .deck-tile { --realm-position: 50%; }
-.deck-grid > li:nth-child(3n) .deck-tile { --realm-position: 100%; }
 .deck-tile::before, .deck-tile::after { content: ""; position: absolute; inset: -5px; pointer-events: none; }
 .deck-tile::before { z-index: -2; background: url('/art/realms.jpg') var(--realm-position) center / 300% 100%; filter: blur(3px); }
 .deck-tile::after { z-index: -1; background: linear-gradient(180deg, #10201b26, var(--art-wash) 75%); }
@@ -1391,3 +1389,41 @@ input[type="checkbox"] { accent-color: var(--accent); }
   .deck-tile-art { padding: 6px; }
   .page-intro:not(.is-illustrated), .detail-heading { padding: 20px; }
 }
+
+/* Equal deck frames keep the collection steady with long names and partner commanders. */
+.deck-grid { grid-auto-rows: 1fr; align-items: stretch; }
+.deck-grid > li { display: flex; min-width: 0; }
+.deck-grid .deck-tile { display: grid; grid-template-rows: auto minmax(3em, auto) auto; align-content: start; width: 100%; height: 100%; min-width: 0; }
+.deck-tile-art { aspect-ratio: 63 / 88; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
+.deck-tile-art .card-image, .deck-tile-art .deck-tile-blank { width: 100%; flex: 0 1 100%; }
+.deck-tile-art.n2 .card-image { width: calc(50% - 3px); flex-basis: calc(50% - 3px); }
+.deck-tile-name { overflow-wrap: anywhere; line-height: 1.35; }
+.deck-tile .small { overflow-wrap: anywhere; }
+/* These selectors override the old positional presets; the deck ID owns its scene. */
+.deck-grid .deck-tile[data-realm="forest"], .deck-page[data-realm="forest"] { --realm-position: 0%; }
+.deck-grid .deck-tile[data-realm="moon"], .deck-page[data-realm="moon"] { --realm-position: 50%; }
+.deck-grid .deck-tile[data-realm="ember"], .deck-page[data-realm="ember"] { --realm-position: 100%; }
+.collection-page, .deck-page { position: relative; }
+.deck-page .detail-heading::before { background: url('/art/realms.jpg') var(--realm-position) center / 300% 100%; opacity: .2; }
+/* The alien plane belongs to the card-search canvas; card faces remain untouched. */
+.search-page .results { position: relative; isolation: isolate; overflow: hidden; min-height: 420px; padding: 24px; border: 1px solid var(--glass-edge); border-radius: 14px; }
+.search-page .results::before, .search-page .results::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
+.search-page .results::before { z-index: -2; background: url('/art/alien-plane.jpg') center top / cover; }
+.search-page .results::after { z-index: -1; background: var(--art-wash); opacity: .8; }
+.search-page .results .empty-state { background: var(--glass-strong); border-style: solid; }
+.search-page .results .card-tile { background: var(--glass-strong); border-color: var(--glass-edge); }
+.search-page .results .card-grid { margin-top: 0; }
+@media (max-width: 600px) {
+  .search-page .results { padding: 12px; min-height: 390px; }
+  .deck-tile-art { gap: 4px; }
+  .deck-tile-art.n2 .card-image { width: calc(50% - 2px); flex-basis: calc(50% - 2px); }
+}
+
+/* Put full-page scenery on the canvas so it cannot cover navigation or dialogs. */
+body:has(.collection-page), body:has(.deck-page) { background-repeat: no-repeat; background-attachment: fixed; }
+body:has(.collection-page) { background-image: linear-gradient(180deg, var(--art-wash), var(--bg)), url('/art/sanctuary.jpg'); background-size: cover; background-position: center; }
+body:has(.deck-page) { background-image: linear-gradient(180deg, var(--art-wash), var(--bg)), url('/art/realms.jpg'); background-size: cover, 300% 100%; background-position: center, var(--realm-position) center; }
+body:has(.deck-page[data-realm="forest"]) { --realm-position: 0%; }
+body:has(.deck-page[data-realm="moon"]) { --realm-position: 50%; }
+body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
+.search-page .page-intro:not(.is-illustrated)::before { background-image: linear-gradient(90deg, var(--bg) 15%, var(--bg) 55%, transparent), url('/art/alien-plane.jpg'); }

@@ -277,3 +277,53 @@ Current examples are retained in `design-previews/glass/`:
 `qa-motion.json` records the dynamic checks and computed glass styles for the menu,
 action sheet, and mana panel in all six size/theme combinations. The glass selector
 has enough specificity to retain translucency after game-specific surface rules.
+
+
+## Consistent deck sizes and connected scenery (2026-10-16)
+
+Deck tiles now use equal-height grid rows, consistent 63:88 artwork frames, and
+wrapping text. Single commanders, partners, and missing commanders occupy the same
+outer frame. Partner images scale side by side inside that frame without cropping;
+long names remain fully readable. The grid stretches every tile to the same height
+across all rows at a given viewport width.
+
+`deckScenery.ts` maps the deck ID to woodland, moon, or ember scenery with a stable
+hash. The collection tile and deck-detail route use the same mapping, including
+direct links and reloads; positional nth-child presets were removed. Opening a deck
+carries that pane's artwork and scene position into the full-page canvas. The deck
+collection also uses the existing sanctuary banner image as its page backdrop.
+Scenery is painted on the body via the existing CSS :has approach so it cannot
+obscure navigation, content, or fixed dialogs. No game, API, or saved-setting behavior
+changes are involved.
+
+The Cards results area has a new Eldrazi-inspired alien-plane painting, with a
+matching cool-toned header. Card-result panels and starting states remain readable
+on glass surfaces. Complete card images keep their original aspect ratio and colors.
+
+New original asset: `client/public/art/alien-plane.jpg`, generated using the built-in
+ImageGen tool, 1536×1024, JPEG quality 86, 276,769 bytes. It is included by the existing
+JPG shell-art precache rule. Prompt: "Use case: stylized-concept. Asset type: wide
+original background painting for a fantasy card catalogue. An uncanny Eldrazi-inspired
+alien plane, with immense floating fractured stone rings and angular monoliths above
+a desolate lavender-gray landscape, twisting pale organic spires, impossible gravity,
+distant amorphous cosmic silhouettes partly obscured by silver mist. Cold indigo,
+muted lilac, bone ivory and subtle teal illumination. Elegant high-detail fantasy
+environment illustration, atmospheric and spacious rather than busy or gruesome.
+No text, logos, mana symbols, card borders, or copied card artwork. Keep the center
+gently lit with low contrast so a grid of whole card images and frosted controls can
+be readable over it. Landscape 1536x1024."
+
+Verification: type checking, all 193 tests, and production build pass. The first test
+run encountered a timing failure in the existing agent-game test while browser QA
+ran concurrently; the full suite passed when rerun separately, without test edits.
+Browser checks cover all three target sizes in dark/light mode, mixed commander
+counts, a long name, equal tile/frame geometry, actual tile-to-detail navigation,
+matching scenery, reload persistence, navigation visibility, and card search/detail.
+The screenshots use intercepted demo accounts/decks and the existing local card
+catalogue; no database writes occurred. Reduced-motion browser settings remained on.
+
+Screenshots and the measured geometry are in `design-previews/deck-scenes/`:
+[Desktop collection](design-previews/deck-scenes/decks-desktop-dark.jpg),
+[Phone collection](design-previews/deck-scenes/decks-portrait-dark.jpg),
+[Selected deck](design-previews/deck-scenes/selected-deck-desktop-dark.jpg), and
+[Alien-plane card results](design-previews/deck-scenes/card-results-desktop-dark.jpg).

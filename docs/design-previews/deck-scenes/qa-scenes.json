@@ -1,0 +1,644 @@
+[
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "portrait",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 397.828125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      },
+      {
+        "height": 397.828125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "forest"
+      },
+      {
+        "height": 397.828125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "portrait",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 397.828125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      },
+      {
+        "height": 397.828125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "forest"
+      },
+      {
+        "height": 397.828125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "landscape",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 474.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      },
+      {
+        "height": 474.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "forest"
+      },
+      {
+        "height": 474.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "landscape",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 474.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      },
+      {
+        "height": 474.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "forest"
+      },
+      {
+        "height": 474.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "desktop",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 432.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      },
+      {
+        "height": 432.765625,
+        "width": 214.40625,
+        "frame": 246.40625,
+        "realm": "forest"
+      },
+      {
+        "height": 432.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "desktop",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 432.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      },
+      {
+        "height": 432.765625,
+        "width": 214.40625,
+        "frame": 246.40625,
+        "realm": "forest"
+      },
+      {
+        "height": 432.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  }
+]
