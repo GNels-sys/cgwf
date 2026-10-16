@@ -335,3 +335,11 @@ Deck tiles now show the existing analysis engine's suggested bracket (B1–B5), 
 A frosted collection toolbar filters brackets with per-bracket counts, and sorts by recent update, bracket ascending/descending, pip total descending, or deck name. Unavailable values stay last in numeric sorts. Pending analysis, unavailable values, empty filtered results, and retry are explicit. Analysis requests are paced to the existing 30/minute limit; short-lived, versioned, per-user in-memory caching avoids unnecessary repeat requests. Deck tiles remain equal-sized, and scenery follows the stable deck ID through sorting/filtering.
 
 Validation: typecheck, all 197 tests (including four new collection sorting tests), production build, and mocked browser review at 375×812, 812×375, and 1440×1000 in both themes. Browser checks cover B2/B3/B4 filters, empty brackets, bracket/pip/name sorts, fractional pips, equal tile dimensions, stable scenery, and navigation. A separate phone check exercises partial analysis failure and successful retry. Screenshots and reports: `docs/design-previews/deck-brackets/`.
+
+## Total mana and full Cards scenery — 2026-10-16
+
+The deck tile headline and pip sort now include all fixed mana requirements: colored and dedicated colorless pips plus numeric generic costs. The breakdown says “Includes … generic mana” to avoid implying it is extra. X stays zero, matching the existing statistics convention. A regression check covers a deck whose generic/colorless requirement changes its sort position.
+
+Cards now uses the alien-plane artwork as the full-page, fixed viewport background, with aspect-preserving cover sizing and a theme-aware wash. The results container and heading no longer paint separate copies of the scene. Scrolling or changing result counts does not rescale the artwork. Card faces and frosted result tiles retain their existing presentation.
+
+Validation: typecheck and production build passed. All 198 tests passed on rerun after the existing agent-runner timing flake (extra mulligan decision). Browser review passed at 375×812, 812×375, and 1440×1000 in both themes, checking combined mana totals, equal deck tiles, stable scenery/navigation, and unchanged viewport background settings before/after card results. Evidence: `docs/design-previews/full-cards/`.

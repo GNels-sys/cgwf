@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DeckSummary, PipCounts } from "@cgwf/shared";
-import { sortDecks, type DeckMetrics } from "./deckMetrics";
+import { sortDecks, totalManaPips, type DeckMetrics } from "./deckMetrics";
 
 const decks: DeckSummary[] = [
   { id: "unknown", name: "Alpha", updatedAt: "2026-10-16" },
@@ -22,8 +22,14 @@ describe("collection sorting", () => {
     expect(sortDecks(decks, metrics, "bracket-asc").map((d) => d.id)).toEqual(["core", "optimized", "unknown"]);
     expect(sortDecks(decks, metrics, "bracket-desc").map((d) => d.id)).toEqual(["optimized", "core", "unknown"]);
   });
-  it("sorts fractional pip totals without counting generic mana", () => {
+  it("sorts fractional pip totals including generic mana", () => {
     expect(sortDecks(decks, metrics, "pips").map((d) => d.id)).toEqual(["core", "optimized", "unknown"]);
+  });
+  it("includes dedicated colorless and generic costs in totals and sorting", () => {
+    const colorless = { ...pips(20), colored: { W: 0, U: 0, B: 0, R: 0, G: 12, C: 8 }, generic: 130 };
+    expect(totalManaPips(colorless)).toBe(150);
+    expect(totalManaPips(pips(23.5))).toBe(123.5);
+    expect(sortDecks(decks, { ...metrics, optimized: { bracket: 4, pips: colorless } }, "pips").map((d) => d.id)).toEqual(["optimized", "core", "unknown"]);
   });
   it("sorts dates and names without mutating the collection", () => {
     expect(sortDecks(decks, metrics, "updated").map((d) => d.id)).toEqual(["unknown", "optimized", "core"]);

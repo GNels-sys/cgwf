@@ -4,7 +4,7 @@ import { BRACKET_NAMES, PIP_COLORS, PIP_COLOR_NAMES, type DeckSummary } from "@c
 import { api } from "../api";
 import { CardImage } from "../components/CardImage";
 import { deckScenery } from "../components/deckScenery";
-import { loadDeckMetrics, sortDecks, type DeckMetrics, type DeckSort } from "../components/deckMetrics";
+import { loadDeckMetrics, sortDecks, totalManaPips, type DeckMetrics, type DeckSort } from "../components/deckMetrics";
 import { RequireUser } from "../components/RequireUser";
 import { Tour } from "../components/Tour";
 import { useUser } from "../user";
@@ -17,11 +17,11 @@ function DeckTileMetrics({ value }: { value: DeckMetrics | undefined }) {
       {bracket ? `B${bracket} · ${BRACKET_NAMES[bracket]}` : value ? "Bracket unavailable" : "Bracket loading…"}
     </span>
     {pips ? <>
-      <span className="deck-pip-total"><strong>{pips.coloredTotal.toLocaleString()}</strong> mana pips</span>
+      <span className="deck-pip-total" title="Colored, colorless and generic mana requirements combined; X counts as zero"><strong>{totalManaPips(pips).toLocaleString()}</strong> total mana pips</span>
       <span className="deck-pip-breakdown">
         {PIP_COLORS.filter((c) => pips.colored[c] > 0).map((c) => <span key={c} aria-label={`${PIP_COLOR_NAMES[c]}: ${pips.colored[c]}`} title={PIP_COLOR_NAMES[c]}><i style={{ background: `var(--mana-${c})` }} aria-hidden="true" />{c} {pips.colored[c].toLocaleString()}</span>)}
       </span>
-      <span className="muted small">+ {pips.generic.toLocaleString()} generic mana</span>
+      <span className="muted small">Includes {pips.generic.toLocaleString()} generic mana</span>
     </> : <span className="muted small">{value ? "Mana pips unavailable" : "Counting mana pips…"}</span>}
   </div>;
 }

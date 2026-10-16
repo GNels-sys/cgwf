@@ -6,6 +6,11 @@ export interface DeckMetrics {
   pips: PipCounts | null;
 }
 
+/** All fixed mana requirements: W/U/B/R/G/C plus numeric generic costs. X remains 0. */
+export function totalManaPips(pips: PipCounts): number {
+  return Math.round((pips.coloredTotal + pips.generic) * 100) / 100;
+}
+
 // Share work across collection remounts. The version and short lifetime keep edits
 // and refreshed combo analysis visible without persisting private deck data.
 const cache = new Map<string, { expires: number; value: Promise<DeckMetrics> }>();
@@ -49,8 +54,8 @@ export function sortDecks(decks: DeckSummary[], metrics: Record<string, DeckMetr
     const am = metrics[a.id], bm = metrics[b.id];
     let result = 0;
     if (sort === "bracket-asc" || sort === "bracket-desc" || sort === "pips") {
-      const av = sort === "pips" ? am?.pips?.coloredTotal : am?.bracket;
-      const bv = sort === "pips" ? bm?.pips?.coloredTotal : bm?.bracket;
+      const av = sort === "pips" ? (am?.pips ? totalManaPips(am.pips) : null) : am?.bracket;
+      const bv = sort === "pips" ? (bm?.pips ? totalManaPips(bm.pips) : null) : bm?.bracket;
       // Unavailable and still-loading values always stay at the end.
       if (av == null || bv == null) result = av == null ? (bv == null ? 0 : 1) : -1;
       else result = (av - bv) * (sort === "bracket-asc" ? 1 : -1);

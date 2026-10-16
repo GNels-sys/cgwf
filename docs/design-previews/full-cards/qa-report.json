@@ -1,0 +1,488 @@
+[
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "total-mana-includes-generic",
+    "size": "portrait",
+    "ui": "dark",
+    "total": "13",
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "portrait",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 589.3125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      },
+      {
+        "height": 589.3125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "forest"
+      },
+      {
+        "height": 589.3125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "viewport-scenery-stable",
+    "size": "portrait",
+    "ui": "dark",
+    "before": {
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgba(16, 32, 27, 0.72)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "after": {
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgba(16, 32, 27, 0.72)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "total-mana-includes-generic",
+    "size": "portrait",
+    "ui": "light",
+    "total": "13",
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "portrait",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 589.3125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      },
+      {
+        "height": 589.3125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "forest"
+      },
+      {
+        "height": 589.3125,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "viewport-scenery-stable",
+    "size": "portrait",
+    "ui": "light",
+    "before": {
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgba(255, 248, 229, 0.79)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "after": {
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgba(255, 248, 229, 0.79)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "total-mana-includes-generic",
+    "size": "landscape",
+    "ui": "dark",
+    "total": "13",
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "landscape",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      },
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "forest"
+      },
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "viewport-scenery-stable",
+    "size": "landscape",
+    "ui": "dark",
+    "before": {
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgba(16, 32, 27, 0.72)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "after": {
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgba(16, 32, 27, 0.72)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "total-mana-includes-generic",
+    "size": "landscape",
+    "ui": "light",
+    "total": "13",
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "landscape",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      },
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "forest"
+      },
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "viewport-scenery-stable",
+    "size": "landscape",
+    "ui": "light",
+    "before": {
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgba(255, 248, 229, 0.79)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "after": {
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgba(255, 248, 229, 0.79)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "total-mana-includes-generic",
+    "size": "desktop",
+    "ui": "dark",
+    "total": "13",
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "desktop",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 586.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      },
+      {
+        "height": 586.765625,
+        "width": 214.40625,
+        "frame": 246.40625,
+        "realm": "forest"
+      },
+      {
+        "height": 586.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "viewport-scenery-stable",
+    "size": "desktop",
+    "ui": "dark",
+    "before": {
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgba(16, 32, 27, 0.72)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "after": {
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgba(16, 32, 27, 0.72)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "total-mana-includes-generic",
+    "size": "desktop",
+    "ui": "light",
+    "total": "13",
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "desktop",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 586.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      },
+      {
+        "height": 586.765625,
+        "width": 214.40625,
+        "frame": 246.40625,
+        "realm": "forest"
+      },
+      {
+        "height": 586.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "viewport-scenery-stable",
+    "size": "desktop",
+    "ui": "light",
+    "before": {
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgba(255, 248, 229, 0.79)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "after": {
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgba(255, 248, 229, 0.79)), url(\"http://localhost:5173/art/alien-plane.jpg\")",
+      "size": "cover, cover",
+      "position": "50% 50%, 50% 50%",
+      "attachment": "fixed, fixed",
+      "resultImage": "none"
+    },
+    "errors": []
+  }
+]
