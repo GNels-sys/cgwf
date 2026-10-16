@@ -11,6 +11,7 @@ import { registerCardRoutes } from "./routes/cards.js";
 import { registerDeckRoutes } from "./routes/decks.js";
 import { registerMeRoutes } from "./routes/me.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
+import { registerSettingsRoutes } from "./routes/settings.js";
 import { RoomManager } from "./rooms/live.js";
 import { Ingestor } from "./scryfall/ingest.js";
 import { NameIndex } from "./search/index.js";
@@ -54,6 +55,7 @@ export async function buildApp(opts: { dbFile?: string; logger?: boolean | "plai
   registerMeRoutes(app, handle);
   registerDeckRoutes(app, { handle, index });
   registerRoomRoutes(app, { handle, roomsManager });
+  registerSettingsRoutes(app, { handle, onSettingsChanged: (userId) => roomsManager.userChanged(userId) });
 
   // In production the server also hosts the built client (a static SPA).
   const indexHtml = path.join(config.clientDist, "index.html");

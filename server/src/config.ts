@@ -25,6 +25,7 @@ export const config = {
   dataDir,
   dbFile: path.join(dataDir, "cgwf.db"),
   imageDir: path.join(dataDir, "images"),
+  uploadDir: path.join(dataDir, "uploads"),
   bulkDir: path.join(dataDir, "scryfall"),
   contactEmail: env("CONTACT_EMAIL", "unknown@example.com"),
   cardDataMaxAgeHours: Number(env("CARD_DATA_MAX_AGE_HOURS", "24")),
@@ -40,7 +41,7 @@ export const config = {
 } as const;
 
 export function ensureDataDirs(): void {
-  for (const dir of [config.dataDir, config.imageDir, config.bulkDir]) {
+  for (const dir of [config.dataDir, config.imageDir, config.bulkDir, config.uploadDir]) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }

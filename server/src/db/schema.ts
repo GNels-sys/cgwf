@@ -136,6 +136,8 @@ export const rooms = sqliteTable(
     format: text("format").notNull().default("commander"),
     seed: text("seed").notNull(),
     lastSeq: integer("last_seq").notNull().default(0),
+    /** Set when the host starts a rematch: the room everyone should move to. */
+    nextRoomId: text("next_room_id"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -178,6 +180,40 @@ export const roomEvents = sqliteTable(
   (t) => [uniqueIndex("room_events_seq_idx").on(t.roomId, t.seq)],
 );
 
+/**
+ * Per-user personalization (playmat, sleeves, theme, layout) as one JSON blob,
+ * validated by shared `sanitizeSettings` on every read and write. Applied
+ * client-side only; the server never renders.
+ */
+export const userSettings = sqliteTable("user_settings", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  settings: text("settings", { mode: "json" }).$type<unknown>().notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+/**
+ * Player-uploaded images (playmats, sleeve backs). Files live under
+ * DATA_DIR/uploads/<id>.<ext>; the id is 16 random bytes in hex. Served only
+ * to the owner and to players who share a room with the owner.
+ */
+export const uploads = sqliteTable(
+  "uploads",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "playmat" | "sleeve" */
+    kind: text("kind").notNull(),
+    mime: text("mime").notNull(),
+    bytes: integer("bytes").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("uploads_user_idx").on(t.userId)],
+);
+
 export type CardRow = typeof cards.$inferSelect;
 export type NewCardRow = typeof cards.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
@@ -186,3 +222,4 @@ export type DeckCardRow = typeof deckCards.$inferSelect;
 export type RoomRow = typeof rooms.$inferSelect;
 export type RoomMemberRow = typeof roomMembers.$inferSelect;
 export type RoomEventRow = typeof roomEvents.$inferSelect;
+export type UploadRow = typeof uploads.$inferSelect;

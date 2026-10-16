@@ -10,6 +10,7 @@ import {
   applyEvent,
   isEventType,
   isRow,
+  lookOf,
   replay,
   viewFor,
   type CardPrinting,
@@ -28,6 +29,7 @@ import { cards, decks, roomEvents, roomMembers, rooms, users, type RoomMemberRow
 import { rowToPrinting } from "../scryfall/map.js";
 import { newRoomCode } from "./codes.js";
 import { describeDeck, loadDeckForGame } from "./deck.js";
+import { loadSettings } from "../settings.js";
 
 /**
  * In-memory runtime for rooms. The database is the source of truth
@@ -103,7 +105,7 @@ export class LiveRoom {
 
   // ------------------------------------------------------------ loading
 
-  private refreshRow(): RoomRow {
+  refreshRow(): RoomRow {
     this.row = this.handle.db.select().from(rooms).where(eq(rooms.id, this.id)).get() ?? this.row;
     return this.row;
   }
@@ -150,11 +152,13 @@ export class LiveRoom {
           deckName: deck?.name ?? null,
           commanders: deck?.commanders ?? [],
           online: online.has(m.userId),
+          look: lookOf(loadSettings(this.handle, m.userId)),
         };
       })
       .filter((m): m is RoomMember => m !== null)
       .sort((a, b) => (a.seat ?? 99) - (b.seat ?? 99) || a.name.localeCompare(b.name));
     const me = forUserId ? members.find((m) => m.userId === forUserId) : undefined;
+    const next = row.nextRoomId ? this.handle.db.select({ code: rooms.code }).from(rooms).where(eq(rooms.id, row.nextRoomId)).get() : undefined;
     return {
       id: row.id,
       code: row.code,
@@ -163,6 +167,7 @@ export class LiveRoom {
       format: "commander",
       members,
       createdAt: row.createdAt,
+      nextCode: next?.code ?? null,
       you: me ? { userId: me.userId, role: me.role, seat: me.seat } : null,
     };
   }
@@ -415,6 +420,54 @@ export class RoomManager {
       this.handle.db.insert(roomMembers).values({ roomId: id, userId: hostUserId, role: "player", seat: 0, deckId: null, joinedAt: ts }).run();
     })();
     return this.get(code)!;
+  }
+
+  /**
+   * Rematch: a brand-new room with a fresh seed, the same seats and decks, started
+   * at once. The old room remembers the new code so every client can follow.
+   * Idempotent: a second press returns the room already created.
+   */
+  rematch(old: LiveRoom, userId: string): LiveRoom {
+    const row = old.refreshRow();
+    if (row.hostUserId !== userId) throw new RoomError("only the host can start a rematch");
+    if (row.status !== "ended") throw new RoomError("the game is still going");
+    if (row.nextRoomId) {
+      const existing = this.handle.db.select({ code: rooms.code }).from(rooms).where(eq(rooms.id, row.nextRoomId)).get();
+      const room = existing ? this.get(existing.code) : null;
+      if (room) return room;
+    }
+    const id = randomUUID();
+    const seed = randomBytes(16).toString("hex");
+    const ts = now();
+    let code = newRoomCode();
+    for (let tries = 0; tries < 10; tries++) {
+      if (!this.handle.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code)).get()) break;
+      code = newRoomCode();
+    }
+    const members = old.members();
+    this.handle.sqlite.transaction(() => {
+      this.handle.db.insert(rooms).values({ id, code, hostUserId: userId, status: "lobby", format: "commander", seed, lastSeq: 0, createdAt: ts, updatedAt: ts }).run();
+      for (const m of members) {
+        this.handle.db.insert(roomMembers).values({ roomId: id, userId: m.userId, role: m.role, seat: m.seat, deckId: m.deckId, joinedAt: ts }).run();
+      }
+      this.handle.db.update(rooms).set({ nextRoomId: id, updatedAt: ts }).where(eq(rooms.id, old.id)).run();
+    })();
+    const next = this.get(code)!;
+    try {
+      next.start(userId);
+    } catch (err) {
+      // A deck was deleted meanwhile: the new table opens as a lobby instead of failing the rematch.
+      this.log.info({ err }, "rematch opened as a lobby");
+    }
+    old.broadcastRoom();
+    return next;
+  }
+
+  /** A user's shared settings changed: re-send room info wherever they are connected. */
+  userChanged(userId: string): void {
+    for (const room of this.live.values()) {
+      if (room.connectionCount > 0 && room.member(userId)) room.broadcastRoom();
+    }
   }
 
   get(code: string): LiveRoom | null {

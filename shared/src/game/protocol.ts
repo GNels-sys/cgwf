@@ -1,5 +1,6 @@
 import type { CardPrinting } from "../cards.js";
 import type { AvatarColorKey, AvatarKey } from "../user.js";
+import type { Look } from "../settings.js";
 import type { EventInput, PlayerId } from "./types.js";
 import type { PlayerView } from "./view.js";
 
@@ -23,6 +24,8 @@ export interface RoomMember {
   deckName: string | null;
   commanders: string[];
   online: boolean;
+  /** Playmat + sleeve this player chose (applied client-side by everyone). */
+  look: Look;
 }
 
 export interface RoomInfo {
@@ -33,6 +36,8 @@ export interface RoomInfo {
   format: "commander";
   members: RoomMember[];
   createdAt: string;
+  /** After a rematch: the code of the new table everyone should move to. */
+  nextCode: string | null;
   /** Who you are in this room (null before joining). */
   you: { userId: PlayerId; role: MemberRole; seat: number | null } | null;
 }
@@ -48,6 +53,8 @@ export type ClientMessage =
   | { t: "event"; event: EventInput; cid?: string }
   | { t: "undo" }
   | { t: "revert"; toSeq: number }
+  /** Host only, once the game has ended: new table, same seats and decks, fresh seed. */
+  | { t: "rematch" }
   | { t: "leave" }
   | { t: "ping" };
 
