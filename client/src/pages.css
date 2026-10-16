@@ -452,3 +452,39 @@ hr {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Account */
+.account-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 4px;
+}
+.device-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 12px;
+}
+.device-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--bg-elev-2);
+  color: var(--fg-muted);
+  vertical-align: middle;
+}
+.tag-owner {
+  margin-left: 0;
+  background: var(--accent);
+  color: var(--accent-ink, #000);
+}
