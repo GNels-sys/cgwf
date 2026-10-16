@@ -18,6 +18,12 @@ Coast LLC. Card data and images courtesy of [Scryfall](https://scryfall.com).
   your table), table theme, accent, light/dark interface, optional ambient sound, card size and
   layout. Saved to your account.
 - Rematch from a finished table with the same seats and decks.
+- Every deck page shows a Commander Bracket panel: the lowest bracket the official rules allow
+  and a suggested bracket, with the reasons card by card (Game Changers, mass land denial, extra
+  turns, two-card infinite combos found by Commander Spellbook), strategy tags and a summary.
+  No AI involved; the Game Changers list is a dated file you can edit by hand.
+- Owner only: a deck library of every Commander precon (imported from MTGJSON) plus your own
+  decks, each with a bracket, tags and a primer, for the future AI opponents to pilot.
 - Start in ten seconds with just a name and an avatar; add an email and password later to use
   your decks on other devices, see which devices are signed in and sign any of them out.
 
@@ -87,6 +93,12 @@ rate-limited and logged. Without the secret, claiming is disabled.
 
 Accounts have no email verification or password reset yet (there is no email provider), so
 keep your password somewhere safe.
+
+Deck library: once you are the owner, open **Library** in the top bar and press "Import precons"
+(about 200 decks, five minutes, safe to run again). The bracket panel asks
+[Commander Spellbook](https://commanderspellbook.com) for combos; answers are cached per list.
+When Wizards changes the Game Changers list, edit `server/data/brackets/game_changers.json` and
+redeploy.
 
 ## Install on a phone
 

@@ -86,7 +86,7 @@ bounded edit distance.
   the SHA-256 hash (since Phase 5 in `sessions.token_hash`, one row per device). `requireUser` in
   `server/src/auth.ts` guards routes; rate limits key on the user when signed in, else the IP.
 - Tables: `users`, `sessions`, `decks`, `deck_cards` (printing id + quantity + board + category +
-  position).
+  position); Phase 6 adds `combo_cache`, `library_decks`, `library_deck_cards`.
   Boards: main | commander | sideboard | maybeboard | companion. Format column kept, "commander" only.
 - Parser: `shared/src/deck/parse.ts` (pure text -> lines/boards/tags/markers); fixtures for the
   five sites in `shared/src/deck/fixtures.ts`. Resolution against card data lives in
@@ -304,6 +304,145 @@ bounded edit distance.
   options/verify) that end in `createSession`; `@simplewebauthn/server` is the boring choice.
   Nothing else changes because every sign-in path only ever produces a session.
 
+## Deck analysis, brackets and the deck library (Phase 6)
+
+### Commander Brackets: the rules we apply (official, checked 2026-10-15)
+
+Sources: Wizards' announcements of 2025-02-11 ("Introducing Commander Brackets Beta"),
+2025-04-22, 2025-10-21 and 2026-02-09 (all under
+`https://magic.wizards.com/en/news/announcements/`, see `server/data/brackets/game_changers.json`
+for the exact URLs). The system is still labelled beta. Summary of the deck-building rules:
+
+| Bracket        | Game Changers | Mass land denial | Extra turns                     | Two-card infinite combos          |
+| -------------- | ------------- | ---------------- | ------------------------------- | --------------------------------- |
+| 1 Exhibition   | none          | none             | none                            | none                              |
+| 2 Core         | none          | none             | few, not chained or looped      | none                              |
+| 3 Upgraded     | up to three   | none             | few, not chained or looped      | none that are early-game (~T6)    |
+| 4 Optimized    | any           | allowed          | allowed                         | allowed                           |
+| 5 cEDH         | any           | allowed          | allowed                         | allowed; built for the cEDH meta  |
+
+- Turn expectations (added 2025-10-21): at least nine turns before anyone wins (B1), eight (B2),
+  six (B3), four (B4); B5 games "could end on any turn".
+- Tutor limits were REMOVED on 2025-10-21 ("rely on Game Changers to catch the most efficient
+  tutors"); Bracket 2 was decoupled from precons at the same time. Precons are still a fine
+  Bracket 2 default, which is what the importer uses.
+- Mass land denial, official definition: cards that "destroy, exile, and bounce other lands, keep
+  lands tapped, or change what mana is produced by four or more lands per player without
+  replacing them" (Armageddon, Ruination, Sunder, Winter Orb, Blood Moon). Strip Mine is not.
+- Game Changers: 53 cards as of 2026-02-09 (Farewell and Biorhythm added; ten removed on
+  2025-10-21 incl. Food Chain, Expropriate, Kinnan, Urza, Winota, Yuriko, Deflecting Swat).
+  `server/data/brackets/game_changers.json` is the list, dated, with `source` + `history`; edit it
+  by hand when Wizards changes it (names must match Scryfall front-face names). The file ships
+  inside the image (`Dockerfile` copies `server/data`); `.gitignore` un-ignores `server/data/`.
+- Intent beats card counts: the engine reports a **floor** (what the written rules allow) and a
+  **suggestion** (a heuristic), and always says that 3 vs 4 is a judgment call.
+
+### Engine (`server/src/analysis/`, pure, no model spend)
+
+`analyzeDeck(cards, {gameChangers, combos})` -> `DeckAnalysis` (shared `analysis.ts`).
+`AnalysisCard` = name, type line, oracle text, mana cost, cmc, keywords, colour identity,
+quantity, board (main | commander). `text()` lower-cases, replaces the card's own name with `~`
+and strips reminder text in parentheses. Detectors, all regex over Scryfall wording, each
+unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
+
+- `gameChangers.ts`: name / front-face match against the JSON list (cached by mtime).
+- `landDenial.ts`: "destroy|exile|return|sacrifice all ... lands", "all permanents" (not
+  "nonland permanents"), "each player sacrifices four+ lands", Cataclysm, "lands don't untap",
+  "can't untap more than one land/permanent", "players skip their untap steps", "nonbasic lands are
+  Mountains", Contamination-style "produces {B} instead". Not caught: Price of Progress-style
+  punishment, single-target land destruction (by design), Stasis-like cards with unusual wording.
+- `extraTurns.ts`: "take(s) an/two extra turn(s)" (Time Warp's "target player takes" counts;
+  "target opponent takes" does not). Chaining = three or more extra-turn cards, or a self-returning
+  one (Nexus of Fate, Beacon of Tomorrows), or any extra turn plus spell recursion / copying
+  (Regrowth, Past in Flames, Snapcaster, Mizzix's Mastery, Twincast). It cannot know whether the
+  pilot intends to chain; the reason text says why it flagged.
+- `tutors.ts`: "search your library for a/an/up to N ... card"; land-only searches are ramp, not
+  tutors; "cards named X" (Squadron Hawk) is ignored; kinds any | creature | artifact |
+  enchantment | instant_sorcery | planeswalker | other. Transmute counts as "any". Not caught:
+  "reveal cards from the top until" (Demonic Consultation is a combo piece, not a tutor here),
+  Birthing Pod-style sacrifice chains beyond their search clause.
+- `fastMana.ts`: curated names (Sol Ring, Mana Crypt, Vault, Monoliths, Moxen, Petal, Jeweled
+  Lotus, LED, Ancient Tomb, City of Traitors, Cradle, Workshop, Sanctum, rituals, Jeska's Will,
+  spirit guides, Dockside) + heuristics (0-cost artifact that adds mana, 1-2 mana instant/sorcery
+  adding 3+ mana, "exile ~ from your hand: add"). Signets, Talismans and dorks are ramp, not fast
+  mana. Also `detectFreeInteraction` (pitch spells, "if you control a commander" spells),
+  `countRamp`, `countInteraction`, `countCardDraw` for the stats line.
+- `combos.ts`: classifies Commander Spellbook variants: `twoCard` = at most two pieces (cards +
+  template requirements) AND a game-ending/infinite/lock feature; `early` = twoCard and
+  `manaValueNeeded <= 6` (our proxy for "the first six or so turns"). Value engines with two cards
+  (draw a card) are listed but not treated as two-card infinites.
+- `archetypes.ts`: 24 tags (`ARCHETYPE_TAGS`), weighted regex signals + density signals (25+
+  instants/sorceries -> spellslinger, 25+ artifacts, 20+ enchantments, 42+ lands, creature count +
+  curve -> aggro, 7+ seven-drops -> big mana, Spellbook combo count -> combo, most common creature
+  subtype with 10+ members -> tribal). Commanders count double. confidence = score / threshold,
+  shown with evidence cards; tags under 35% are dropped, at most six returned.
+- `bracket.ts`: floor = max over reasons (GC 1-3 -> 3, GC 4+ -> 4, MLD -> 4, extra turn -> 2,
+  chaining -> 4, two-card combo -> 3, early two-card combo -> 4). Suggested = max(floor, score
+  band) where the power score sums signal weights (fast mana, tutors, free interaction, low curve,
+  Game Changers, combo density, extra turns, stax): >= 7 -> 3, >= 14 -> 4; never 5 (self-declared),
+  never below 2 (Bracket 1 is for showcase decks). `judgmentNote` always carries the "3 vs 4"
+  sentence when either is suggested.
+- `summary.ts` (one paragraph), `primer.ts` (`primerSkeleton`: Markdown with fixed headings
+  Archetype, Game plan, Win conditions, Key synergies, Game Changers, Combos, Early turns,
+  Weaknesses, Agent notes; "(fill in ...)" placeholders).
+- `spellbook.ts` + `service.ts`: `SpellbookClient.findCombos` POSTs `{commanders, main}` (card
+  names + quantities) to `https://backend.commanderspellbook.com/find-my-combos`, one request per
+  distinct list, named User-Agent, 1.5 s minimum spacing, 20 s timeout, 429 -> back off for
+  Retry-After; the answer (slimmed, no image URLs) is cached in `combo_cache` keyed by the SHA-256
+  of the sorted names (14 days). When Spellbook fails the analysis still returns with
+  `combosStatus: "unavailable"` (or a stale cached answer). Their API notes (verified 2026-10-15 in
+  the OpenAPI document's info text) ask for sparse unauthenticated requests, a named User-Agent,
+  ~80 requests/minute at most, handling 429s, and credit with a link back: the panel says "Combos
+  by Commander Spellbook" and links each combo to its page. Never use the API for bulk export;
+  `https://json.commanderspellbook.com/variants.json.gz` exists if a local copy is ever wanted.
+  `DeckAnalyzer.analyze(cards, {combos: "cached" | "refresh" | "skip"})`.
+
+### Routes and UI
+
+- `GET /api/decks/:id/analysis[?refresh=1]` (signed in, own deck, 30/min) ->
+  `{analysis, combosCached}`. Recomputed on every call (the engine is milliseconds); only the
+  Spellbook answer is cached. The deck page's **Bracket** panel (`client/src/components/
+  BracketPanel.tsx`) shows floor + suggested badges, the summary, the judgment note, the reasons,
+  strategy chips (hover = evidence), combos with Spellbook links, a Details toggle (Game Changers
+  with the list date, tutors by kind, fast mana, extra turns, MLD, power signals, stats) and a
+  Recompute button; it re-runs whenever the deck's `updatedAt` or card count changes.
+
+### Deck library (owner only; Phase 7 reads it)
+
+- Tables (migration 0006): `library_decks` (name, source precon|user, source_key unique =
+  `mtgjson:<fileName>` or `deck:<deckId>`, set_code, set_name, release_date, commanders JSON,
+  bracket (owner's call, precons default 2, user decks default to the suggestion), bracket_floor,
+  bracket_suggested, tags JSON, primer text, agent_eligible, analysis JSON, created_by, timestamps),
+  `library_deck_cards` (printing id, quantity, board main|commander|sideboard, position),
+  `combo_cache`.
+- Routes (`server/src/routes/library.ts`, preHandler `[requireUser, requireOwner]`):
+  `GET /api/library?bracket=&tag=&q=&source=&agent=` -> `{decks, importState}`,
+  `POST /api/library/import-precons {force?, combos?}` (202, background),
+  `GET /api/library/import-status`, `POST /api/library/from-deck/:deckId` (409 if already added),
+  `GET/PATCH/DELETE /api/library/:id` (PATCH: name, bracket, tags, primer, agentEligible),
+  `POST /api/library/:id/analyze` (re-run engine + Spellbook, keeps the owner's edits),
+  `GET /api/library/:id/primer-skeleton`.
+- Precon import (`server/src/library/precons.ts`): MTGJSON (MIT licence, data courtesy of
+  MTGJSON; verified 2026-10-15) `https://mtgjson.com/api/v5/DeckList.json` lists every product
+  deck (3113 rows; 197 with `type: "Commander Deck"`); each deck is
+  `https://mtgjson.com/api/v5/decks/<fileName>.json` with `commander[]`, `mainBoard[]`,
+  `sideBoard[]`, each card carrying `count` and `identifiers.scryfallId`. Cards resolve by
+  Scryfall id first (our `cards.id`), then exact name through `NameIndex`; a deck with more than
+  10% unresolved cards is reported, not imported. 250 ms between MTGJSON requests; Spellbook is
+  asked per deck through the cache (so a full run is ~200 Spellbook calls spaced 1.5 s = about
+  five minutes). Idempotent by fileName; `force` only re-checks, it never duplicates. State
+  (`LibraryImportState`: phase list|decks|done|error, total/done/imported/skipped, errors[]) is
+  in-memory like the Scryfall ingest.
+- Client: `/admin/library` (filters by bracket, archetype, source, agent-eligible, text search;
+  "Import precons" with a progress bar polled every 2 s; problems list) and `/admin/library/:id`
+  (name, bracket select, agent-eligible toggle, tag chips, primer textarea with "Fill in a
+  skeleton", Save, Re-analyse, Remove, the engine analysis, the card list). Deck pages show
+  "Add to library" for the owner (`isOwner(user)` in `client/src/user.tsx`; the server enforces).
+- **Phase 7 hook:** a model may draft the primer; keep `PRIMER_SECTIONS` headings (the agent will
+  read them by name), write the draft into `library_decks.primer` through the same PATCH, and add
+  the model call behind an owner-only route. Agent opponents should pick from
+  `library.list({agentEligible: true})`.
+
 ### Testing alone
 
 `node scripts/seed-field.mjs <base-url> <code> <token> "Lotus Cobra" "Rancor" ...` pulls named
@@ -324,6 +463,7 @@ https://cgwf.fly.dev too. The Vite proxy needs `ws: true` for `/api` (already se
    (playmats, sleeves, uploads, themes, layout), animations, accessibility. **(done)**
 5. Accounts (email + password on top of device profiles), multi-device sessions, owner flag
    with a one-time claim code. **(done)**
-6. Deck analysis, brackets, agent deck library (parallel session).
+6. Deck analysis engine, Commander Bracket panel, MTGJSON precon import, owner deck library
+   with primers. **(done)**
 7. LLM opponents, owner-only (builds on `requireOwner`).
 8. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority).

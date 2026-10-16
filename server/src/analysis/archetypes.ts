@@ -162,7 +162,7 @@ const TEXT_SIGNALS: Record<ArchetypeTag, Signal[]> = {
     { re: /\bfor each (?:creature )?card in your graveyard\b/, weight: 1 },
   ],
   storm: [
-    { re: /\bstorm\b/, weight: 3 },
+    { re: /\bstorm\b/, weight: 2 },
     { re: /\bwhenever you cast your (?:second|third) spell\b|\bspells? you've cast this turn\b|\bfor each (?:other )?spell (?:you've )?cast (?:before it )?this turn\b/, weight: 1.5 },
     { re: /\bcosts? \{\d\} less to cast\b/, weight: 0.3 },
   ],
@@ -194,7 +194,7 @@ const THRESHOLDS: Record<ArchetypeTag, number> = {
   blink: 7,
   lifegain: 8,
   mill: 7,
-  wheels: 5,
+  wheels: 7,
   big_mana: 8,
   theft: 6,
   graveyard: 10,
@@ -229,7 +229,6 @@ export function detectArchetypes(input: ArchetypeInput): ArchetypeHit[] {
       for (const s of TEXT_SIGNALS[tag]) if (s.re.test(t)) bump(tag, s.weight * mult, c.name);
     }
     if (hasKeyword(c, "Landfall")) bump("lands", 0.5 * mult, c.name);
-    if (hasKeyword(c, "Storm")) bump("storm", 1 * mult, c.name);
     if (hasKeyword(c, "Lifelink")) bump("lifegain", 0.2, c.name);
     if (hasKeyword(c, "Prowess")) bump("spellslinger", 0.3, c.name);
   }

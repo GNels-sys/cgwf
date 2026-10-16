@@ -34,13 +34,18 @@ export function fromRow(
   };
 }
 
-/** Lower-cased oracle text with the card's own name replaced by "~" (so "Sol Ring" rules read the same as any other). */
+/**
+ * Lower-cased oracle text with the card's own name replaced by "~" (so "Sol Ring"
+ * rules read the same as any other) and reminder text "(...)" removed, so
+ * Flusterstorm's "(copy it for each spell cast before it this turn)" does not
+ * read as a storm payoff.
+ */
 export function text(card: AnalysisCard): string {
   const front = frontName(card);
-  let t = card.oracleText;
+  let t = card.oracleText.replace(/\([^()]*\)/g, " ");
   if (front) t = t.split(front).join("~");
   if (card.name !== front) t = t.split(card.name).join("~");
-  return t.toLowerCase();
+  return t.replace(/[ \t]+/g, " ").toLowerCase();
 }
 
 export function typeLine(card: AnalysisCard): string {
