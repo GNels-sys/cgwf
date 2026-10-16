@@ -24,6 +24,8 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMeRoutes } from "./routes/me.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
+import { registerSinglesRoutes } from "./routes/singles.js";
+import { SinglesClient } from "./singles/client.js";
 import { registerSocialRoutes } from "./routes/social.js";
 import { presence } from "./social/presence.js";
 import { SocialService } from "./social/service.js";
@@ -44,6 +46,7 @@ export interface AppContext {
   agents: AgentManager;
   social: SocialService;
   submissions: SubmissionService;
+  singles: SinglesClient;
 }
 
 export interface BuildOptions {
@@ -53,6 +56,9 @@ export interface BuildOptions {
   spellbookFetch?: FetchLike;
   /** Same for MTGJSON (precon import). */
   mtgjsonFetch?: FetchLike;
+  /** Phase 10: tests inject a fake Singles site (and its URL/token); production reads config. */
+  singlesFetch?: FetchLike;
+  singlesOptions?: Partial<import("./singles/client.js").SinglesClientOptions>;
   /** Phase 7: tests pass a ScriptedLlm (or null for a dry run) and force the feature on. */
   agentLlm?: import("./agents/llm.js").Llm | null;
   agentsEnabled?: boolean;
@@ -94,6 +100,14 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
 
   const social = new SocialService(handle, roomsManager, presence);
   const submissions = new SubmissionService(handle, library, analyzer, social);
+  const singles = new SinglesClient({
+    baseUrl: config.singlesApiUrl,
+    token: config.singlesApiToken,
+    timeoutMs: config.singlesTimeoutMs,
+    fetch: opts.singlesFetch,
+    log: app.log,
+    ...(opts.singlesOptions ?? {}),
+  });
 
   registerCardRoutes(app, { handle, index, ingestor });
   registerSocialRoutes(app, { handle, social, submissions, roomsManager });
@@ -108,6 +122,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   registerDeckRoutes(app, { handle, index });
   registerRoomRoutes(app, { handle, roomsManager, agents });
   registerSettingsRoutes(app, { handle, onSettingsChanged: (userId) => roomsManager.userChanged(userId) });
+  registerSinglesRoutes(app, { handle, singles, library });
 
   // In production the server also hosts the built client (a static SPA).
   const indexHtml = path.join(config.clientDist, "index.html");
@@ -139,5 +154,5 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, agents, social, submissions };
+  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, agents, social, submissions, singles };
 }

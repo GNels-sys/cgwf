@@ -7,6 +7,7 @@ import {
   type CardPrinting,
   type CardSummary,
   type Color,
+  type PurchaseLinks,
 } from "@cgwf/shared";
 import type { CardRow, NewCardRow } from "../db/schema.js";
 
@@ -44,6 +45,7 @@ export interface ScryfallCard {
   digital?: boolean;
   booster?: boolean;
   scryfall_uri?: string;
+  purchase_uris?: Record<string, string>;
 }
 
 export interface ScryfallFace {
@@ -78,6 +80,25 @@ function pickImages(uris: Record<string, string> | undefined): Record<string, st
   const out: Record<string, string> = {};
   for (const k of ["small", "normal", "large"]) if (uris[k]) out[k] = uris[k] as string;
   return Object.keys(out).length ? out : null;
+}
+
+const PURCHASE_KEYS = ["tcgplayer", "cardmarket", "cardhoarder"] as const;
+
+/** Keep only the three marketplaces we link to, only when the value is an https URL. */
+export function pickPurchaseUris(uris: Record<string, string> | undefined): Record<string, string> | null {
+  if (!uris) return null;
+  const out: Record<string, string> = {};
+  for (const k of PURCHASE_KEYS) {
+    const v = uris[k];
+    if (typeof v === "string" && /^https:\/\//.test(v)) out[k] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Stored JSON -> the API shape (every key present, null when missing). */
+export function toPurchaseLinks(stored: Record<string, string> | null | undefined): PurchaseLinks | null {
+  if (!stored) return null;
+  return { tcgplayer: stored.tcgplayer ?? null, cardmarket: stored.cardmarket ?? null, cardhoarder: stored.cardhoarder ?? null };
 }
 
 /** Should this Scryfall object be stored at all? English, real card objects only. */
@@ -166,6 +187,7 @@ export function toCardRow(card: ScryfallCard, seenRun: number): NewCardRow {
     inBooster: Boolean(card.booster),
     artist: card.artist ?? faces[0]?.artist ?? null,
     scryfallUri: card.scryfall_uri ?? "",
+    purchaseUris: pickPurchaseUris(card.purchase_uris),
     seenRun,
   };
 }
@@ -200,6 +222,7 @@ export function rowToPrinting(row: CardRow): CardPrinting {
     isDigital: row.isDigital,
     artist: row.artist,
     scryfallUri: row.scryfallUri,
+    purchaseUris: toPurchaseLinks(row.purchaseUris),
   };
 }
 
@@ -215,5 +238,6 @@ export function rowToSummary(row: CardRow): CardSummary {
     layout: toLayout(row.layout),
     isToken: row.isToken,
     faceCount: row.imageBack ? 2 : 1,
+    purchaseUris: toPurchaseLinks(row.purchaseUris),
   };
 }

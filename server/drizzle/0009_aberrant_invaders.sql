@@ -1,0 +1,1 @@
+ALTER TABLE `cards` ADD `purchase_uris` text;

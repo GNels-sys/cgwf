@@ -54,6 +54,10 @@ export const config = {
   clientDist: path.resolve(env("CLIENT_DIST", path.join(serverRoot, "../client/dist"))),
   /** Drizzle SQL migrations folder. */
   migrationsDir: path.resolve(env("MIGRATIONS_DIR", path.join(serverRoot, "drizzle"))),
+  /** Phase 10 local-stores bridge: the Singles site's service API. Both unset = the bridge answers "unconfigured". */
+  singlesApiUrl: env("SINGLES_API_URL", ""),
+  singlesApiToken: env("SINGLES_API_TOKEN", ""),
+  singlesTimeoutMs: Number(env("SINGLES_TIMEOUT_MS", "4000")),
   /** Hand-maintained bracket data (the Game Changers list). */
   bracketDataDir: path.resolve(env("BRACKET_DATA_DIR", path.join(serverRoot, "data", "brackets"))),
 } as const;

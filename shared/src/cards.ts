@@ -45,6 +45,16 @@ export type Color = "W" | "U" | "B" | "R" | "G";
 export type ImageSize = "small" | "normal" | "large";
 export const IMAGE_SIZES: readonly ImageSize[] = ["small", "normal", "large"];
 
+/**
+ * Scryfall's outbound purchase links for a printing (its `purchase_uris`).
+ * CGwF only links out: it never sells anything itself.
+ */
+export interface PurchaseLinks {
+  tcgplayer: string | null;
+  cardmarket: string | null;
+  cardhoarder: string | null;
+}
+
 export interface CardFace {
   name: string;
   manaCost: string;
@@ -91,6 +101,8 @@ export interface CardPrinting {
   isDigital: boolean;
   artist: string | null;
   scryfallUri: string;
+  /** Outbound store links from Scryfall; absent/null for printings without any. */
+  purchaseUris?: PurchaseLinks | null;
 }
 
 /** Compact card shape the search page lists. */
@@ -106,6 +118,8 @@ export interface CardSummary {
   isToken: boolean;
   /** Number of images: 1 or 2. */
   faceCount: number;
+  /** Outbound store links from Scryfall; absent/null for printings without any. */
+  purchaseUris?: PurchaseLinks | null;
 }
 
 export function hasBackFace(layout: CardLayout): boolean {
