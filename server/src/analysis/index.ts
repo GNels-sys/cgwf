@@ -19,7 +19,7 @@ export { primerSkeleton } from "./primer.js";
 export interface AnalyzeOptions {
   gameChangers: GameChangersList;
   /** Commander Spellbook results for this exact list, or null when the lookup failed, or undefined when it was not attempted. */
-  combos?: SpellbookResults | null;
+  combos?: SpellbookResults | null | undefined;
   now?: Date;
 }
 

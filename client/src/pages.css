@@ -452,3 +452,106 @@ hr {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- Bracket panel (Phase 6) ---- */
+.bracket-panel {
+  margin: 16px 0;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+.bracket-panel h3 {
+  margin: 0;
+}
+.bracket-panel h4 {
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+}
+.bracket-badges {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.bracket-badge {
+  display: grid;
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 10px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 2px solid var(--border);
+  background: var(--bg-elev-2);
+  min-width: 150px;
+}
+.bracket-badge-label {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
+}
+.bracket-badge-num {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.bracket-badge-name {
+  grid-column: 2;
+  grid-row: 2;
+  font-weight: 600;
+}
+.bracket-badge.b1 { border-color: #7aa37a; }
+.bracket-badge.b2 { border-color: #5b9bd5; }
+.bracket-badge.b3 { border-color: #d9a441; }
+.bracket-badge.b4 { border-color: #e07b39; }
+.bracket-badge.b5 { border-color: #d64a3a; }
+.bracket-summary {
+  margin: 8px 0;
+  line-height: 1.45;
+}
+.bracket-reasons {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+.bracket-reasons li {
+  margin: 6px 0;
+  line-height: 1.4;
+}
+.bracket-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  margin-right: 4px;
+}
+.bracket-pill.b2 { border-color: #5b9bd5; }
+.bracket-pill.b3 { border-color: #d9a441; }
+.bracket-pill.b4 { border-color: #e07b39; }
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tag-chip {
+  cursor: default;
+}
+.combo-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.combo-list li {
+  margin: 4px 0;
+}
+.bracket-details p {
+  margin: 4px 0;
+}

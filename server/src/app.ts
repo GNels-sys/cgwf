@@ -7,6 +7,9 @@ import websocket from "@fastify/websocket";
 import { config } from "./config.js";
 import { openDb, type DbHandle } from "./db/index.js";
 import { registerImageRoutes } from "./images.js";
+import { DeckAnalyzer } from "./analysis/service.js";
+import { SpellbookClient, type FetchLike } from "./analysis/spellbook.js";
+import { registerAnalysisRoutes } from "./routes/analysis.js";
 import { registerCardRoutes } from "./routes/cards.js";
 import { registerDeckRoutes } from "./routes/decks.js";
 import { registerMeRoutes } from "./routes/me.js";
@@ -22,10 +25,18 @@ export interface AppContext {
   index: NameIndex;
   ingestor: Ingestor;
   roomsManager: RoomManager;
+  analyzer: DeckAnalyzer;
+}
+
+export interface BuildOptions {
+  dbFile?: string;
+  logger?: boolean | "plain";
+  /** Tests inject a fake Commander Spellbook; production uses global fetch. */
+  spellbookFetch?: FetchLike;
 }
 
 /** Build the Fastify app with every route wired. Listening is the caller's job. */
-export async function buildApp(opts: { dbFile?: string; logger?: boolean | "plain" } = {}): Promise<AppContext> {
+export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   const app = Fastify({
     logger:
       opts.logger === false
@@ -49,8 +60,11 @@ export async function buildApp(opts: { dbFile?: string; logger?: boolean | "plai
   // One WebSocket per connected client; the largest frame is a token with a full printing.
   await app.register(websocket, { options: { maxPayload: 256 * 1024 } });
   const roomsManager = new RoomManager(handle, app.log);
+  const spellbook = new SpellbookClient(app.log, opts.spellbookFetch);
+  const analyzer = new DeckAnalyzer(handle, spellbook, app.log);
 
   registerCardRoutes(app, { handle, index, ingestor });
+  registerAnalysisRoutes(app, { handle, analyzer });
   registerImageRoutes(app, handle);
   registerMeRoutes(app, handle);
   registerDeckRoutes(app, { handle, index });
@@ -86,5 +100,5 @@ export async function buildApp(opts: { dbFile?: string; logger?: boolean | "plai
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager };
+  return { app, handle, index, ingestor, roomsManager, analyzer };
 }

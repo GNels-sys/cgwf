@@ -214,7 +214,73 @@ export const uploads = sqliteTable(
   (t) => [index("uploads_user_idx").on(t.userId)],
 );
 
+/**
+ * Commander Spellbook "find my combos" answers, cached per exact card list
+ * (SHA-256 of the sorted names) so re-opening a deck page costs no request.
+ */
+export const comboCache = sqliteTable("combo_cache", {
+  listHash: text("list_hash").primaryKey(),
+  /** Raw results object from Spellbook (included / almostIncluded ...). */
+  results: text("results", { mode: "json" }).$type<unknown>().notNull(),
+  fetchedAt: text("fetched_at").notNull(),
+});
+
+/**
+ * The owner's deck library: imported precons plus hand-picked decks, each with
+ * a bracket, archetype tags and a primer. Phase 7's agent opponents pick from
+ * the rows with agent_eligible = 1.
+ */
+export const libraryDecks = sqliteTable(
+  "library_decks",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    /** "precon" (MTGJSON import) | "user" (added from a player's deck). */
+    source: text("source").notNull(),
+    /** Idempotency key: MTGJSON fileName for precons, the source deck id for user decks. */
+    sourceKey: text("source_key"),
+    setCode: text("set_code"),
+    setName: text("set_name"),
+    releaseDate: text("release_date"),
+    /** Commander names, JSON array. */
+    commanders: text("commanders", { mode: "json" }).$type<string[]>().notNull(),
+    /** Owner-assigned bracket (precons default to 2). */
+    bracket: integer("bracket").notNull().default(2),
+    bracketFloor: integer("bracket_floor"),
+    bracketSuggested: integer("bracket_suggested"),
+    /** Archetype tags, JSON array (engine output, editable). */
+    tags: text("tags", { mode: "json" }).$type<string[]>().notNull(),
+    primer: text("primer").notNull().default(""),
+    agentEligible: integer("agent_eligible", { mode: "boolean" }).notNull().default(false),
+    /** Last full DeckAnalysis, JSON. */
+    analysis: text("analysis", { mode: "json" }).$type<unknown>(),
+    createdBy: text("created_by"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("library_decks_source_key_idx").on(t.sourceKey), index("library_decks_bracket_idx").on(t.bracket)],
+);
+
+export const libraryDeckCards = sqliteTable(
+  "library_deck_cards",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    libraryDeckId: text("library_deck_id")
+      .notNull()
+      .references(() => libraryDecks.id, { onDelete: "cascade" }),
+    /** Scryfall printing id. */
+    cardId: text("card_id").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    /** "main" | "commander" | "sideboard". */
+    board: text("board").notNull().default("main"),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [index("library_deck_cards_deck_idx").on(t.libraryDeckId)],
+);
+
 export type CardRow = typeof cards.$inferSelect;
+export type LibraryDeckRow = typeof libraryDecks.$inferSelect;
+export type LibraryDeckCardRow = typeof libraryDeckCards.$inferSelect;
 export type NewCardRow = typeof cards.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
 export type DeckRow = typeof decks.$inferSelect;

@@ -22,6 +22,7 @@ COPY --from=build /app/shared/dist ./shared/dist
 COPY --from=build /app/server/package.json ./server/
 COPY --from=build /app/server/dist ./server/dist
 COPY --from=build /app/server/drizzle ./server/drizzle
+COPY --from=build /app/server/data ./server/data
 COPY --from=build /app/client/dist ./client/dist
 EXPOSE 8080
 CMD ["node", "server/dist/index.js"]

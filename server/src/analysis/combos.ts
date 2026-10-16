@@ -14,22 +14,22 @@ export const EARLY_COMBO_MANA_VALUE = 6;
 
 export interface SpellbookVariant {
   id: string;
-  uses: Array<{ card: { name: string }; quantity?: number; mustBeCommander?: boolean }>;
-  requires?: Array<{ template?: { name?: string }; quantity?: number }>;
-  produces: Array<{ feature: { name: string; status?: string; uncountable?: boolean }; quantity?: number }>;
-  manaValueNeeded?: number;
-  manaNeeded?: string;
-  bracketTag?: string | null;
-  status?: string;
-  identity?: string;
-  description?: string;
-  popularity?: number | null;
+  uses: Array<{ card: { name: string }; quantity?: number | undefined; mustBeCommander?: boolean | undefined }>;
+  requires?: Array<{ template?: { name?: string | undefined } | undefined; quantity?: number | undefined }> | undefined;
+  produces: Array<{ feature: { name: string; status?: string | undefined; uncountable?: boolean | undefined }; quantity?: number | undefined }>;
+  manaValueNeeded?: number | undefined;
+  manaNeeded?: string | undefined;
+  bracketTag?: string | null | undefined;
+  status?: string | undefined;
+  identity?: string | undefined;
+  description?: string | undefined;
+  popularity?: number | null | undefined;
 }
 
 export interface SpellbookResults {
-  identity?: string;
+  identity?: string | undefined;
   included: SpellbookVariant[];
-  almostIncluded?: SpellbookVariant[];
+  almostIncluded?: SpellbookVariant[] | undefined;
 }
 
 /** Features that mean "the game ends" or "loop forever": the ones brackets care about. */

@@ -2,6 +2,7 @@ import type {
   CardResponse,
   CreateDeckRequest,
   CreateRoomResponse,
+  DeckAnalysisResponse,
   MyRoomsResponse,
   RoomResponse,
   DeckDetail,
@@ -95,6 +96,7 @@ export const api = {
     rename: (id: string, name: string) => request<{ deck: DeckDetail }>(`/api/decks/${encodeURIComponent(id)}`, { method: "PATCH", json: { name } }),
     remove: (id: string) => request<{ ok: true }>(`/api/decks/${encodeURIComponent(id)}`, { method: "DELETE" }),
     parse: (text: string) => request<ResolveResponse>("/api/decks/parse", { json: { text } }),
+    analysis: (id: string, refresh = false) => request<DeckAnalysisResponse>(`/api/decks/${encodeURIComponent(id)}/analysis${refresh ? "?refresh=1" : ""}`),
     importUrl: (url: string) => request<ImportUrlResponse>(`/api/decks/import-url?url=${encodeURIComponent(url)}`),
   },
 

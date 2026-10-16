@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Board, DeckCardEntry, DeckDetail } from "@cgwf/shared";
 import { api } from "../api";
+import { BracketPanel } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
 import { ManaCost } from "../components/ManaCost";
@@ -148,6 +149,8 @@ function DeckView({ id }: { id: string }) {
           </button>
         ))}
       </section>
+
+      <BracketPanel deckId={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} />
 
       <div className="deck-columns">
         {sections.main.map((g) => (
