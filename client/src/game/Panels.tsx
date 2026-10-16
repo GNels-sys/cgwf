@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
-import type { LogEntry, PlayerView, ViewCard, ViewPlayer, Row, RoomInfo, RoomMember } from "@cgwf/shared";
+import type { LogEntry, PlayerView, ViewCard, ViewPlayer, RoomInfo, RoomMember } from "@cgwf/shared";
 import { AVATAR_COLORS } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
 import { Footer } from "../components/Footer";
+import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
 import { useMat, type SleeveStyle } from "./look";
-import { battlefieldCards, counterSummary, nameOf, totalCommanderDamage, type Printings } from "./model";
+import { ManaSummary } from "./Mana";
+import { battlefieldCards, counterSummary, deriveFor, nameOf, totalCommanderDamage, type Printings } from "./model";
 
 /** Modal panels used by the table: zone viewer, opponent field, log, menu. */
 
@@ -51,8 +53,6 @@ export function CardList({ cards, printings, onTap, onHold, sleeveOf, empty = "N
   );
 }
 
-const ROW_LABEL: Record<Row, string> = { lands: "Lands", creatures: "Creatures", other: "Other" };
-
 export function OpponentPanel({
   player,
   member,
@@ -65,6 +65,8 @@ export function OpponentPanel({
   onHold,
   onShowCards,
   onPlayerSheet,
+  onAnthems,
+  highlighted,
 }: {
   player: ViewPlayer;
   member: RoomMember | undefined;
@@ -77,8 +79,11 @@ export function OpponentPanel({
   onHold: (c: ViewCard) => void;
   onShowCards: (title: string, cards: ViewCard[]) => void;
   onPlayerSheet: (p: ViewPlayer) => void;
+  onAnthems: (p: ViewPlayer) => void;
+  highlighted: ReadonlySet<string>;
 }) {
   const active = view.activePlayer === player.id;
+  const derived = deriveFor(player, printings);
   const mat = useMat(member?.look);
   return (
     <Panel title={player.name} subtitle={`${player.life} life${player.conceded ? " - conceded" : active ? " - active player" : ""}`} onClose={onClose} wide className="opponent-panel">
@@ -87,6 +92,7 @@ export function OpponentPanel({
         <span>Library {player.library.count}</span>
         {counterSummary(player.counters) && <span>{counterSummary(player.counters)}</span>}
         {totalCommanderDamage(player) > 0 && <span>Cmdr dmg {totalCommanderDamage(player)}</span>}
+        <ManaSummary player={player} />
         {me && (
           <button className="btn btn-small" onClick={() => onPlayerSheet(player)}>
             Counters
@@ -118,15 +124,7 @@ export function OpponentPanel({
             ))}
           </div>
         )}
-        {(["lands", "creatures", "other"] as const).map((row) => (
-          <div key={row} className="opp-row">
-            <span className="row-label">{ROW_LABEL[row]}</span>
-            {player.battlefield[row].length === 0 && <span className="muted small">-</span>}
-            {player.battlefield[row].map((c) => (
-              <CardTile key={c.iid} card={c} printings={printings} onTap={onTap} onHold={onHold} attached={Boolean(c.attachedTo)} sleeve={sleeveOf(c.owner)} />
-            ))}
-          </div>
-        ))}
+        <Battlefield player={player} printings={printings} derived={derived} onTap={onTap} onHold={onHold} highlighted={highlighted} onAnthems={() => onAnthems(player)} sleeveOf={sleeveOf} compact />
       </div>
       {Object.keys(player.commanderDamage).length > 0 && (
         <p className="muted small">

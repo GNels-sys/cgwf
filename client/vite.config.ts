@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { fileURLToPath } from "node:url";
 
+// API_PORT lets a second dev client (another worktree) proxy to its own server.
+const api = `http://localhost:${process.env.API_PORT ?? "8080"}`;
+
 export default defineConfig({
   plugins: [
     react(),
@@ -50,8 +53,8 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": { target: "http://localhost:8080", ws: true },
-      "/img": "http://localhost:8080",
+      "/api": { target: api, ws: true },
+      "/img": api,
     },
   },
   build: { outDir: "dist", sourcemap: false },

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Color, Row, TokenSummary } from "@cgwf/shared";
+import { SECTIONS, SECTION_LABELS, defaultSection, type Color, type Row, type TokenSummary } from "@cgwf/shared";
 import { api } from "../api";
 import { CardImage } from "../components/CardImage";
 import { Panel } from "./Panels";
@@ -42,10 +42,7 @@ function pushRecent(t: TokenSummary): void {
 }
 
 export function rowFor(typeLine: string): Row {
-  const front = typeLine.split(" // ")[0] ?? typeLine;
-  if (/\bCreature\b/.test(front)) return "creatures";
-  if (/\bLand\b/.test(front)) return "lands";
-  return "other";
+  return defaultSection(typeLine);
 }
 
 function ColorDots({ colors }: { colors: Color[] }) {
@@ -220,9 +217,11 @@ export function TokenFinder({ onCreate, onClose }: { onCreate: (req: TokenReques
           <label className="field">
             <span>Row</span>
             <select value={row} onChange={(e) => setRow(e.target.value as Row)}>
-              <option value="creatures">Creatures</option>
-              <option value="other">Other</option>
-              <option value="lands">Lands</option>
+              {SECTIONS.map((sec) => (
+                <option key={sec} value={sec}>
+                  {SECTION_LABELS[sec]}
+                </option>
+              ))}
             </select>
           </label>
           <button className="btn btn-primary" type="submit" disabled={!name.trim()}>

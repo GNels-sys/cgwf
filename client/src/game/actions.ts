@@ -1,5 +1,19 @@
-import { CARD_COUNTER_KINDS, ROWS, hasBackFace, type ClientMessage, type EventInput, type MoveTarget, type PlayerView, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
-import { battlefieldCards, nameOf, printingOf, type Printings } from "./model";
+import {
+  CARD_COUNTER_KINDS,
+  SECTIONS,
+  SECTION_LABELS,
+  hasBackFace,
+  parseAnthem,
+  parseAttachmentEffect,
+  type ClientMessage,
+  type EventInput,
+  type MoveTarget,
+  type PlayerView,
+  type Row,
+  type ViewCard,
+  type ViewPlayer,
+} from "@cgwf/shared";
+import { battlefieldCards, deriveFor, nameOf, printingOf, type Printings } from "./model";
 import type { Action, Dialog } from "./Sheets";
 
 /**
@@ -23,7 +37,13 @@ export interface Ctx {
   close: () => void;
 }
 
-const ROW_LABEL: Record<Row, string> = { lands: "Lands", creatures: "Creatures", other: "Other" };
+function oracleOf(card: ViewCard, printings: Printings): string {
+  if (card.custom) return card.custom.text;
+  const p = printingOf(card, printings);
+  if (!p) return "";
+  const f = p.faces[card.face] ?? p.faces[0];
+  return f ? f.oracleText : p.oracleText;
+}
 
 export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
   const { view, me, dispatch, dialog, close } = ctx;
@@ -46,6 +66,7 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
   const opponents = view.turnOrder.filter((id) => id !== me && !view.players[id]!.conceded);
   const printing = printingOf(card, ctx.printings);
   const twoFaced = printing ? hasBackFace(printing.layout) || printing.faces.length >= 2 : false;
+  const name = nameOf(card, ctx.printings);
 
   switch (zone.kind) {
     case "hand": {
@@ -60,6 +81,8 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
       break;
     }
     case "battlefield": {
+      const holderPlayer = view.players[holder];
+      const derived = holderPlayer ? deriveFor(holderPlayer, ctx.printings).cards.get(card.iid) : undefined;
       out.push({ label: card.tapped ? "Untap" : "Tap", run: () => act({ type: "CardTapped", payload: { iid: card.iid, tapped: !card.tapped } }) });
       for (const kind of CARD_COUNTER_KINDS.slice(0, 3)) {
         const have = card.counters[kind] ?? 0;
@@ -69,7 +92,7 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
           run: () =>
             dialog({
               kind: "number",
-              title: `${kind} counters on ${nameOf(card, ctx.printings)} (now ${have})`,
+              title: `${kind} counters on ${name} (now ${have})`,
               initial: 1,
               quick: [-3, -1, 1, 3],
               submitLabel: "Add",
@@ -95,31 +118,105 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
               }),
           }),
       });
+      // Assisted bookkeeping: manual keyword / P/T adjustments on top of what the parsers found.
+      const mod = card.modifier ?? { power: 0, toughness: 0, keywords: [], removedKeywords: [] };
+      out.push({
+        label: "Add keyword...",
+        hint: mod.keywords.length ? `manual: ${mod.keywords.join(", ")}` : undefined,
+        run: () =>
+          dialog({
+            kind: "text",
+            title: `Give ${name} a keyword`,
+            placeholder: "flying, trample, hexproof...",
+            onSubmit: (k) => {
+              const kw = k.toLowerCase();
+              act({ type: "CardModifierSet", payload: { iid: card.iid, modifier: { ...mod, keywords: [...new Set([...mod.keywords, kw])], removedKeywords: mod.removedKeywords.filter((x) => x !== kw) } } });
+            },
+          }),
+      } as Action);
+      if (derived && derived.keywords.length) {
+        out.push({
+          label: "Remove keyword...",
+          run: () =>
+            dialog({
+              kind: "pick",
+              title: `Remove a keyword from ${name}`,
+              options: derived.keywords.map((k) => ({ value: k, label: k })),
+              onPick: (k) => act({ type: "CardModifierSet", payload: { iid: card.iid, modifier: { ...mod, keywords: mod.keywords.filter((x) => x !== k), removedKeywords: [...new Set([...mod.removedKeywords, k])] } } }),
+            }),
+        });
+      }
+      out.push({
+        label: "Set P/T modifier...",
+        hint: mod.power || mod.toughness ? `manual ${mod.power >= 0 ? "+" : ""}${mod.power}/${mod.toughness >= 0 ? "+" : ""}${mod.toughness}` : undefined,
+        run: () =>
+          dialog({
+            kind: "effect",
+            title: `Manual adjustment for ${name}`,
+            body: "On top of counters, attachments and anthems. Use it for temporary pumps or anything the parser missed.",
+            initial: { power: mod.power, toughness: mod.toughness, keywords: mod.keywords },
+            submitLabel: "Apply",
+            onSubmit: (v) => act({ type: "CardModifierSet", payload: { iid: card.iid, modifier: v.power || v.toughness || v.keywords.length || mod.removedKeywords.length ? { power: v.power, toughness: v.toughness, keywords: v.keywords, removedKeywords: mod.removedKeywords } : null } }),
+          }),
+      } as Action);
       if (twoFaced) out.push({ label: card.face === 0 ? "Transform / flip" : "Transform back", run: () => act({ type: "CardFlipped", payload: { iid: card.iid } }) });
       out.push({ label: card.faceDown ? "Turn face up" : "Turn face down", run: () => act({ type: "CardTurned", payload: { iid: card.iid, faceDown: !card.faceDown } }) });
-      if (card.attachedTo) out.push({ label: "Unattach", run: () => act({ type: "Attached", payload: { iid: card.iid, to: null } }) });
+      if (card.attachedTo) {
+        const host = battlefieldCards(holderPlayer!).find((c) => c.iid === card.attachedTo);
+        out.push({
+          label: "Edit granted effect...",
+          hint: card.effect ? describeEffect(card.effect) : "grants nothing yet",
+          run: () =>
+            dialog({
+              kind: "effect",
+              title: `${name} grants ${host ? nameOf(host, ctx.printings) : "its host"}`,
+              initial: card.effect ?? parseAttachmentEffect(oracleOf(card, ctx.printings)) ?? { power: 0, toughness: 0, keywords: [] },
+              submitLabel: "Save",
+              onSubmit: (v) => act({ type: "AttachmentEffectSet", payload: { iid: card.iid, effect: { power: v.power, toughness: v.toughness, keywords: v.keywords } } }),
+            }),
+        });
+        out.push({ label: "Unattach", run: () => act({ type: "Attached", payload: { iid: card.iid, to: null } }) });
+      }
       out.push({
         label: "Attach to...",
         run: () => {
           const hosts = Object.values(view.players)
             .flatMap((p) => battlefieldCards(p).map((c) => ({ p, c })))
-            .filter(({ c }) => c.iid !== card.iid);
+            .filter(({ c }) => c.iid !== card.iid && !c.attachedTo);
           dialog({
             kind: "pick",
-            title: `Attach ${nameOf(card, ctx.printings)} to`,
+            title: `Attach ${name} to`,
             options: hosts.map(({ p, c }) => ({ value: c.iid, label: nameOf(c, ctx.printings), hint: p.id === me ? "yours" : p.name })),
-            onPick: (to) => act({ type: "Attached", payload: { iid: card.iid, to } }),
+            onPick: (to) => {
+              const parsed = parseAttachmentEffect(oracleOf(card, ctx.printings));
+              const hostCard = hosts.find((h) => h.c.iid === to)?.c;
+              dialog({
+                kind: "effect",
+                title: `What does ${name} grant ${hostCard ? nameOf(hostCard, ctx.printings) : "its host"}?`,
+                body: parsed ? "Read from the card text. Edit if it is conditional, then confirm." : "Nothing static was found in the text. Fill in what applies, or confirm empty.",
+                initial: parsed ?? { power: 0, toughness: 0, keywords: [] },
+                submitLabel: "Attach",
+                onSubmit: (v) => act({ type: "Attached", payload: { iid: card.iid, to, effect: { power: v.power, toughness: v.toughness, keywords: v.keywords } } }),
+              });
+            },
           });
         },
       });
+      if (parseAnthem(oracleOf(card, ctx.printings))) {
+        out.push({
+          label: card.anthemDismissed ? "Show its anthem again" : "Hide its anthem",
+          hint: card.anthemDismissed ? undefined : "for conditional ones",
+          run: () => act({ type: "AnthemDismissed", payload: { iid: card.iid, dismissed: !card.anthemDismissed } }),
+        } as Action);
+      }
       out.push({ label: "Create token copy", run: () => act({ type: "CardCopied", payload: { iid: card.iid, player: me } }) });
       out.push({
-        label: "Move to row...",
+        label: "Move to section...",
         run: () =>
           dialog({
             kind: "pick",
-            title: "Row",
-            options: ROWS.filter((r) => r !== zone.row).map((r) => ({ value: r, label: ROW_LABEL[r] })),
+            title: "Section",
+            options: SECTIONS.filter((r) => r !== zone.row).map((r) => ({ value: r, label: SECTION_LABELS[r] })),
             onPick: (row) => act({ type: "CardMoved", payload: { iid: card.iid, to: { kind: "battlefield", owner: holder, row: row as Row, faceDown: card.faceDown } } }),
           }),
       });
@@ -180,6 +277,50 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
     }
   }
   out.push({ label: "Zoom", run: () => ctx.zoom(card) });
+  return out;
+}
+
+export function describeEffect(e: { power: number; toughness: number; keywords: string[] }): string {
+  const parts: string[] = [];
+  if (e.power || e.toughness) parts.push(`${e.power >= 0 ? "+" : ""}${e.power}/${e.toughness >= 0 ? "+" : ""}${e.toughness}`);
+  if (e.keywords.length) parts.push(e.keywords.join(", "));
+  return parts.join(", ") || "nothing";
+}
+
+/** The Creatures header sheet: detected anthems (hide/show), manual anthems (remove), add one. */
+export function anthemActions(ctx: Ctx, p: ViewPlayer): Action[] {
+  const { me, dispatch, dialog, close } = ctx;
+  const act = (e: EventInput) => {
+    dispatch(e);
+    close();
+  };
+  const d = deriveFor(p, ctx.printings);
+  const out: Action[] = [];
+  for (const a of d.anthems) {
+    out.push({
+      label: `${a.dismissed ? "Show" : "Hide"} ${a.name}`,
+      hint: `${describeEffect(a)}${a.other ? " (other creatures)" : ""}${a.dismissed ? " - hidden" : ""}`,
+      disabled: !me,
+      run: () => act({ type: "AnthemDismissed", payload: { iid: a.sourceIid, dismissed: !a.dismissed } }),
+    });
+  }
+  for (const m of p.manualAnthems) {
+    out.push({ label: `Remove ${m.note || "manual anthem"}`, hint: describeEffect(m), disabled: !me, run: () => act({ type: "ManualAnthemRemoved", payload: { player: p.id, id: m.id } }) });
+  }
+  out.push({
+    label: "Add an anthem...",
+    hint: "for effects the text parser cannot see",
+    disabled: !me,
+    run: () =>
+      dialog({
+        kind: "effect",
+        title: `Anthem for ${p.id === me ? "your" : `${p.name}'s`} creatures`,
+        initial: { power: 1, toughness: 1, keywords: [] },
+        withNote: true,
+        submitLabel: "Add",
+        onSubmit: (v) => act({ type: "ManualAnthemAdded", payload: { player: p.id, power: v.power, toughness: v.toughness, keywords: v.keywords, note: v.note } }),
+      }),
+  });
   return out;
 }
 

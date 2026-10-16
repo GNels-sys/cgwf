@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { cardImagePath, type ViewCard } from "@cgwf/shared";
+import { cardImagePath, type DerivedCard, type ViewCard } from "@cgwf/shared";
 import type { SleeveStyle } from "./look";
 import { imageFace, nameOf, printingOf, type Printings } from "./model";
 
@@ -10,11 +10,15 @@ interface Props {
   printings: Printings;
   onTap?: (card: ViewCard) => void;
   onHold?: (card: ViewCard) => void;
-  draggable?: boolean;
+  draggable?: boolean | undefined;
   selected?: boolean;
   /** Drawn smaller and offset: an attachment under its host. */
   attached?: boolean;
   dim?: boolean;
+  /** Derived P/T and keywords (from deriveBattlefield) for the P/T badge and keyword chevrons. */
+  derived?: DerivedCard | undefined;
+  /** A pending trigger points at this card. */
+  highlight?: boolean | undefined;
   /** The owner's sleeve, drawn when the card is hidden. */
   sleeve?: SleeveStyle | undefined;
 }
@@ -24,12 +28,13 @@ const FLIP_MS = 320;
 
 /**
  * One card on the table. Tap opens the action sheet; press-and-hold zooms.
- * Tapped cards turn sideways, counters show as badges, hidden cards show the
- * owner's sleeve (a CGwF design or their upload, never the official card back).
+ * Tapped cards turn sideways, counters show as badges, creatures show their
+ * computed P/T and one chevron per keyword, hidden cards show the owner's
+ * sleeve (a CGwF design or their upload, never the official card back).
  * Light animations: fade in on arrival, a flip when a face changes; all off
  * under prefers-reduced-motion (see game.css).
  */
-export function CardTile({ card, printings, onTap, onHold, draggable = false, selected = false, attached = false, dim = false, sleeve }: Props) {
+export function CardTile({ card, printings, onTap, onHold, draggable = false, selected = false, attached = false, dim = false, derived, highlight = false, sleeve }: Props) {
   const printing = printingOf(card, printings);
   const name = nameOf(card, printings);
   const hidden = card.faceDown || (!card.printingId && !card.custom);
@@ -89,20 +94,32 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.4 : dim ? 0.55 : 1,
   };
-  const badges = Object.entries(card.counters);
-  const label = `${name}${card.tapped ? ", tapped" : ""}${card.faceDown ? ", face down" : ""}${badges.length ? `, ${badges.map(([k, v]) => `${v} ${k}`).join(", ")}` : ""}`;
+  const badges = Object.entries(card.counters).filter(([k]) => !(derived?.isCreature && (k === "+1/+1" || k === "-1/-1")));
+  const showPt = derived?.isCreature && derived.power !== null && derived.toughness !== null && !hidden;
+  const ptChanged = derived ? derived.deltaPower !== 0 || derived.deltaToughness !== 0 : false;
+  const chevrons = derived && !hidden ? derived.keywords : [];
+  const label = [
+    name,
+    showPt && derived ? `${derived.power}/${derived.toughness}` : null,
+    card.tapped ? "tapped" : null,
+    card.faceDown ? "face down" : null,
+    chevrons.length ? chevrons.join(", ") : null,
+    badges.length ? badges.map(([k, v]) => `${v} ${k}`).join(", ") : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div
       ref={setNodeRef}
-      className={`tile${card.tapped ? " is-tapped" : ""}${selected ? " is-selected" : ""}${attached ? " is-attached" : ""}${card.isToken ? " is-token" : ""}${card.isCommander ? " is-commander" : ""}${flipping ? " is-flipping" : ""}`}
+      className={`tile${card.tapped ? " is-tapped" : ""}${selected ? " is-selected" : ""}${attached ? " is-attached" : ""}${card.isToken ? " is-token" : ""}${card.isCommander ? " is-commander" : ""}${highlight ? " is-triggered" : ""}${flipping ? " is-flipping" : ""}`}
       style={style}
       {...listeners}
       {...attributes}
       role="button"
       tabIndex={0}
       aria-label={label}
-      title={name}
+      title={chevrons.length ? `${name} - ${chevrons.join(", ")}` : name}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
@@ -132,6 +149,13 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
           <img src={cardImagePath(printing.id, "small", face)} alt="" draggable={false} loading="lazy" decoding="async" />
         )}
       </div>
+      {chevrons.length > 0 && (
+        <div className="tile-chevrons" aria-hidden="true">
+          {chevrons.map((k) => (
+            <span key={k} className="chevron" title={k} />
+          ))}
+        </div>
+      )}
       {badges.length > 0 && (
         <div className="tile-badges">
           {badges.map(([k, v]) => (
@@ -140,6 +164,11 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
             </span>
           ))}
         </div>
+      )}
+      {showPt && derived && (
+        <span className={`tile-pt${ptChanged ? " is-modified" : ""}`} title={`${derived.power}/${derived.toughness}`}>
+          {derived.power}/{derived.toughness}
+        </span>
       )}
       {card.isCommander && <span className="tile-mark" title="Commander">C</span>}
     </div>

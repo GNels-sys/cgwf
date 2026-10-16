@@ -32,8 +32,12 @@ keep the repo readable.
   the schema portable.
 - Commander only in v1 (keep `format` in the model). Partner commanders from day one. Track
   commander tax, life, poison, commander damage, every counter type.
-- Battlefield = structured rows per player (lands / creatures / other); tap an opponent to view
-  their field. Phone landscape is the primary device.
+- Battlefield = structured sections per player, three rows: Other on top, then Creatures |
+  Enchantments, then Lands | Artifacts; tap an opponent to view their field. Phone landscape is
+  the primary device.
+- **No rules engine in v1, but assisted bookkeeping (owner, 2026-10-16):** the app may SUGGEST
+  from card text (equipment/aura grants, anthems, triggers) and the player confirms or edits with
+  a tap. Nothing is enforced or blocked; every confirmation is an event in the log.
 - Interaction: tap-to-select + action sheet is primary; `@dnd-kit` drag is secondary.
 - Stop after each phase's deploy so the owner can check it on their phone.
 
@@ -105,15 +109,24 @@ bounded edit distance.
 - `types.ts`: `GameState` = players (life, counters, commanderDamage, commanderTax, mulligans, kept,
   toBottom, conceded, zones) + `cards` (one `CardInstance` per physical card or token: full
   `CardPrinting`, owner, zone {kind, owner, row}, tapped, faceDown, face, counters, attachedTo,
-  revealedTo) + turnOrder / activePlayer / turn / step + `rng` + `log` + `seq`. Zones: library
-  (index 0 = top), hand, graveyard, exile, command, battlefield rows lands | creatures | other.
+  revealedTo, effect, modifier, anthemDismissed) + turnOrder / activePlayer / turn / step +
+  `rng` + `log` + `seq` + `pendingTriggers`. Zones: library (index 0 = top), hand, graveyard,
+  exile, command, battlefield sections other | creatures | enchantments | lands | artifacts
+  (`zone.row`; `sections.ts` picks the default from the type line: any creature -> creatures,
+  land -> lands, planeswalker/battle -> other, artifact (equipment, vehicles) -> artifacts,
+  enchantment (auras) -> enchantments; players can move a card to any section). Players also
+  carry `mana` (W/U/B/R/G/C pool), `keepMana` and `manualAnthems`.
   `stack` and `priority` exist but are never used (reserved for a rules engine).
 - Events (`EventPayloads`): GameStarted, Mulligan, HandKept, CardsDrawn, CardMoved, CardTapped,
   UntapAll, CardFlipped, CardTurned, CardRevealed, CounterChanged, LifeChanged,
   PlayerCounterChanged, CommanderDamage, CommanderTaxChanged, LibraryShuffled, LibraryRevealed,
   LibraryLooked, LibrarySearched, Milled, TokenCreated, CardCopied, Attached, TurnAdvanced,
-  StepAdvanced, StepSet, DiceRolled, CoinFlipped, RandomOpponent, PlayerConceded, Revert.
-  Clients send `{type, payload}`; the server stamps `seq` (1-based, contiguous), `actor`, `ts`.
+  StepAdvanced, StepSet, DiceRolled, CoinFlipped, RandomOpponent, PlayerConceded, Revert, plus
+  the bookkeeping events AttachmentEffectSet, CardModifierSet, AnthemDismissed,
+  ManualAnthemAdded/Removed, TriggerResolved, TriggersDismissed, ManaChanged, ManaConverted,
+  ManaEmptied, KeepManaToggled. `Attached` carries the confirmed `effect` {power, toughness,
+  keywords}. Clients send `{type, payload}`; the server stamps `seq` (1-based, contiguous),
+  `actor`, `ts`.
 - `reducer.ts`: `applyEvent(state, event, seed)` is pure and throws `GameError` for illegal
   actions (nobody touches another player's hand or library; only the host starts). `replay(events,
   seed)` rebuilds state; a `Revert {toSeq}` replays the prefix up to `toSeq` and later events
@@ -128,6 +141,38 @@ bounded edit distance.
 - `view.ts`: `viewFor(state, viewerId | null)` -> `PlayerView` + the printings it references.
   Hidden cards have `printingId: null` and are not listed at all when in a library or another
   hand (counts only). Spectators get `viewer: null`.
+
+### Assisted bookkeeping (`shared/src/game/effects.ts`, `triggers.ts`)
+
+- Attachments: on "Attach to...", the client runs `parseAttachmentEffect` on the attachment's
+  oracle text and prefills a confirm sheet (P/T + editable keyword chips); the confirmed effect
+  travels in the `Attached` event (editable later via AttachmentEffectSet). Parser catches
+  "Equipped/Enchanted creature gets +X/+Y", "... and has <kw>, <kw> and <kw>", "has <kw>" alone,
+  "protection from X and from Y". It does NOT evaluate conditionals ("+1/+1 for each", "as long
+  as"): it reports the base numbers and the player edits. Attachments sit in the host's section,
+  render under the host, move with it, and are re-sectioned (equipment -> artifacts, auras ->
+  enchantments) with their effect cleared when unattached or when the host leaves.
+- Anthems: `parseAnthem` detects "Creatures you control get +X/+Y [and have kw]" and the "Other
+  creatures you control" form (source excluded). Temporary ("until end of turn"), conditional
+  ("as long as", "for each") and subset anthems ("Creature tokens you control") are ignored; the
+  player adds those manually (ManualAnthemAdded, with a note) from the Creatures header badge.
+  Detected anthems can be hidden per source (AnthemDismissed).
+- `deriveBattlefield(cards, getPrinting, manualAnthems)` is the single derivation used by server
+  tests and every client: displayed P/T = printed + (+1/+1) - (-1/-1) + attachment effects +
+  active anthems + manual modifier; keywords = printed + granted + manual - removed. Tiles show
+  the P/T badge (gold when modified) and one chevron per keyword; the zoom view lists every
+  granted effect and attachment.
+- Triggers: `detectTriggers(stateAfter, event)` runs inside the reducer after every event and
+  appends advisory `pendingTriggers` (cleared on TurnAdvanced). Families: Landfall (keyword or
+  "whenever a land [you control] enters"), own-permanent ETB ("whenever a/another creature |
+  artifact | enchantment (constellation) | permanent enters [under your control]"), the entering
+  card's own "When ~ enters", and "at the beginning of your/each upkeep | draw step | precombat
+  main phase | combat | end step" (yours = active player only, each = everyone). Not covered:
+  opponent-side triggers, dies/attacks/damage triggers, "whenever you cast". The Triggers panel
+  lists mine (tap = TriggerResolved, logged), matching tiles glow green for everyone.
+- Mana bank: ManaChanged/ManaConverted/ManaEmptied/KeepManaToggled; the reducer empties every
+  player's pool on StepAdvanced/StepSet/TurnAdvanced unless `keepMana`, logging it. Pools are
+  public (pill in the turn bar, summary in opponent chips).
 
 ### Server (`server/src/rooms/`)
 
@@ -161,8 +206,9 @@ bounded edit distance.
 
 - `/play` create/join/recent, `/room/:code` = `Lobby` (seats, own-deck picker, share link, host
   start) or `Table` once playing. `socket.ts` reconnects with backoff and on tab wake.
-- Table: opponents across the top (tap -> `OpponentPanel` with their rows and zones), my three
-  battlefield rows, hand drawer, zone buttons, life widget. Tap a card -> `ActionSheet`
+- Table: opponents across the top (tap -> `OpponentPanel`, same `Battlefield` layout as mine),
+  my battlefield (`Battlefield.tsx`: sections, stacked attachments, anthem badge), hand drawer,
+  zone buttons, life widget, mana pill, triggers panel. Tap a card -> `ActionSheet`
   (`actions.ts` builds the list per zone); press-and-hold -> `CardZoom`. `@dnd-kit` drag onto
   rows/zone buttons is the secondary path. Menu: log (tap a line to revert), dice, tokens
   (Scryfall token search or custom text token), undo, untap all, concede, leave.
@@ -210,6 +256,8 @@ bounded edit distance.
 
 ### Testing alone
 
+`node scripts/seed-field.mjs <base-url> <code> <token> "Lotus Cobra" "Rancor" ...` pulls named
+cards from that player's library straight onto their battlefield (for testing bookkeeping).
 `node scripts/bots.mjs http://localhost:8080` registers "Georgie" + three bots with small decks,
 creates a room, seats the bots and prints a device token: put it in localStorage as `cgwf.token`
 and open `/room/<code>` to play seat 1. Bots keep, play a land and pass on their turns; press
@@ -221,6 +269,7 @@ https://cgwf.fly.dev too. The Vite proxy needs `ws: true` for `/api` (already se
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
 2. Device identity, decks, decklist parser with per-site fixtures, printing resolution. **(done)**
 3. Rooms, join codes, WebSocket sync, event log + reducer, the table, hidden info, reconnect. **(done)**
+3b. Battlefield sections + assisted bookkeeping (attachment effects, anthems, triggers, mana). **(done)**
 4. Polish: token finder, silent undo, sentence log, card zoom, rematch, personalization
    (playmats, sleeves, uploads, themes, layout), animations, accessibility. **(done)**
 5. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority).

@@ -11,10 +11,18 @@ export const SYSTEM_ACTOR = "system";
 export const ZONE_KINDS = ["library", "hand", "graveyard", "exile", "command", "battlefield"] as const;
 export type ZoneKind = (typeof ZONE_KINDS)[number];
 
-export const ROWS = ["lands", "creatures", "other"] as const;
+/**
+ * Battlefield sections. Laid out as three rows on the table: Other on top,
+ * then Creatures | Enchantments, then Lands | Artifacts. A card's section is
+ * state (everyone sees the same), defaulted from the type line (sections.ts)
+ * and freely overridable by the player.
+ */
+export const ROWS = ["other", "creatures", "enchantments", "lands", "artifacts"] as const;
 export type Row = (typeof ROWS)[number];
+export type Section = Row;
+export const SECTIONS = ROWS;
 
-/** Where a card sits: a zone belonging to a player, plus a row on the battlefield. */
+/** Where a card sits: a zone belonging to a player, plus a section on the battlefield. */
 export interface ZoneRef {
   kind: ZoneKind;
   owner: PlayerId;
@@ -28,6 +36,46 @@ export interface CustomToken {
   toughness: string | null;
   colors: Color[];
   text: string;
+}
+
+/** What an attachment grants its host (confirmed by the player, parsed from oracle text). */
+export interface AttachmentEffect {
+  power: number;
+  toughness: number;
+  keywords: string[];
+}
+
+/** Manual adjustments on a permanent for whatever the parsers miss. */
+export interface CardModifier {
+  power: number;
+  toughness: number;
+  keywords: string[];
+  removedKeywords: string[];
+}
+
+export interface ManualAnthem {
+  id: string;
+  power: number;
+  toughness: number;
+  keywords: string[];
+  note: string;
+}
+
+export const MANA_COLORS = ["W", "U", "B", "R", "G", "C"] as const;
+export type ManaColor = (typeof MANA_COLORS)[number];
+export type ManaPool = Record<ManaColor, number>;
+export const EMPTY_MANA: ManaPool = { W: 0, U: 0, B: 0, R: 0, G: 0, C: 0 };
+
+/** An advisory "this may have triggered" note; nothing is enforced. */
+export interface PendingTrigger {
+  id: string;
+  iid: string;
+  controller: PlayerId;
+  /** Short family label, e.g. "Landfall", "ETB", "Upkeep". */
+  kind: string;
+  /** Card name at the time, for the panel and the log. */
+  name: string;
+  seq: number;
 }
 
 export interface CardInstance {
@@ -50,13 +98,14 @@ export interface CardInstance {
   revealedTo: PlayerId[] | "all" | null;
   isToken: boolean;
   isCommander: boolean;
+  /** When attached: what this card grants its host. */
+  effect: AttachmentEffect | null;
+  modifier: CardModifier | null;
+  /** The player hid this card's detected anthem (conditional ones). */
+  anthemDismissed: boolean;
 }
 
-export interface Battlefield {
-  lands: string[];
-  creatures: string[];
-  other: string[];
-}
+export type Battlefield = Record<Section, string[]>;
 
 export interface PlayerZones {
   /** Index 0 is the top of the library. */
@@ -85,6 +134,10 @@ export interface PlayerState {
   toBottom: number;
   conceded: boolean;
   zones: PlayerZones;
+  mana: ManaPool;
+  /** Keep floating mana across steps (cards that carry mana over). */
+  keepMana: boolean;
+  manualAnthems: ManualAnthem[];
 }
 
 export const STEPS = [
@@ -153,6 +206,7 @@ export interface GameState {
   /** Seq of the last event applied. */
   seq: number;
   winner: PlayerId | null;
+  pendingTriggers: PendingTrigger[];
 }
 
 // ---------------------------------------------------------------- events
@@ -211,7 +265,19 @@ export type EventPayloads = {
   TokenCreated: { player: PlayerId; printing: CardPrinting | null; custom: CustomToken | null; count: number; row: Row };
   /** Token copy of a permanent, under the creator's control. */
   CardCopied: { iid: string; player: PlayerId };
-  Attached: { iid: string; to: string | null };
+  Attached: { iid: string; to: string | null; effect?: AttachmentEffect | null };
+  /** Edit what an attachment grants after the fact. */
+  AttachmentEffectSet: { iid: string; effect: AttachmentEffect | null };
+  CardModifierSet: { iid: string; modifier: CardModifier | null };
+  AnthemDismissed: { iid: string; dismissed: boolean };
+  ManualAnthemAdded: { player: PlayerId; power: number; toughness: number; keywords: string[]; note: string };
+  ManualAnthemRemoved: { player: PlayerId; id: string };
+  TriggerResolved: { id: string };
+  TriggersDismissed: { player: PlayerId };
+  ManaChanged: { player: PlayerId; color: ManaColor; delta: number };
+  ManaConverted: { player: PlayerId; to: ManaColor };
+  ManaEmptied: { player: PlayerId };
+  KeepManaToggled: { player: PlayerId; keep: boolean };
   TurnAdvanced: Record<string, never>;
   StepAdvanced: Record<string, never>;
   StepSet: { step: Step };
@@ -248,6 +314,17 @@ export const EVENT_TYPES = Object.keys({
   TokenCreated: 0,
   CardCopied: 0,
   Attached: 0,
+  AttachmentEffectSet: 0,
+  CardModifierSet: 0,
+  AnthemDismissed: 0,
+  ManualAnthemAdded: 0,
+  ManualAnthemRemoved: 0,
+  TriggerResolved: 0,
+  TriggersDismissed: 0,
+  ManaChanged: 0,
+  ManaConverted: 0,
+  ManaEmptied: 0,
+  KeepManaToggled: 0,
   TurnAdvanced: 0,
   StepAdvanced: 0,
   StepSet: 0,
@@ -277,6 +354,9 @@ export function isZoneKind(v: unknown): v is ZoneKind {
 }
 export function isRow(v: unknown): v is Row {
   return typeof v === "string" && (ROWS as readonly string[]).includes(v);
+}
+export function isManaColor(v: unknown): v is ManaColor {
+  return typeof v === "string" && (MANA_COLORS as readonly string[]).includes(v);
 }
 export function isStep(v: unknown): v is Step {
   return typeof v === "string" && (STEPS as readonly string[]).includes(v);

@@ -1,15 +1,34 @@
 import { useEffect, useState } from "react";
-import { hasBackFace, type PlayerView, type ViewCard } from "@cgwf/shared";
+import { hasBackFace, type DerivedCard, type PlayerView, type ViewCard } from "@cgwf/shared";
 import { CardImage } from "../components/CardImage";
 import { ManaCost, OracleText } from "../components/ManaCost";
+import { describeEffect } from "./actions";
 import type { SleeveStyle } from "./look";
 import { imageFace, nameOf, printingOf, type Printings } from "./model";
 
 /**
  * Big view of one card from the data we already have (no API round trip):
- * full image, oracle text for every face, counters and where it sits.
+ * full image, oracle text for every face, where it sits and its status. On the
+ * battlefield it also shows the derived P/T, keywords, attachments and every
+ * granted effect, so "why is this a 6/4?" has an answer.
  */
-export function CardZoom({ card, printings, view, sleeve, onClose }: { card: ViewCard; printings: Printings; view?: PlayerView; sleeve?: SleeveStyle | undefined; onClose: () => void }) {
+export function CardZoom({
+  card,
+  printings,
+  view,
+  sleeve,
+  derived,
+  attachments = [],
+  onClose,
+}: {
+  card: ViewCard;
+  printings: Printings;
+  view?: PlayerView;
+  sleeve?: SleeveStyle | undefined;
+  derived?: DerivedCard | undefined;
+  attachments?: ViewCard[];
+  onClose: () => void;
+}) {
   const printing = printingOf(card, printings);
   const [face, setFace] = useState<0 | 1>(imageFace(card, printing));
   useEffect(() => {
@@ -20,6 +39,7 @@ export function CardZoom({ card, printings, view, sleeve, onClose }: { card: Vie
 
   const twoFaced = printing ? hasBackFace(printing.layout) : false;
   const faces = printing?.faces.length ? printing.faces : printing ? [{ name: printing.name, manaCost: printing.manaCost, typeLine: printing.typeLine, oracleText: printing.oracleText, power: printing.power, toughness: printing.toughness, loyalty: printing.loyalty, defense: printing.defense }] : [];
+  const counters = Object.entries(card.counters);
   const owner = view?.players[card.owner]?.name;
   const controller = view?.players[card.zone.owner]?.name;
   const where = `${card.zone.kind === "battlefield" ? `battlefield (${card.zone.row ?? "other"})` : card.zone.kind}${controller ? `, ${controller}` : ""}${owner && owner !== controller ? ` (owned by ${owner})` : ""}`;
@@ -54,6 +74,46 @@ export function CardZoom({ card, printings, view, sleeve, onClose }: { card: Vie
           )}
         </div>
         <div className="zoom-text">
+          {derived && card.zone.kind === "battlefield" && (
+            <section className="zoom-now">
+              {derived.isCreature && derived.power !== null && (
+                <p className="zoom-pt">
+                  <strong>
+                    {derived.power}/{derived.toughness}
+                  </strong>
+                  {(derived.deltaPower || derived.deltaToughness) && derived.basePower !== null ? (
+                    <span className="muted small">
+                      {" "}
+                      printed {derived.basePower}/{derived.baseToughness}
+                    </span>
+                  ) : null}
+                </p>
+              )}
+              {derived.keywords.length > 0 && (
+                <p className="zoom-keywords">
+                  {derived.keywords.map((k) => (
+                    <span key={k} className="chip is-selected">
+                      {k}
+                    </span>
+                  ))}
+                </p>
+              )}
+              {attachments.length > 0 && (
+                <p className="small">
+                  Attached: {attachments.map((a) => `${nameOf(a, printings)}${a.effect ? ` (${describeEffect(a.effect)})` : ""}`).join(", ")}
+                </p>
+              )}
+              {derived.effects.length > 0 && (
+                <ul className="zoom-effects small">
+                  {derived.effects.map((e, i) => (
+                    <li key={`${e.source}-${i}`}>
+                      <span className="muted">{e.label}:</span> {describeEffect(e)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
           {printing &&
             faces.map((f, i) => (
               <section key={i} className={`card-face${twoFaced && i !== face ? " is-dim" : ""}`}>
@@ -82,13 +142,8 @@ export function CardZoom({ card, printings, view, sleeve, onClose }: { card: Vie
             In {where}
             {status ? ` - ${status}` : ""}
           </p>
-          {Object.keys(card.counters).length > 0 && (
-            <p className="muted small">
-              Counters:{" "}
-              {Object.entries(card.counters)
-                .map(([k, v]) => `${v} ${k}`)
-                .join(", ")}
-            </p>
+          {counters.length > 0 && (
+            <p className="muted small">Counters: {counters.map(([k, v]) => `${v} ${k}`).join(", ")}</p>
           )}
         </div>
         <button className="modal-close" onClick={onClose} aria-label="Close">

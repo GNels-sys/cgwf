@@ -1,5 +1,5 @@
 import type { CardPrinting } from "../cards.js";
-import type { CardInstance, CustomToken, GameState, LogEntry, PlayerId, Row, StackItem, Step, ZoneRef } from "./types.js";
+import type { AttachmentEffect, CardInstance, CardModifier, CustomToken, GameState, LogEntry, ManaPool, ManualAnthem, PendingTrigger, PlayerId, Row, StackItem, Step, ZoneRef } from "./types.js";
 
 /**
  * Per-player view of the game. This is the ONLY shape a client ever receives.
@@ -23,6 +23,9 @@ export interface ViewCard {
   attachedTo: string | null;
   isToken: boolean;
   isCommander: boolean;
+  effect: AttachmentEffect | null;
+  modifier: CardModifier | null;
+  anthemDismissed: boolean;
   /** True when every player can see the identity (revealed, or a public zone). */
   public: boolean;
   /** Library cards only: 0 = top. */
@@ -41,6 +44,9 @@ export interface ViewPlayer {
   kept: boolean;
   toBottom: number;
   conceded: boolean;
+  mana: ManaPool;
+  keepMana: boolean;
+  manualAnthems: ManualAnthem[];
   library: { count: number; known: ViewCard[] };
   hand: { count: number; cards: ViewCard[] };
   graveyard: ViewCard[];
@@ -62,6 +68,7 @@ export interface PlayerView {
   log: LogEntry[];
   seq: number;
   winner: PlayerId | null;
+  pendingTriggers: PendingTrigger[];
 }
 
 function identityVisible(c: CardInstance, viewer: PlayerId | null): boolean {
@@ -102,6 +109,9 @@ function toViewCard(c: CardInstance, viewer: PlayerId | null, printings: Map<str
     attachedTo: c.attachedTo,
     isToken: c.isToken,
     isCommander: c.isCommander,
+    effect: c.effect,
+    modifier: c.modifier,
+    anthemDismissed: c.anthemDismissed,
     public: isPublicIdentity(c),
   };
   return out;
@@ -147,15 +157,20 @@ export function viewFor(state: GameState, viewer: PlayerId | null, logLimit = 20
       kept: p.kept,
       toBottom: p.toBottom,
       conceded: p.conceded,
+      mana: p.mana,
+      keepMana: p.keepMana,
+      manualAnthems: p.manualAnthems,
       library: { count: p.zones.library.length, known },
       hand: { count: p.zones.hand.length, cards: handCards },
       graveyard: list(p.zones.graveyard),
       exile: list(p.zones.exile),
       command: list(p.zones.command),
       battlefield: {
-        lands: list(p.zones.battlefield.lands),
-        creatures: list(p.zones.battlefield.creatures),
         other: list(p.zones.battlefield.other),
+        creatures: list(p.zones.battlefield.creatures),
+        enchantments: list(p.zones.battlefield.enchantments),
+        lands: list(p.zones.battlefield.lands),
+        artifacts: list(p.zones.battlefield.artifacts),
       },
     };
   }
@@ -173,6 +188,7 @@ export function viewFor(state: GameState, viewer: PlayerId | null, logLimit = 20
     log: state.log.slice(-logLimit),
     seq: state.seq,
     winner: state.winner,
+    pendingTriggers: state.pendingTriggers,
   };
   return { view, printings };
 }
