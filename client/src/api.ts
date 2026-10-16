@@ -1,6 +1,9 @@
 import type {
   CardResponse,
   CreateDeckRequest,
+  CreateRoomResponse,
+  MyRoomsResponse,
+  RoomResponse,
   DeckDetail,
   DeckSummary,
   ImportUrlResponse,
@@ -87,5 +90,13 @@ export const api = {
     remove: (id: string) => request<{ ok: true }>(`/api/decks/${encodeURIComponent(id)}`, { method: "DELETE" }),
     parse: (text: string) => request<ResolveResponse>("/api/decks/parse", { json: { text } }),
     importUrl: (url: string) => request<ImportUrlResponse>(`/api/decks/import-url?url=${encodeURIComponent(url)}`),
+  },
+
+  rooms: {
+    create: () => request<CreateRoomResponse>("/api/rooms", { method: "POST", json: {} }),
+    get: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}`),
+    join: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}/join`, { method: "POST", json: {} }),
+    mine: () => request<MyRoomsResponse>("/api/rooms/mine"),
+    decks: () => request<{ decks: Array<{ id: string; name: string; commanders: string[] }> }>("/api/rooms/decks"),
   },
 };

@@ -14,6 +14,7 @@ export function Header() {
           Decks
         </NavLink>
         <NavLink to="/cards">Cards</NavLink>
+        <NavLink to="/play">Play</NavLink>
       </nav>
       <NavLink to="/me" className="nav-user" aria-label="Your profile">
         {user ? (
