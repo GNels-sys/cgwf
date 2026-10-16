@@ -182,6 +182,15 @@ function DeckView({ id }: { id: string }) {
     };
   }, [deck]);
 
+  // Follow the displayed section order, visiting each printing once rather than
+  // repeating basic lands or the same printing listed on multiple boards.
+  const browseIds = useMemo(() => sections ? [...new Set([
+    ...sections.commanders,
+    ...sections.main.flatMap((group) => group.entries),
+    ...sections.companion, ...sections.sideboard, ...sections.maybeboard,
+  ].map((entry) => entry.card.id))] : [], [sections]);
+  const browseIndex = open ? browseIds.indexOf(open) : -1;
+
   if (error) return <p className="error">{error}</p>;
   if (!deck || !sections) return <p className="muted">Loading deck...</p>;
 
@@ -319,7 +328,12 @@ function DeckView({ id }: { id: string }) {
         )}
       </div>
 
-      {open && <CardDetail id={open} onClose={() => setOpen(null)} />}
+      {open && <CardDetail id={open} onClose={() => setOpen(null)} navigation={{
+        position: browseIndex + 1,
+        total: browseIds.length,
+        onPrevious: browseIndex > 0 ? () => setOpen(browseIds[browseIndex - 1]!) : null,
+        onNext: browseIndex >= 0 && browseIndex < browseIds.length - 1 ? () => setOpen(browseIds[browseIndex + 1]!) : null,
+      }} />}
     </>
   );
 }

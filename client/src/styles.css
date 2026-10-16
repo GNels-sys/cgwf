@@ -333,6 +333,17 @@ body.in-table > #root > .app-shell > .site-footer {
   flex-direction: column;
   gap: 10px;
 }
+.card-detail-nav {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding-right: 36px;
+}
+.card-detail-nav .btn { min-width: 44px; min-height: 44px; font-size: 1.2rem; }
+.card-detail-nav > span { min-width: 90px; text-align: center; font-variant-numeric: tabular-nums; }
+.card-detail-loading { grid-column: 1 / -1; min-height: 160px; }
 .card-detail-text h2 {
   margin: 0 0 4px;
   font-size: 1.2rem;

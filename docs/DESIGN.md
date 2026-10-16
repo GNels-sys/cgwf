@@ -351,3 +351,13 @@ A later live build omitted the redesign: its CSS had none of the illustrated dec
 Validation: shared build, workspace typecheck, production build, all 223 tests, collection/Cards checks at all three sizes in both themes, and all six gameplay motion/theme/size checks. Gameplay checks cover draws, play, graveyard, exile, return to hand, cleanup, reduced motion, undo, glass overlays, and pointer interaction. Reports: `docs/design-previews/restoration/`.
 
 Release note: deploy a revision containing both `origin/main` and the design commits. Until the design pull request is merged into `main`, deploying `main` alone will omit the design again. The original design brief reserves merging into `main` for owner approval; restoration deployment uses the combined `design-refresh` branch.
+
+## Browse enlarged deck cards — 2026-10-16
+
+The deck's enlarged card dialog now has previous/next arrow buttons, a position counter, and Left/Right keyboard navigation. It follows the displayed deck order: commanders, main-deck type groups, companion, sideboard, then maybeboard. Each printing is visited once; card quantities and repeated printings across boards do not create duplicate steps. Arrows disable at the first/last card. Other card-detail callers keep their existing view.
+
+Changing cards aborts pending reads, clears old errors, resets to the front face and top of the panel, and leaves the arrow controls mounted so focus stays usable. Navigation remains available during loading/errors. Escape, close, backdrop dismissal, whole-card artwork, and frosted styling remain in place.
+
+Browser checks passed at 375×812, 812×375, and 1440×1000 in both themes: order, keyboard/buttons, boundaries, duplicate handling, double-face reset, failed-card recovery, stale request cancellation, 44px targets, close/Escape, no overflow, and unchanged Cards search dialogs. Evidence: `docs/design-previews/card-browser/`.
+
+Validation also passed workspace typecheck, the production build, and all 223 tests before release.
