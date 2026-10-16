@@ -632,6 +632,91 @@ tests in `server/src/routes/social.test.ts` and `shared/src/onboarding.test.ts`.
   `@media (max-width: 600px)` block since Phase 6 that swallowed every later rule on wide screens;
   fixed here.
 
+## Deck statistics (Phase 9)
+
+The **Stats** panel sits beside **Bracket** on every deck page and library deck page
+(`client/src/components/StatsPanel.tsx`, `client/src/stats.css`; `.analysis-row` puts the two side
+by side from 900 px). Everything is computed by `server/src/analysis/stats.ts` (`computeStats`,
+pure, no model, no network) over the deck's main + commander cards; shapes in `shared/src/stats.ts`.
+Routes: `GET /api/decks/:id/stats` (own deck, 60/min) and `GET /api/library/:id/stats` (owner) ->
+`{stats, cached}`. `StatsCache` (`server/src/routes/stats.ts`) keeps up to 300 results in memory
+keyed by deck id + `updatedAt` (every card change bumps it), so a repeat view is a map lookup; no
+table was added (Phase 8 owned migrations). Tests: `server/src/analysis/stats.test.ts` (a 29-card
+hand-checked fixture deck, every number worked out by hand in the comments) and
+`server/src/routes/stats.test.ts` (real card rows, cache, ownership, library).
+
+**AnalysisCard** gained `colors`, `power`, `toughness` (front face for two-faced cards); the
+fixture helper `card()` defaults `colors` to the colours in the mana cost.
+
+What each statistic means. "Exact" = counted from card data; "heuristic" = regex over Oracle text
+(reminder text stripped, own name = `~`), which can miss unusual wordings; every heuristic result
+lists the card names it matched (tap the row), so the reader can disagree.
+
+- **Mana value** (exact): parsed from the FRONT half of the mana cost (`frontCost`, so Fire // Ice is
+  2 and an MDFC is its front), numbers add, X/Y/Z are 0, {2/W} is 2, every other symbol is 1; a card
+  with no cost uses Scryfall's `cmc` (0 for lands and suspend-only cards). Not Scryfall's `cmc` for
+  split cards (which sums both halves).
+- **Mana curve** (exact): buckets 0..6 and 7+ of nonland cards; the toggle adds lands (always
+  bucket 0). Totals: sum over all cards, mean over nonland cards, mean over every card.
+- **Pips** (exact by definition): per colour from the front cost. Hybrid `{G/W}` adds 0.5 to each
+  colour; `{2/W}` and Phyrexian `{W/P}` count one pip of the colour; `{C}` is its own column; `{S}`
+  is generic; X counts 0 and the card is listed as an X spell. Generic is shown apart.
+- **Mana sources** (heuristic, `manaSource`): permanents only (instants/sorceries such as rituals
+  and one-shot Treasure makers are not sources). Lands produce by basic land type in the type line
+  ("Land — Forest Island" -> G, U) and by "Add {G}" / "Add {G} or {W}" / "Add {C}" text; fetch lands
+  by what they search for ("Forest or Island card" -> G, U; "a basic land card" -> any). Rocks
+  (artifacts), dorks (creatures) and other permanents by "Add ..." text. "Add one mana of any
+  color", "any one color", "in any combination of colors", "of the chosen color", Command Tower's
+  "any color in your commander's color identity" -> `any`, which counts toward every colour of the
+  deck's identity (commander colour identity; without a commander, the colours of the nonland
+  cards). Lands keep their reminder text (a basic's only text is reminder text); other cards drop it
+  so Treasure reminders do not count. Each card counts once per colour it can make, times quantity.
+  Known misses: "adds an additional {G}" (Wild Growth), Exotic Orchard / Reflecting Pool count as
+  any-colour even when the table would not allow it, Lotus Cobra's landfall counts as a dork,
+  Treasure and other token producers are ignored, conditional producers are taken at face value.
+- **Sources vs pips**: per colour, pips in costs against cards that make the colour, the ratio, the
+  colour's share of coloured pips vs its share of colour-producing source slots, and a one-line
+  note ("Light on green" when the source share trails the pip share by more than 8 points; "no way
+  to make red mana"; "outside the commander's colour identity"). The guideline text credits Frank
+  Karsten's 2022 colour-source article (link in `KARSTEN` in stats.ts) as a rule of thumb, never a
+  rule; the exact per-turn source counts are left to his tables.
+- **Breakdowns**: card types (exact, front face, a card counts once in each of its types, so an
+  Artifact Creature is both); colours of nonland cards from Scryfall `colors` (a multicolour card
+  counts in each colour; multicolour and colourless totals shown); lands basic/nonbasic (exact, by
+  "Basic" in the type line); creature count with mean printed P/T over numeric P/T only ("*",
+  "1+*" are reported as left out); X spells (exact); token makers (heuristic: "create(s) a/two/X/that
+  many ... token(s)", excluding "would create" and "creates twice that many" doublers).
+- **Functional counts** (`server/src/analysis/functional.ts`, heuristic; Phase 6's `countRamp` /
+  `countCardDraw` / `countInteraction` now wrap the same finders so the bracket summary agrees):
+  ramp (rocks/dorks of MV <= 3 that add mana incl. fast mana, land searches, "put a land card onto
+  the battlefield", extra land drops), card draw/advantage ("draw a card/two cards/X cards" unless
+  an opponent or each player draws, impulse draw "exile the top card ... you may play", investigate),
+  targeted removal (destroy/exile target X incl. "noncreature permanent", damage to any target /
+  target creature, bounce an opponent's permanent, -N/-N, edicts, fights, "exile ... until"), board
+  wipes (destroy/exile all/each X, damage to each creature, each player sacrifices all, all creatures
+  get -X/-X, bounce all, Cataclysm-style "chooses ... sacrifices the rest"; "destroy all lands" alone
+  is land denial, not a wipe), counterspells ("counter target spell / ability / spell that targets"),
+  tutors (Phase 6 `detectTutors`: land searches excluded, "cards named X" excluded), recursion
+  (return/put ... from a graveyard to hand / battlefield / top of library, "return ~ from your
+  graveyard", cast from graveyard, play lands from graveyard, unearth/escape/embalm/eternalize),
+  protection (grant hexproof / indestructible / shroud / protection to targets or your permanents,
+  regenerate, phase out, "counter target spell that targets", fogs, blink-to-save, bounce your own
+  creature). A card can sit in several lists (Beast Within is removal and a token maker). Known
+  misses: planeswalker loyalty text is matched like any other text (usually right), "Fire deals 2
+  damage divided among one or two targets" is not removal, self-only protection ("~ has hexproof")
+  is deliberately not counted, cantrips on permanents ("when ~ enters, draw a card") ARE counted as
+  draw.
+
+Charts follow the `dataviz` skill as far as the game's own colours allow: horizontal CSS bars
+(16 px, rounded data end, square baseline, 2 px surface gaps), one series per chart in the accent
+colour, mana colours only where the bar IS a colour, each bar labelled with its letter and count,
+fixed WUBRG order, a text alternative (sr-only names + visible values) and `<details>` sections.
+The mana palette fails the generic colour-blind validator by design (white, black and grey are
+near-neutral, red/green are the game's colours); the letter on every mark is the secondary
+encoding. `--mana-W/U/B/R/G/C` in `styles.css` match the mana-dot hues, with white and black
+nudged per theme so bars stay visible on the panel surface. Bar width animates only under
+`prefers-reduced-motion: no-preference`.
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
@@ -647,6 +732,7 @@ tests in `server/src/routes/social.test.ts` and `shared/src/onboarding.test.ts`.
 7. Computer opponents driven by Claude Sonnet, owner-only, behind AGENTS_ENABLED with USD caps. **(done)**
 8. Onboarding (welcome screen, tour, guided sign-up) and social (friend codes, requests, presence,
    table invites, notification bell, agent deck queue). **(done)**
-9. Deck stats panel (pure computation, parallel session).
+9. Deck statistics panel beside Bracket (mana curve, pips, sources vs pips, breakdowns,
+   functional counts), pure computation with an in-memory cache. **(done)**
 10. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority),
     browser push notifications (see Phase 8), password reset once there is an email provider.
