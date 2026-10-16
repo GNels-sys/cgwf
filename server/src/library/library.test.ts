@@ -156,6 +156,18 @@ describe("deck library (owner only)", () => {
     expect((re.json() as { deck: LibraryDeckDetail }).deck).toMatchObject({ bracket: 3, agentEligible: true }); // owner edits survive a re-analysis
   });
 
+  it("exposes the import to the machine itself (loopback) but not to the outside", async () => {
+    expect((await ctx.app.inject({ method: "POST", url: "/api/admin/import-precons", remoteAddress: "10.9.9.9", payload: {} })).statusCode).toBe(403);
+    expect((await ctx.app.inject({ method: "GET", url: "/api/admin/import-status", remoteAddress: "10.9.9.9" })).statusCode).toBe(403);
+    const status = await ctx.app.inject({ method: "GET", url: "/api/admin/import-status" });
+    expect(status.statusCode).toBe(200);
+    expect(status.json().importState.phase).toBe("done");
+    const start = await ctx.app.inject({ method: "POST", url: "/api/admin/import-precons", payload: {} });
+    expect(start.statusCode).toBe(202);
+    for (let i = 0; i < 200 && ctx.precons.state.running; i++) await new Promise((r) => setTimeout(r, 25));
+    expect(ctx.precons.state.skipped).toBe(1);
+  });
+
   it("adds one of the owner's own decks to the library once, then deletes it", async () => {
     const parsed = await ctx.app.inject({ method: "POST", url: "/api/decks/parse", headers: asOwner(), payload: { text: "Commander\n1 Atraxa, Praetors' Voice\n\nDeck\n1 Sol Ring\n2 Forest\n" } });
     const lines = (parsed.json() as { lines: Array<{ card: { id: string } | null; line: { quantity: number; board: string } }> }).lines;

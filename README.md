@@ -95,7 +95,8 @@ Accounts have no email verification or password reset yet (there is no email pro
 keep your password somewhere safe.
 
 Deck library: once you are the owner, open **Library** in the top bar and press "Import precons"
-(about 200 decks, five minutes, safe to run again). The bracket panel asks
+(about 200 decks, five minutes, safe to run again), or from the machine:
+`fly ssh console -C "node server/dist/cli.js import-precons"`. The bracket panel asks
 [Commander Spellbook](https://commanderspellbook.com) for combos; answers are cached per list.
 When Wizards changes the Game Changers list, edit `server/data/brackets/game_changers.json` and
 redeploy.

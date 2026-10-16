@@ -421,7 +421,10 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
   `GET /api/library/import-status`, `POST /api/library/from-deck/:deckId` (409 if already added),
   `GET/PATCH/DELETE /api/library/:id` (PATCH: name, bracket, tags, primer, agentEligible),
   `POST /api/library/:id/analyze` (re-run engine + Spellbook, keeps the owner's edits),
-  `GET /api/library/:id/primer-skeleton`.
+  `GET /api/library/:id/primer-skeleton`. `POST /api/admin/import-precons` + `GET /api/admin/import-status`
+  are the same import for the machine itself (loopback) or `ADMIN_TOKEN`, like `/api/admin/ingest`;
+  `node server/dist/cli.js import-precons [--force] [--no-combos]` drives them and prints progress
+  (what the owner runs through `fly ssh console` after a deploy).
 - Precon import (`server/src/library/precons.ts`): MTGJSON (MIT licence, data courtesy of
   MTGJSON; verified 2026-10-15) `https://mtgjson.com/api/v5/DeckList.json` lists every product
   deck (3113 rows; 197 with `type: "Commander Deck"`); each deck is

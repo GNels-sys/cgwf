@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { isArchetypeTag, isBracket, type LibraryDeckDetail, type LibraryListResponse, type LibraryPatchRequest } from "@cgwf/shared";
 import { requireOwner, requireUser } from "../auth.js";
+import { config } from "../config.js";
 import type { DbHandle } from "../db/index.js";
 import { deckCards, decks } from "../db/schema.js";
 import type { PreconImporter } from "../library/precons.js";
@@ -47,6 +48,27 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
   });
 
   app.get("/api/library/import-status", { preHandler: owner }, async () => ({ importState: precons.state }));
+
+  /**
+   * Same import, for the machine itself (the CLI over loopback) or the ADMIN_TOKEN secret,
+   * mirroring POST /api/admin/ingest. Lets the owner run `node server/dist/cli.js import-precons`
+   * through `fly ssh console` without signing in.
+   */
+  app.post<{ Body: { force?: boolean; combos?: boolean } | null }>("/api/admin/import-precons", async (req, reply) => {
+    const isLoopback = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+    const token = req.headers["x-admin-token"];
+    const authorised = isLoopback || (config.adminToken !== "" && token === config.adminToken);
+    if (!authorised) return reply.code(403).send({ error: "forbidden" });
+    if (precons.state.running) return reply.code(409).send({ error: "import already running", importState: precons.state });
+    void precons.run({ force: Boolean(req.body?.force), combos: req.body?.combos !== false });
+    return reply.code(202).send({ started: true, importState: precons.state });
+  });
+  app.get("/api/admin/import-status", async (req, reply) => {
+    const isLoopback = req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+    const token = req.headers["x-admin-token"];
+    if (!(isLoopback || (config.adminToken !== "" && token === config.adminToken))) return reply.code(403).send({ error: "forbidden" });
+    return { importState: precons.state };
+  });
 
   app.post<{ Body: { force?: boolean; combos?: boolean } | null }>("/api/library/import-precons", { preHandler: owner }, async (req, reply) => {
     if (precons.state.running) return reply.code(409).send({ error: "import already running", importState: precons.state });
