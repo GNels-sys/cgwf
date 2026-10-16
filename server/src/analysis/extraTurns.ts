@@ -4,8 +4,8 @@ import { expanded, text, type AnalysisCard } from "./cards.js";
  * Extra turns. Bracket 1 allows none; Brackets 2 and 3 allow a few that are
  * "not intended to be chained in succession or looped". We call it chaining
  * potential when the deck can realistically take several in a row: three or
- * more extra-turn cards, or any extra turn plus a way to recur / copy spells,
- * or a card that puts itself back (Nexus of Fate, Beacon of Tomorrows).
+ * more extra-turn cards, or two plus a way to recur / copy spells, or a card
+ * that puts itself back (Nexus of Fate, Beacon of Tomorrows).
  */
 const EXTRA_TURN = /\btakes? (?:an|two|three) extra turns?\b/;
 // "Target player takes an extra turn" (Time Warp) is still yours; only explicit gifts to opponents are excluded.
@@ -48,6 +48,8 @@ export function detectExtraTurns(cards: AnalysisCard[]): ExtraTurnResult {
       return r ? [{ name: c.name, why: r.why }] : [];
     });
 
+  // One extra turn plus one Regrowth is two turns in a game, not a chain; two extra-turn cards plus
+  // recursion / copying, three or more cards, or a self-returning card is where chaining starts.
   let chaining = false;
   let why: string | null = null;
   if (names.length >= 3) {
@@ -56,9 +58,9 @@ export function detectExtraTurns(cards: AnalysisCard[]): ExtraTurnResult {
   } else if (selfRecurring.length > 0) {
     chaining = true;
     why = `${selfRecurring[0]!.name} puts itself back into the library`;
-  } else if (names.length >= 1 && recursion.length > 0) {
+  } else if (names.length >= 2 && recursion.length > 0) {
     chaining = true;
-    why = `${recursion[0]!.name} ${recursion[0]!.why}, so extra turns can repeat`;
+    why = `${recursion[0]!.name} ${recursion[0]!.why}, so the extra turns can repeat`;
   }
   return { cards: [...new Set(names)], chaining, chainingWhy: why };
 }

@@ -38,6 +38,13 @@ export const F = {
   planarCleansing: card("Planar Cleansing", "Sorcery", "Destroy all nonland permanents.", { manaCost: "{3}{W}{W}{W}", cmc: 6 }),
   wrath: card("Wrath of God", "Sorcery", "Destroy all creatures. They can't be regenerated.", { manaCost: "{2}{W}{W}", cmc: 4 }),
   smallpox: card("Smallpox", "Sorcery", "Each player loses 1 life, discards a card, sacrifices a creature, then sacrifices a land.", { manaCost: "{B}{B}", cmc: 2 }),
+  elspethTirel: card("Elspeth Tirel", "Legendary Planeswalker — Elspeth", "+2: You gain 1 life for each creature you control.\n−2: Create three 1/1 white Soldier creature tokens.\n−5: Destroy all other permanents except for lands and tokens.", { manaCost: "{3}{W}{W}", cmc: 5 }),
+  waveOfVitriol: card("Wave of Vitriol", "Sorcery", "Each player sacrifices all artifacts, enchantments, and nonbasic lands they control. For each land sacrificed this way, its controller may search their library for a basic land card and put it onto the battlefield tapped. Then each player who searched their library this way shuffles.", { manaCost: "{5}{G}{G}", cmc: 7 }),
+  fromTheAshes: card("From the Ashes", "Sorcery", "Destroy all nonbasic lands. For each land destroyed this way, its controller may search their library for a basic land card and put it onto the battlefield. Then each player who searched their library this way shuffles.", { manaCost: "{3}{R}", cmc: 4 }),
+  washOut: card("Wash Out", "Sorcery", "Return all permanents of the color of your choice to their owners' hands.", { manaCost: "{3}{U}", cmc: 4 }),
+  cataclysmicGearhulk: card("Cataclysmic Gearhulk", "Artifact Creature — Construct", "Vigilance\nWhen Cataclysmic Gearhulk enters, each player chooses an artifact, a creature, an enchantment, and a planeswalker from among the nonland permanents they control, then sacrifices the rest.", { manaCost: "{3}{W}{W}", cmc: 5, keywords: ["Vigilance"] }),
+  magusOfTheBalance: card("Magus of the Balance", "Creature — Human Wizard", "{4}{W}, {T}, Sacrifice Magus of the Balance: Each player chooses a number of lands they control equal to the number of lands controlled by the player who controls the fewest, then sacrifices the rest. Players discard cards and sacrifice creatures the same way.", { manaCost: "{3}{W}", cmc: 4 }),
+  cataclysm: card("Cataclysm", "Sorcery", "Each player chooses from among the permanents they control an artifact, a creature, an enchantment, and a land, then sacrifices the rest.", { manaCost: "{2}{W}{W}", cmc: 4 }),
 
   // --- extra turns and recursion ---
   timeWarp: card("Time Warp", "Sorcery", "Target player takes an extra turn after this one.", { manaCost: "{3}{U}{U}", cmc: 5 }),

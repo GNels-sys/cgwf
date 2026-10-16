@@ -39,6 +39,10 @@ describe("mass land denial", () => {
   it("ignores single-target land destruction, nonland wipes and ordinary sacrifice", () => {
     expect(detectMassLandDenial([F.stripMine, F.planarCleansing, F.wrath, F.smallpox, F.rampantGrowth, F.forest])).toEqual([]);
   });
+  it("ignores wipes that spare lands, replace them with basics, filter by colour or keep the fewest", () => {
+    expect(detectMassLandDenial([F.elspethTirel, F.waveOfVitriol, F.fromTheAshes, F.washOut, F.cataclysmicGearhulk, F.magusOfTheBalance])).toEqual([]);
+    expect(detectMassLandDenial([F.cataclysm]).map((h) => h.name)).toEqual(["Cataclysm"]);
+  });
 });
 
 describe("extra turns", () => {
@@ -57,10 +61,11 @@ describe("extra turns", () => {
     expect(r.chaining).toBe(true);
     expect(r.chainingWhy).toContain("Nexus of Fate");
   });
-  it("flags one extra turn plus recursion", () => {
-    expect(detectExtraTurns([F.timeWarp, F.regrowth]).chaining).toBe(true);
-    expect(detectExtraTurns([F.timeWarp, F.pastInFlames]).chaining).toBe(true);
-    expect(detectExtraTurns([F.timeWarp, F.counterspell]).chaining).toBe(false);
+  it("flags two extra turns plus recursion, but not a single extra turn with a Regrowth", () => {
+    expect(detectExtraTurns([F.timeWarp, F.regrowth]).chaining).toBe(false);
+    expect(detectExtraTurns([F.timeWarp, F.temporalMastery, F.regrowth]).chaining).toBe(true);
+    expect(detectExtraTurns([F.timeWarp, F.temporalMastery, F.pastInFlames]).chaining).toBe(true);
+    expect(detectExtraTurns([F.timeWarp, F.temporalMastery, F.counterspell]).chaining).toBe(false);
   });
 });
 
@@ -104,6 +109,10 @@ describe("combos", () => {
     expect(hits[1]).toMatchObject({ twoCard: true, early: false });
     expect(hits[2]).toMatchObject({ twoCard: false, early: false });
     expect(hits[0]!.url).toBe("https://commanderspellbook.com/combo/742-1295/");
+  });
+  it("trusts Spellbook's Core / Exhibition tag: cheap but not an early-game problem", () => {
+    const hits = classifyCombos({ included: [{ ...THORACLE_VARIANT, bracketTag: "C" }] });
+    expect(hits[0]).toMatchObject({ twoCard: true, early: false, bracketTag: "C" });
   });
   it("skips non-OK variants and handles no results", () => {
     expect(classifyCombos({ included: [{ ...THORACLE_VARIANT, status: "NW" }] })).toEqual([]);

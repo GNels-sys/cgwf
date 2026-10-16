@@ -14,7 +14,8 @@ interface Signal {
 
 const TEXT_SIGNALS: Record<ArchetypeTag, Signal[]> = {
   tokens: [
-    { re: /\bcreate (?:a|an|two|three|four|x|that many|\d+) [^.]*\btokens?\b/, weight: 1 },
+    { re: /\bcreate (?:a|an|two|three|four|x|that many|\d+) [^.]*\btokens?\b/, weight: 0.7 },
+    { re: /\bcreates? twice that many\b/, weight: 2 },
     { re: /\btokens? you control (?:get|have)\b/, weight: 1.5 },
     { re: /\bfor each (?:creature )?token\b/, weight: 1 },
     { re: /\bpopulate\b/, weight: 1 },
@@ -175,11 +176,13 @@ const TEXT_SIGNALS: Record<ArchetypeTag, Signal[]> = {
   ],
 };
 
+// Tuned against the 197 Commander precons (2026-10-16): token makers, +1/+1 counters, removal and
+// a common creature type show up in almost every list, so those tags need more evidence.
 const THRESHOLDS: Record<ArchetypeTag, number> = {
-  tokens: 9,
-  counters: 9,
+  tokens: 12,
+  counters: 12,
   aristocrats: 8,
-  voltron: 8,
+  voltron: 12,
   spellslinger: 8,
   reanimator: 7,
   lands: 8,
@@ -187,10 +190,10 @@ const THRESHOLDS: Record<ArchetypeTag, number> = {
   enchantress: 8,
   stax: 7,
   group_hug: 6,
-  control: 12,
+  control: 15,
   combo: 6,
-  aggro: 10,
-  tribal: 12,
+  aggro: 12,
+  tribal: 16,
   blink: 7,
   lifegain: 8,
   mill: 7,
@@ -257,7 +260,8 @@ export function detectArchetypes(input: ArchetypeInput): ArchetypeHit[] {
 
   // Tribal: the most common creature subtype.
   const subtypeCount = new Map<string, number>();
-  for (const c of all) if (isCreature(c)) for (const s of creatureSubtypes(c)) subtypeCount.set(s, (subtypeCount.get(s) ?? 0) + 1);
+  // Humans are in every deck, so they never count as the tribe.
+  for (const c of all) if (isCreature(c)) for (const s of creatureSubtypes(c)) if (s !== "Human") subtypeCount.set(s, (subtypeCount.get(s) ?? 0) + 1);
   let topType: string | null = null;
   let topN = 0;
   for (const [s, n] of subtypeCount) {

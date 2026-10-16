@@ -52,13 +52,17 @@ export function classifyCombos(results: SpellbookResults | null | undefined): Co
       v.uses.reduce((n, u) => n + Math.max(1, u.quantity ?? 1), 0) + (v.requires?.reduce((n, r) => n + Math.max(1, r.quantity ?? 1), 0) ?? 0);
     const mv = typeof v.manaValueNeeded === "number" && Number.isFinite(v.manaValueNeeded) ? v.manaValueNeeded : Number.POSITIVE_INFINITY;
     const twoCard = pieces <= 2 && isGameEnding(v);
+    // Spellbook's own bracket tag: C (Core) and E (Exhibition) mean their editors consider the combo
+    // fine at Bracket 2, so it is not an "early-game" problem even when it is cheap.
+    const tag = v.bracketTag ?? null;
+    const spellbookSaysCore = tag === "C" || tag === "E";
     out.push({
       id: v.id,
       cards,
       produces: v.produces.map((p) => p.feature.name),
       manaValueNeeded: Number.isFinite(mv) ? mv : 99,
       twoCard,
-      early: twoCard && mv <= EARLY_COMBO_MANA_VALUE,
+      early: twoCard && mv <= EARLY_COMBO_MANA_VALUE && !spellbookSaysCore,
       bracketTag: v.bracketTag ?? null,
       url: `https://commanderspellbook.com/combo/${encodeURIComponent(v.id)}/`,
     });

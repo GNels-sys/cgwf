@@ -90,8 +90,9 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
     return { ok: true };
   });
 
-  app.post<{ Params: { id: string } }>("/api/library/:id/analyze", { preHandler: owner }, async (req, reply): Promise<{ deck: LibraryDeckDetail } | void> => {
-    const deck = await library.reanalyze(req.params.id, { combos: "refresh" });
+  /** Re-run the engine. `?combos=cached` reuses the stored Spellbook answer (no request); default re-asks. */
+  app.post<{ Params: { id: string }; Querystring: { combos?: string } }>("/api/library/:id/analyze", { preHandler: owner }, async (req, reply): Promise<{ deck: LibraryDeckDetail } | void> => {
+    const deck = await library.reanalyze(req.params.id, { combos: req.query.combos === "cached" ? "cached" : "refresh" });
     if (!deck) return reply.code(404).send({ error: "library deck not found" });
     return { deck };
   });
