@@ -15,6 +15,13 @@
       "when": 1792124901855,
       "tag": "0001_bright_proemial_gods",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792126693928,
+      "tag": "0002_handy_captain_flint",
+      "breakpoints": true
     }
   ]
 }

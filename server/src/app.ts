@@ -3,12 +3,15 @@ import path from "node:path";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import rateLimit from "@fastify/rate-limit";
+import websocket from "@fastify/websocket";
 import { config } from "./config.js";
 import { openDb, type DbHandle } from "./db/index.js";
 import { registerImageRoutes } from "./images.js";
 import { registerCardRoutes } from "./routes/cards.js";
 import { registerDeckRoutes } from "./routes/decks.js";
 import { registerMeRoutes } from "./routes/me.js";
+import { registerRoomRoutes } from "./routes/rooms.js";
+import { RoomManager } from "./rooms/live.js";
 import { Ingestor } from "./scryfall/ingest.js";
 import { NameIndex } from "./search/index.js";
 
@@ -17,6 +20,7 @@ export interface AppContext {
   handle: DbHandle;
   index: NameIndex;
   ingestor: Ingestor;
+  roomsManager: RoomManager;
 }
 
 /** Build the Fastify app with every route wired. Listening is the caller's job. */
@@ -41,11 +45,15 @@ export async function buildApp(opts: { dbFile?: string; logger?: boolean | "plai
   ingestor.onComplete(() => index.build());
 
   await app.register(rateLimit, { max: 300, timeWindow: "1 minute" });
+  // One WebSocket per connected client; the largest frame is a token with a full printing.
+  await app.register(websocket, { options: { maxPayload: 256 * 1024 } });
+  const roomsManager = new RoomManager(handle, app.log);
 
   registerCardRoutes(app, { handle, index, ingestor });
   registerImageRoutes(app, handle);
   registerMeRoutes(app, handle);
   registerDeckRoutes(app, { handle, index });
+  registerRoomRoutes(app, { handle, roomsManager });
 
   // In production the server also hosts the built client (a static SPA).
   const indexHtml = path.join(config.clientDist, "index.html");
@@ -71,7 +79,10 @@ export async function buildApp(opts: { dbFile?: string; logger?: boolean | "plai
     });
   }
 
-  app.addHook("onClose", async () => handle.close());
+  app.addHook("onClose", async () => {
+    roomsManager.close();
+    handle.close();
+  });
 
-  return { app, handle, index, ingestor };
+  return { app, handle, index, ingestor, roomsManager };
 }

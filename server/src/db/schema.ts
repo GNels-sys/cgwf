@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * One row per Scryfall printing (English only). JSON columns hold the
@@ -119,8 +119,70 @@ export const deckCards = sqliteTable(
   (t) => [index("deck_cards_deck_idx").on(t.deckId), index("deck_cards_card_idx").on(t.cardId)],
 );
 
+/**
+ * A room is one game table: a join code, a host, seats and (once started) an
+ * append-only event log. The RNG seed never leaves the server.
+ */
+export const rooms = sqliteTable(
+  "rooms",
+  {
+    id: text("id").primaryKey(),
+    code: text("code").notNull(),
+    hostUserId: text("host_user_id")
+      .notNull()
+      .references(() => users.id),
+    /** "lobby" | "playing" | "ended" */
+    status: text("status").notNull().default("lobby"),
+    format: text("format").notNull().default("commander"),
+    seed: text("seed").notNull(),
+    lastSeq: integer("last_seq").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("rooms_code_idx").on(t.code), index("rooms_updated_idx").on(t.updatedAt)],
+);
+
+export const roomMembers = sqliteTable(
+  "room_members",
+  {
+    roomId: text("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "player" | "spectator" */
+    role: text("role").notNull().default("spectator"),
+    seat: integer("seat"),
+    deckId: text("deck_id"),
+    joinedAt: text("joined_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.roomId, t.userId] }), index("room_members_user_idx").on(t.userId)],
+);
+
+/** Append-only game log. seq is 1-based and contiguous per room. */
+export const roomEvents = sqliteTable(
+  "room_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    roomId: text("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    /** User id, or "system". */
+    actor: text("actor").notNull(),
+    type: text("type").notNull(),
+    payload: text("payload").notNull(),
+    ts: integer("ts").notNull(),
+  },
+  (t) => [uniqueIndex("room_events_seq_idx").on(t.roomId, t.seq)],
+);
+
 export type CardRow = typeof cards.$inferSelect;
 export type NewCardRow = typeof cards.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
 export type DeckRow = typeof decks.$inferSelect;
 export type DeckCardRow = typeof deckCards.$inferSelect;
+export type RoomRow = typeof rooms.$inferSelect;
+export type RoomMemberRow = typeof roomMembers.$inferSelect;
+export type RoomEventRow = typeof roomEvents.$inferSelect;

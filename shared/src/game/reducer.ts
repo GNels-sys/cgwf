@@ -35,8 +35,43 @@ const MAX_LOG = 400;
 
 // ---------------------------------------------------------------- helpers
 
-function clone<T>(v: T): T {
-  return structuredClone(v);
+/**
+ * Copy the mutable parts of a state. Printing and custom-token objects are
+ * never mutated by the reducer, so they are shared, which keeps a clone cheap
+ * even with 400 full card objects in play.
+ */
+function clone(s: GameState): GameState {
+  const cards: Record<string, CardInstance> = {};
+  for (const [iid, c] of Object.entries(s.cards)) {
+    cards[iid] = {
+      ...c,
+      zone: { ...c.zone },
+      counters: { ...c.counters },
+      revealedTo: Array.isArray(c.revealedTo) ? c.revealedTo.slice() : c.revealedTo,
+    };
+  }
+  const players: Record<string, PlayerState> = {};
+  for (const [id, p] of Object.entries(s.players)) {
+    players[id] = {
+      ...p,
+      counters: { ...p.counters },
+      commanderDamage: { ...p.commanderDamage },
+      commanderTax: { ...p.commanderTax },
+      zones: {
+        library: p.zones.library.slice(),
+        hand: p.zones.hand.slice(),
+        graveyard: p.zones.graveyard.slice(),
+        exile: p.zones.exile.slice(),
+        command: p.zones.command.slice(),
+        battlefield: {
+          lands: p.zones.battlefield.lands.slice(),
+          creatures: p.zones.battlefield.creatures.slice(),
+          other: p.zones.battlefield.other.slice(),
+        },
+      },
+    };
+  }
+  return { ...s, cards, players, turnOrder: s.turnOrder.slice(), stack: s.stack.slice(), log: s.log.slice() };
 }
 
 function fail(msg: string): never {
@@ -148,7 +183,6 @@ function newInstance(state: GameState, owner: PlayerId, printing: CardPrinting |
 /** Move a card into a zone. Handles attachments and visibility resets. */
 function moveCard(state: GameState, c: CardInstance, to: MoveTarget): void {
   const dest = player(state, to.owner);
-  const wasBattlefield = c.zone.kind === "battlefield";
   removeFromZone(state, c);
 
   const row: Row | undefined = to.kind === "battlefield" ? (to.row ?? defaultRow(c.printing, c.custom)) : undefined;
@@ -189,9 +223,6 @@ function moveCard(state: GameState, c: CardInstance, to: MoveTarget): void {
   }
 
   // Tokens cease to exist outside the battlefield.
-  if (c.isToken && to.kind !== "battlefield" && !wasBattlefield) {
-    /* already gone; nothing */
-  }
   if (c.isToken && to.kind !== "battlefield") {
     removeFromZone(state, c);
     delete state.cards[c.iid];
