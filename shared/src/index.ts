@@ -5,3 +5,8 @@ export * from "./api.js";
 export * from "./deck/parse.js";
 export * from "./deck/types.js";
 export * from "./user.js";
+export * from "./game/rng.js";
+export * from "./game/types.js";
+export * from "./game/reducer.js";
+export * from "./game/view.js";
+export * from "./game/protocol.js";
