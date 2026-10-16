@@ -22,6 +22,10 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMeRoutes } from "./routes/me.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
+import { registerSocialRoutes } from "./routes/social.js";
+import { presence } from "./social/presence.js";
+import { SocialService } from "./social/service.js";
+import { SubmissionService } from "./social/submissions.js";
 import { RoomManager } from "./rooms/live.js";
 import { Ingestor } from "./scryfall/ingest.js";
 import { NameIndex } from "./search/index.js";
@@ -36,6 +40,8 @@ export interface AppContext {
   library: LibraryService;
   precons: PreconImporter;
   agents: AgentManager;
+  social: SocialService;
+  submissions: SubmissionService;
 }
 
 export interface BuildOptions {
@@ -84,7 +90,11 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   const llm = opts.agentLlm !== undefined ? opts.agentLlm : config.anthropicApiKey ? new AnthropicLlm(config.agentModel, config.anthropicApiKey, config.anthropicWorkspaceId) : null;
   const agents = new AgentManager({ handle, library, analyzer, log: app.log, llm, enabled: opts.agentsEnabled });
 
+  const social = new SocialService(handle, roomsManager, presence);
+  const submissions = new SubmissionService(handle, library, analyzer, social);
+
   registerCardRoutes(app, { handle, index, ingestor });
+  registerSocialRoutes(app, { handle, social, submissions, roomsManager });
   registerAnalysisRoutes(app, { handle, analyzer });
   registerLibraryRoutes(app, { handle, library, precons });
   registerAgentRoutes(app, { handle, agents, roomsManager });
@@ -125,5 +135,5 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, agents };
+  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, agents, social, submissions };
 }

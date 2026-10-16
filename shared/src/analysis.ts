@@ -146,6 +146,9 @@ export interface LibraryDeckSummary {
   hasPrimer: boolean;
   cardCount: number;
   updatedAt: string;
+  /** User id credited with a user deck (the submitter, Phase 8), null for precons. */
+  createdBy: string | null;
+  createdByName: string | null;
 }
 
 export interface LibraryDeckDetail extends LibraryDeckSummary {

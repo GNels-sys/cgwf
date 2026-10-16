@@ -16,3 +16,5 @@ export * from "./game/effects.js";
 export * from "./game/triggers.js";
 export * from "./analysis.js";
 export * from "./agents.js";
+export * from "./social.js";
+export * from "./onboarding.js";

@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest, preHandlerHookHandler } from "fastif
 import type { User } from "@cgwf/shared";
 import type { DbHandle } from "./db/index.js";
 import { sessions, users, type SessionRow, type UserRow } from "./db/schema.js";
+import { presence } from "./social/presence.js";
 
 /**
  * Identity: every signed-in device holds a random secret, sent as a Bearer
@@ -82,6 +83,7 @@ export function sessionFromToken(handle: DbHandle, token: string): { user: UserR
     .where(eq(sessions.tokenHash, hashToken(token)))
     .get();
   if (!hit) return null;
+  presence.touch(hit.user.id);
   if (Date.now() - Date.parse(hit.session.lastSeenAt) > LAST_SEEN_BUMP_MS) {
     const now = new Date().toISOString();
     handle.db.update(sessions).set({ lastSeenAt: now }).where(eq(sessions.id, hit.session.id)).run();

@@ -57,6 +57,13 @@
       "when": 1792137804121,
       "tag": "0007_foamy_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1792161293025,
+      "tag": "0008_wonderful_gambit",
+      "breakpoints": true
     }
   ]
 }

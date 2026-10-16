@@ -80,10 +80,12 @@ export const users = sqliteTable(
     isOwner: integer("is_owner", { mode: "boolean" }).notNull().default(false),
     /** Computer opponent (Phase 7): no sessions, no sign-in, seated by the owner. */
     isAgent: integer("is_agent", { mode: "boolean" }).notNull().default(false),
+    /** Phase 8: short unique code friends type to add each other (assigned lazily, see social/codes.ts). */
+    friendCode: text("friend_code"),
     createdAt: text("created_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
   },
-  (t) => [uniqueIndex("users_email_idx").on(t.email)],
+  (t) => [uniqueIndex("users_email_idx").on(t.email), uniqueIndex("users_friend_code_idx").on(t.friendCode)],
 );
 
 /**
@@ -371,7 +373,118 @@ export const agentDecisions = sqliteTable(
   (t) => [index("agent_decisions_run_idx").on(t.runId), index("agent_decisions_created_idx").on(t.createdAt)],
 );
 
+/**
+ * Phase 8 social layer. A friendship is stored twice (one row per direction)
+ * so "my friends" is a single equality query; both rows are written and
+ * removed together.
+ */
+export const friendships = sqliteTable(
+  "friendships",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    friendId: text("friend_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.friendId] })],
+);
+
+export const friendRequests = sqliteTable(
+  "friend_requests",
+  {
+    id: text("id").primaryKey(),
+    fromUserId: text("from_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    toUserId: text("to_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "pending" | "accepted" | "declined" */
+    status: text("status").notNull().default("pending"),
+    createdAt: text("created_at").notNull(),
+    respondedAt: text("responded_at"),
+  },
+  (t) => [index("friend_requests_to_idx").on(t.toUserId), index("friend_requests_from_idx").on(t.fromUserId)],
+);
+
+/** An invitation to a table. Dead once the room has ended (computed on read, never swept). */
+export const roomInvites = sqliteTable(
+  "room_invites",
+  {
+    id: text("id").primaryKey(),
+    roomId: text("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    fromUserId: text("from_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    toUserId: text("to_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** "pending" | "accepted" | "declined" */
+    status: text("status").notNull().default("pending"),
+    createdAt: text("created_at").notNull(),
+    respondedAt: text("responded_at"),
+  },
+  (t) => [index("room_invites_to_idx").on(t.toUserId), uniqueIndex("room_invites_room_to_idx").on(t.roomId, t.toUserId)],
+);
+
+/**
+ * In-app notifications (the bell). `payload` is JSON specific to `kind`:
+ * friend_request {requestId, fromName}, friend_accepted {userId, name},
+ * room_invite {inviteId, code, fromName}, submission_reviewed {submissionId, deckName, status, reason}.
+ */
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    payload: text("payload", { mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    readAt: text("read_at"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("notifications_user_idx").on(t.userId, t.createdAt)],
+);
+
+/**
+ * Agent deck queue: a player offers one of their decks for the owner's library.
+ * The card list is frozen at submission time so later edits do not change what
+ * was reviewed. Approval copies the frozen list into library_decks.
+ */
+export const librarySubmissions = sqliteTable(
+  "library_submissions",
+  {
+    id: text("id").primaryKey(),
+    deckId: text("deck_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deckName: text("deck_name").notNull(),
+    note: text("note").notNull().default(""),
+    /** Frozen [{cardId, quantity, board}] at submission time. */
+    cards: text("cards", { mode: "json" }).$type<Array<{ cardId: string; quantity: number; board: string }>>().notNull(),
+    commanders: text("commanders", { mode: "json" }).$type<string[]>().notNull(),
+    /** "pending" | "approved" | "rejected" */
+    status: text("status").notNull().default("pending"),
+    reason: text("reason"),
+    libraryDeckId: text("library_deck_id"),
+    createdAt: text("created_at").notNull(),
+    reviewedAt: text("reviewed_at"),
+  },
+  (t) => [index("library_submissions_user_idx").on(t.userId), index("library_submissions_status_idx").on(t.status, t.createdAt)],
+);
+
 export type CardRow = typeof cards.$inferSelect;
+export type FriendRequestRow = typeof friendRequests.$inferSelect;
+export type RoomInviteRow = typeof roomInvites.$inferSelect;
+export type NotificationRow = typeof notifications.$inferSelect;
+export type LibrarySubmissionRow = typeof librarySubmissions.$inferSelect;
 export type AgentRunRow = typeof agentRuns.$inferSelect;
 export type AgentDecisionRow = typeof agentDecisions.$inferSelect;
 export type LibraryDeckRow = typeof libraryDecks.$inferSelect;
