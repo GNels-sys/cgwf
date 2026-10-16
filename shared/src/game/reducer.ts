@@ -865,6 +865,14 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       checkEnded(state, ev);
       break;
     }
+    case "NoteAdded": {
+      const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
+      const text = String(ev.payload.text ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+      if (!text) fail("empty note");
+      log(state, ev, `${p.name}: ${text}`);
+      break;
+    }
     default: {
       const never: never = ev;
       fail(`unknown event ${(never as { type: string }).type}`);

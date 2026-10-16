@@ -34,6 +34,16 @@ export const config = {
   adminToken: env("ADMIN_TOKEN", ""),
   /** One-time code that grants the owner flag (POST /api/me/owner-claim). Unset = claiming disabled. */
   ownerClaimCode: env("OWNER_CLAIM_CODE", ""),
+  /** Phase 7 computer opponents. Off unless AGENTS_ENABLED=1; the key comes from the environment only. */
+  agentsEnabled: env("AGENTS_ENABLED", "0") === "1",
+  anthropicApiKey: env("ANTHROPIC_API_KEY", ""),
+  agentModel: env("AGENT_MODEL", "claude-sonnet-5-5"),
+  agentMaxUsdPerGame: Number(env("AGENT_MAX_USD_PER_GAME", "6")),
+  agentMaxUsdPerDay: Number(env("AGENT_MAX_USD_PER_DAY", "25")),
+  agentMaxTokensPerDecision: Number(env("AGENT_MAX_TOKENS_PER_DECISION", "1500")),
+  agentDecisionTimeoutMs: Number(env("AGENT_DECISION_TIMEOUT_MS", "60000")),
+  agentMaxCallsPerTurn: Number(env("AGENT_MAX_CALLS_PER_TURN", "8")),
+  agentDataDir: path.resolve(env("AGENT_DATA_DIR", path.join(serverRoot, "data", "agents"))),
   /** Recorded for the record only; ownership is never granted by email. */
   ownerEmail: env("OWNER_EMAIL", "nelson.george.edward@gmail.com"),
   appName: "CGwF",

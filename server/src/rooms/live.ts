@@ -84,6 +84,10 @@ export class LiveRoom {
   private loaded = false;
   private conns = new Set<Conn>();
   lastActivity = Date.now();
+  /** Phase 7: agent runners subscribe here; they get the TRUE state and must build their own view with viewFor(). */
+  private stateListeners = new Set<(state: GameState) => void>();
+  /** Agents seated in this room that have a live runner, and whether a decision is in flight. */
+  private agentPresence = new Map<string, { thinking: boolean }>();
 
   constructor(
     private readonly handle: DbHandle,
@@ -151,8 +155,10 @@ export class LiveRoom {
           deckId: deck?.id ?? null,
           deckName: deck?.name ?? null,
           commanders: deck?.commanders ?? [],
-          online: online.has(m.userId),
+          online: online.has(m.userId) || this.agentPresence.has(m.userId),
           look: lookOf(loadSettings(this.handle, m.userId)),
+          isAgent: Boolean(u.isAgent),
+          thinking: this.agentPresence.get(m.userId)?.thinking ?? false,
         };
       })
       .filter((m): m is RoomMember => m !== null)
@@ -315,6 +321,28 @@ export class LiveRoom {
     this.lastActivity = Date.now();
     this.refreshRow();
     this.broadcastState();
+    if (next) for (const fn of this.stateListeners) fn(next);
+  }
+
+  /** Phase 7: notified after every applied event. Returns the unsubscribe function. */
+  onState(fn: (state: GameState) => void): () => void {
+    this.stateListeners.add(fn);
+    return () => this.stateListeners.delete(fn);
+  }
+
+  /** Phase 7: mark an agent seat as live (and thinking or not); null removes it. Rebroadcasts the room. */
+  setAgentPresence(userId: string, presence: { thinking: boolean } | null): void {
+    if (presence) this.agentPresence.set(userId, presence);
+    else this.agentPresence.delete(userId);
+    this.broadcastRoom();
+  }
+
+  /** Phase 7: user ids of seated computer opponents. */
+  agentMemberIds(): string[] {
+    const rows = this.members().filter((m) => m.role === "player");
+    if (rows.length === 0) return [];
+    const userRows = this.handle.db.select({ id: users.id, isAgent: users.isAgent }).from(users).where(inArray(users.id, rows.map((m) => m.userId))).all();
+    return userRows.filter((u) => u.isAgent).map((u) => u.id);
   }
 
   // ------------------------------------------------------------ sockets

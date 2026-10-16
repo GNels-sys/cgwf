@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { MAX_SEATS, type RoomInfo } from "@cgwf/shared";
+import { BRACKET_NAMES, MAX_SEATS, type AgentPick, type Bracket, type RoomInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { Avatar } from "../components/Avatar";
+import { isOwner, useUser } from "../user";
 import type { RoomSocket } from "./socket";
 
 interface DeckPick {
@@ -14,6 +15,8 @@ interface DeckPick {
 export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
   const me = room.you;
   const isHost = me?.userId === room.hostId;
+  const { user } = useUser();
+  const owner = isOwner(user);
   const [decks, setDecks] = useState<DeckPick[] | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -78,7 +81,8 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
                   <span className="seat-name">
                     {m.name}
                     {m.userId === room.hostId && <span className="muted small"> (host)</span>}
-                    {!m.online && <span className="muted small"> &middot; offline</span>}
+                    {m.isAgent && <span className="bot-chip">BOT</span>}
+                    {!m.online && !m.isAgent && <span className="muted small"> &middot; offline</span>}
                     <br />
                     <span className="muted small">{m.deckName ? `${m.deckName}${m.commanders.length ? ` - ${m.commanders.join(" / ")}` : ""}` : "no deck yet"}</span>
                   </span>
@@ -125,6 +129,8 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
 
       {sock.error && <p className="error small">{sock.error}</p>}
 
+      {owner && isHost && <AgentsControl room={room} />}
+
       {spectators.length > 0 && (
         <p className="muted small">
           Watching: {spectators.map((m) => m.name).join(", ")}
@@ -141,6 +147,104 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
         )}
       </div>
     </main>
+  );
+}
+
+/** Owner + host only: seat computer opponents from the library, picked for the bracket with different archetypes. */
+function AgentsControl({ room }: { room: RoomInfo }) {
+  const agents = room.members.filter((m) => m.isAgent);
+  const humans = room.members.filter((m) => m.role === "player" && !m.isAgent).length;
+  const free = Math.max(0, MAX_SEATS - humans);
+  const [count, setCount] = useState(Math.min(3, free));
+  const [bracket, setBracket] = useState<Bracket>(2);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [picks, setPicks] = useState<AgentPick[] | null>(null);
+
+  useEffect(() => {
+    api.agents
+      .status()
+      .then((s) => {
+        setEnabled(s.enabled);
+        if (s.dryRun) setNote("No API key on the server: agents play a scripted dry run.");
+      })
+      .catch(() => setEnabled(false));
+  }, []);
+
+  if (enabled === false) return null;
+
+  const add = async () => {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await api.agents.add(room.code, { count, bracket });
+      setPicks(r.agents);
+      if (r.eligible === 0) setNote(`No agent-eligible decks at Bracket ${bracket}; used any eligible deck.`);
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const remove = async () => {
+    setBusy(true);
+    try {
+      await api.agents.remove(room.code);
+      setPicks(null);
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="notice agents-control">
+      <strong>Computer opponents</strong>
+      <div className="agents-form">
+        <label>
+          Bracket{" "}
+          <select value={bracket} onChange={(e) => setBracket(Number(e.target.value) as Bracket)}>
+            {([1, 2, 3, 4, 5] as const).map((b) => (
+              <option key={b} value={b}>
+                {b} · {BRACKET_NAMES[b]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          How many{" "}
+          <select value={count} onChange={(e) => setCount(Number(e.target.value))}>
+            {Array.from({ length: Math.max(1, free) }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="btn btn-small btn-primary" disabled={busy || free === 0} onClick={() => void add()}>
+          {busy ? "Picking..." : agents.length ? "Re-roll decks" : "Add computer opponents"}
+        </button>
+        {agents.length > 0 && (
+          <button className="btn btn-small" disabled={busy} onClick={() => void remove()}>
+            Remove
+          </button>
+        )}
+      </div>
+      {picks && picks.length > 0 && (
+        <ul className="small agents-picks">
+          {picks.map((p) => (
+            <li key={p.userId}>
+              <strong>{p.name}</strong> · seat {p.seat + 1} · {p.deckName} ({p.commanders.join(" / ")}) · B{p.bracket}
+              {p.tags.length ? ` · ${p.tags.join(", ")}` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+      {note && <p className="small muted">{note}</p>}
+      <p className="small muted">Agents take their turns through the same table actions you use; the owner can read their reasoning from the table menu.</p>
+    </section>
   );
 }
 

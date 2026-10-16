@@ -18,6 +18,7 @@ function Editor({ id }: { id: string }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [draftNote, setDraftNote] = useState<string | null>(null);
 
   const apply = (d: LibraryDeckDetail) => {
     setDeck(d);
@@ -72,6 +73,20 @@ function Editor({ id }: { id: string }) {
       setPrimer(r.primer);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const draft = async () => {
+    const force = Boolean(deck.primer.trim());
+    if (force && !confirm("Ask Claude to redraft the primer? The current text is replaced (you can still edit before saving).")) return;
+    setBusy("draft");
+    try {
+      const r = await api.library.draftPrimer(deck.id, force);
+      setPrimer(r.primer);
+      setDraftNote(r.cached ? "Using the primer Claude drafted earlier." : `Drafted by ${r.model} for $${r.costUsd.toFixed(3)}. Review, edit, then Save.`);
+    } catch (e) {
+      setDraftNote((e as Error).message);
     } finally {
       setBusy(null);
     }
@@ -134,10 +149,16 @@ function Editor({ id }: { id: string }) {
         <div className="field">
           <div className="row-between">
             <span>Primer (Markdown)</span>
-            <button type="button" className="btn btn-small" disabled={busy !== null} onClick={() => void skeleton()}>
-              {busy === "skeleton" ? "Building..." : "Fill in a skeleton"}
-            </button>
+            <span className="actions">
+              <button type="button" className="btn btn-small" disabled={busy !== null} onClick={() => void skeleton()}>
+                {busy === "skeleton" ? "Building..." : "Fill in a skeleton"}
+              </button>
+              <button type="button" className="btn btn-small btn-primary" disabled={busy !== null} onClick={() => void draft()}>
+                {busy === "draft" ? "Drafting..." : "Draft with Claude"}
+              </button>
+            </span>
           </div>
+          {draftNote && <p className="small muted">{draftNote}</p>}
           <textarea value={primer} onChange={(e) => setPrimer(e.target.value)} rows={18} spellCheck={false} placeholder="How this deck wins, what to protect, what to mulligan for. A model may draft this in Phase 7; the headings from the skeleton are what the agent reads." />
         </div>
         <div className="sticky-actions">

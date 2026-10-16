@@ -1,5 +1,10 @@
 import type {
+  AddAgentsResponse,
+  AgentGamesResponse,
+  AgentsStatus,
   CardResponse,
+  DraftPrimerResponse,
+  RoomAgentsResponse,
   ChangePasswordRequest,
   CreateDeckRequest,
   CreateRoomResponse,
@@ -137,6 +142,17 @@ export const api = {
     remove: (id: string) => request<{ ok: true }>(`/api/library/${encodeURIComponent(id)}`, { method: "DELETE" }),
     analyze: (id: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}/analyze`, { method: "POST", json: {} }),
     primerSkeleton: (id: string) => request<{ primer: string }>(`/api/library/${encodeURIComponent(id)}/primer-skeleton`),
+    draftPrimer: (id: string, force = false) => request<DraftPrimerResponse>(`/api/library/${encodeURIComponent(id)}/draft-primer`, { json: { force } }),
+  },
+
+  /** Phase 7 computer opponents (owner only, AGENTS_ENABLED=1). */
+  agents: {
+    status: () => request<AgentsStatus>("/api/agents/status"),
+    games: () => request<AgentGamesResponse>("/api/agents/games"),
+    add: (code: string, body: { count: number; bracket: number }) => request<AddAgentsResponse>(`/api/rooms/${encodeURIComponent(code)}/agents`, { json: body }),
+    remove: (code: string) => request<{ removed: number }>(`/api/rooms/${encodeURIComponent(code)}/agents`, { method: "DELETE" }),
+    room: (code: string) => request<RoomAgentsResponse>(`/api/rooms/${encodeURIComponent(code)}/agents`),
+    draftPrimer: (libraryDeckId: string, force = false) => request<DraftPrimerResponse>(`/api/library/${encodeURIComponent(libraryDeckId)}/draft-primer`, { json: { force } }),
   },
 
   tokens: (q: string, signal?: AbortSignal) => request<TokenSearchResponse>(`/api/tokens?q=${encodeURIComponent(q)}`, { ...(signal ? { signal } : {}) }),

@@ -1860,3 +1860,40 @@
 .table.is-compact .bf-section {
   padding: 1px 4px;
 }
+
+/* ---- Computer opponents (Phase 7) ---- */
+.bot-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: var(--accent);
+  color: var(--accent-ink);
+  vertical-align: middle;
+}
+.opp-chip.is-thinking {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.opp-chip.is-thinking .bot-chip {
+  animation: bot-pulse 1s ease-in-out infinite;
+}
+@keyframes bot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .opp-chip.is-thinking .bot-chip { animation: none; }
+}
+.agent-runs, .agent-decisions {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+.agent-runs li { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.agent-decision { padding: 8px 0; border-bottom: 1px solid var(--border); }
+.agent-decision.is-invalid, .agent-decision.is-error, .agent-decision.is-timeout, .agent-decision.is-capped { background: rgba(214, 74, 58, 0.08); }
+.agent-rationale { margin: 2px 0; font-style: italic; }
+.agent-calls { word-break: break-word; }

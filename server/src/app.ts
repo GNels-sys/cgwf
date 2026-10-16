@@ -7,7 +7,10 @@ import websocket from "@fastify/websocket";
 import { config } from "./config.js";
 import { openDb, type DbHandle } from "./db/index.js";
 import { registerImageRoutes } from "./images.js";
+import { AgentManager } from "./agents/manager.js";
+import { AnthropicLlm } from "./agents/llm.js";
 import { DeckAnalyzer } from "./analysis/service.js";
+import { registerAgentRoutes } from "./routes/agents.js";
 import { SpellbookClient, type FetchLike } from "./analysis/spellbook.js";
 import { PreconImporter } from "./library/precons.js";
 import { LibraryService } from "./library/service.js";
@@ -32,6 +35,7 @@ export interface AppContext {
   analyzer: DeckAnalyzer;
   library: LibraryService;
   precons: PreconImporter;
+  agents: AgentManager;
 }
 
 export interface BuildOptions {
@@ -41,6 +45,9 @@ export interface BuildOptions {
   spellbookFetch?: FetchLike;
   /** Same for MTGJSON (precon import). */
   mtgjsonFetch?: FetchLike;
+  /** Phase 7: tests pass a ScriptedLlm (or null for a dry run) and force the feature on. */
+  agentLlm?: import("./agents/llm.js").Llm | null;
+  agentsEnabled?: boolean;
 }
 
 /** Build the Fastify app with every route wired. Listening is the caller's job. */
@@ -74,14 +81,18 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   const library = new LibraryService(handle, analyzer);
   const precons = new PreconImporter(handle, index, library, app.log, opts.mtgjsonFetch);
 
+  const llm = opts.agentLlm !== undefined ? opts.agentLlm : config.anthropicApiKey ? new AnthropicLlm(config.agentModel, config.anthropicApiKey) : null;
+  const agents = new AgentManager({ handle, library, analyzer, log: app.log, llm, enabled: opts.agentsEnabled });
+
   registerCardRoutes(app, { handle, index, ingestor });
   registerAnalysisRoutes(app, { handle, analyzer });
   registerLibraryRoutes(app, { handle, library, precons });
+  registerAgentRoutes(app, { handle, agents, roomsManager });
   registerImageRoutes(app, handle);
   registerMeRoutes(app, handle);
   registerAuthRoutes(app, handle);
   registerDeckRoutes(app, { handle, index });
-  registerRoomRoutes(app, { handle, roomsManager });
+  registerRoomRoutes(app, { handle, roomsManager, agents });
   registerSettingsRoutes(app, { handle, onSettingsChanged: (userId) => roomsManager.userChanged(userId) });
 
   // In production the server also hosts the built client (a static SPA).
@@ -109,9 +120,10 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   }
 
   app.addHook("onClose", async () => {
+    agents.close();
     roomsManager.close();
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons };
+  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, agents };
 }

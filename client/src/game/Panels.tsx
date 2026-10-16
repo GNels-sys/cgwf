@@ -193,6 +193,7 @@ export function MenuPanel({ room, view, me, status, onClose, actions }: { room: 
               {m.name}
               {m.userId === me ? " (you)" : ""}
               {m.userId === room.hostId ? <span className="muted small"> (host)</span> : null}
+              {m.isAgent ? <span className="bot-chip">{m.thinking ? "thinking…" : "BOT"}</span> : null}
             </span>
             <span className="muted small">
               {m.role === "player" ? (view.players[m.userId]?.conceded ? "conceded" : `seat ${(m.seat ?? 0) + 1}`) : "watching"}

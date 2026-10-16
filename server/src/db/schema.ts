@@ -78,6 +78,8 @@ export const users = sqliteTable(
     /** scrypt record (see auth/password.ts); null for a device-only profile. */
     passwordHash: text("password_hash"),
     isOwner: integer("is_owner", { mode: "boolean" }).notNull().default(false),
+    /** Computer opponent (Phase 7): no sessions, no sign-in, seated by the owner. */
+    isAgent: integer("is_agent", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
   },
@@ -275,6 +277,9 @@ export const libraryDecks = sqliteTable(
     /** Archetype tags, JSON array (engine output, editable). */
     tags: text("tags", { mode: "json" }).$type<string[]>().notNull(),
     primer: text("primer").notNull().default(""),
+    /** When a model last drafted the primer (Phase 7); null = hand-written or skeleton only. */
+    primerDraftedAt: text("primer_drafted_at"),
+    primerModel: text("primer_model"),
     agentEligible: integer("agent_eligible", { mode: "boolean" }).notNull().default(false),
     /** Last full DeckAnalysis, JSON. */
     analysis: text("analysis", { mode: "json" }).$type<unknown>(),
@@ -302,7 +307,73 @@ export const libraryDeckCards = sqliteTable(
   (t) => [index("library_deck_cards_deck_idx").on(t.libraryDeckId)],
 );
 
+/**
+ * One computer opponent in one game (Phase 7). Spend is summed from its
+ * decisions; the per-game and per-day caps read these tables.
+ */
+export const agentRuns = sqliteTable(
+  "agent_runs",
+  {
+    id: text("id").primaryKey(),
+    roomId: text("room_id")
+      .notNull()
+      .references(() => rooms.id, { onDelete: "cascade" }),
+    /** The agent's user row (users.is_agent = 1). */
+    userId: text("user_id").notNull(),
+    seat: integer("seat").notNull(),
+    libraryDeckId: text("library_deck_id"),
+    deckName: text("deck_name").notNull(),
+    model: text("model").notNull(),
+    /** "live" | "dry_run" (no API key). */
+    mode: text("mode").notNull().default("live"),
+    /** "running" | "ended" | "capped" | "error" | "stopped" */
+    status: text("status").notNull().default("running"),
+    decisions: integer("decisions").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: real("cost_usd").notNull().default(0),
+    stoppedReason: text("stopped_reason"),
+    startedAt: text("started_at").notNull(),
+    endedAt: text("ended_at"),
+  },
+  (t) => [index("agent_runs_room_idx").on(t.roomId), index("agent_runs_started_idx").on(t.startedAt)],
+);
+
+export const agentDecisions = sqliteTable(
+  "agent_decisions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    runId: text("run_id")
+      .notNull()
+      .references(() => agentRuns.id, { onDelete: "cascade" }),
+    roomId: text("room_id").notNull(),
+    turn: integer("turn").notNull(),
+    step: text("step").notNull(),
+    /** "turn" | "trigger" | "mulligan" | "bottom" */
+    kind: text("kind").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: real("cost_usd").notNull().default(0),
+    latencyMs: integer("latency_ms").notNull().default(0),
+    /** "ok" | "invalid" | "timeout" | "error" | "capped" | "dry_run" | "refusal" */
+    outcome: text("outcome").notNull(),
+    /** The model's one-sentence rationale (text before its tool calls). */
+    rationale: text("rationale").notNull().default(""),
+    /** JSON: [{name, input, ok, error?}] */
+    toolCalls: text("tool_calls", { mode: "json" }).$type<unknown>().notNull(),
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("agent_decisions_run_idx").on(t.runId), index("agent_decisions_created_idx").on(t.createdAt)],
+);
+
 export type CardRow = typeof cards.$inferSelect;
+export type AgentRunRow = typeof agentRuns.$inferSelect;
+export type AgentDecisionRow = typeof agentDecisions.$inferSelect;
 export type LibraryDeckRow = typeof libraryDecks.$inferSelect;
 export type LibraryDeckCardRow = typeof libraryDeckCards.$inferSelect;
 export type NewCardRow = typeof cards.$inferInsert;

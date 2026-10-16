@@ -26,6 +26,10 @@ export interface RoomMember {
   online: boolean;
   /** Playmat + sleeve this player chose (applied client-side by everyone). */
   look: Look;
+  /** A computer opponent (Phase 7). Agents never have sockets; `online` means its runner is up. */
+  isAgent: boolean;
+  /** Agents only: a decision is in flight right now. */
+  thinking: boolean;
 }
 
 export interface RoomInfo {

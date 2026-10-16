@@ -19,6 +19,8 @@ import { ActionSheet, DialogView, type Action, type Dialog } from "./Sheets";
 import type { RoomSocket } from "./socket";
 import { TokenFinder } from "./TokenFinder";
 import { TriggersPanel } from "./Triggers";
+import { AgentsPanel } from "./AgentsPanel";
+import { isOwner, useUser } from "../user";
 
 /**
  * The table. Phone landscape first: opponents across the top (or around the
@@ -60,12 +62,15 @@ function OpponentChip({ p, member, active, side, size, onClick }: { p: ViewPlaye
   const field = battlefieldCards(p).length;
   return (
     <button
-      className={`opp-chip is-${size}${active ? " is-active" : ""}${p.conceded ? " is-out" : ""}${member && !member.online ? " is-offline" : ""}${side ? " is-side" : ""}`}
+      className={`opp-chip is-${size}${active ? " is-active" : ""}${p.conceded ? " is-out" : ""}${member && !member.online ? " is-offline" : ""}${side ? " is-side" : ""}${member?.isAgent ? " is-agent" : ""}${member?.thinking ? " is-thinking" : ""}`}
       onClick={onClick}
       aria-label={`${p.name}, ${p.life} life, ${p.hand.count} in hand, ${p.library.count} in library, ${field} on the battlefield${active ? ", active player" : ""}${p.conceded ? ", conceded" : ""}. Open their battlefield`}
     >
       {member && <Avatar avatar={member.avatar} color={member.color} size={size === "small" ? 22 : size === "large" ? 34 : 26} />}
-      <span className="opp-name">{p.name}</span>
+      <span className="opp-name">
+        {p.name}
+        {member?.isAgent && <span className="bot-chip">{member.thinking ? "…" : "BOT"}</span>}
+      </span>
       <span className="opp-life">
         {p.life}
         <LifeTicks ticks={ticks} />
@@ -98,6 +103,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const [showTokens, setShowTokens] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAgents, setShowAgents] = useState(false);
+  const { user } = useUser();
+  const hasAgents = room.members.some((m) => m.isAgent);
   const [dismissedEnd, setDismissedEnd] = useState(false);
   const wantRematch = useRef(false);
 
@@ -264,6 +272,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const menuActions: Action[] = [
     { label: "Game log", run: () => (setShowMenu(false), setShowLog(true)) },
     { label: "Personalize", hint: "playmat, sleeves, layout", run: () => (setShowMenu(false), setShowSettings(true)) },
+    ...(isOwner(user) && hasAgents ? [{ label: "Agent reasoning", hint: "what the computer opponents decided and spent", run: () => (setShowMenu(false), setShowAgents(true)) }] : []),
     { label: "Dice, coin, random opponent", run: () => (setShowMenu(false), setSheet({ kind: "dice" })), disabled: !canAct },
     { label: "Create tokens", run: () => (setShowMenu(false), setShowTokens(true)), disabled: !canAct },
     { label: "Undo my last action", hint: "only while nobody else has acted", run: () => (setShowMenu(false), sock.send({ t: "undo" })), disabled: !canAct },
@@ -544,6 +553,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
         </Panel>
       )}
       {showMenu && <MenuPanel room={room} view={view} me={me} status={sock.status} onClose={() => setShowMenu(false)} actions={menuActions} />}
+      {showAgents && <AgentsPanel code={room.code} onClose={() => setShowAgents(false)} />}
     </DndContext>
   );
 }

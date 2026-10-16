@@ -694,3 +694,21 @@ hr {
   background: var(--accent);
   color: var(--accent-ink, #000);
 }
+
+/* ---- Computer opponents in the lobby (Phase 7) ---- */
+.agents-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0;
+}
+.agents-form select {
+  min-height: 36px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  color: var(--fg);
+}
+.agents-picks { padding-left: 18px; margin: 6px 0; }

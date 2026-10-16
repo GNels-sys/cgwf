@@ -285,6 +285,8 @@ export type EventPayloads = {
   CoinFlipped: { player: PlayerId };
   RandomOpponent: { player: PlayerId };
   PlayerConceded: { player: PlayerId };
+  /** A short public note in the log ("Attacking Blair with Krenko for 6"). Agents announce intent with it. */
+  NoteAdded: { player: PlayerId; text: string };
   /** Rewind the game to just after event `toSeq`. Applied by the replayer, not the reducer. */
   Revert: { toSeq: number; reason?: string };
 };
@@ -332,6 +334,7 @@ export const EVENT_TYPES = Object.keys({
   CoinFlipped: 0,
   RandomOpponent: 0,
   PlayerConceded: 0,
+  NoteAdded: 0,
   Revert: 0,
 } satisfies Record<EventType, 0>) as EventType[];
 

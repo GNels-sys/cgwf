@@ -5,10 +5,13 @@ import { rateLimitKey, requireUser, userFromToken } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
 import { isRoomCode, normalizeRoomCode } from "../rooms/codes.js";
 import { RoomError, type LiveRoom, type RoomManager } from "../rooms/live.js";
+import type { AgentManager } from "../agents/manager.js";
 
 interface Deps {
   handle: DbHandle;
   roomsManager: RoomManager;
+  /** Phase 7: starts computer opponents when a game begins and resumes them after a restart. */
+  agents?: AgentManager | undefined;
 }
 
 const MAX_WS_MESSAGE = 64 * 1024;
@@ -18,7 +21,7 @@ const MAX_WS_MESSAGE = 64 * 1024;
  * /api/rooms/:code/ws?token=... for everything live.
  */
 export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
-  const { handle, roomsManager } = deps;
+  const { handle, roomsManager, agents } = deps;
   const auth = requireUser(handle);
   const keyGenerator = rateLimitKey(handle);
 
@@ -74,6 +77,7 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
     }
 
     const conn = room.attach(socket, user.id);
+    agents?.ensureRunning(room);
     const fail = (message: string, cid?: string) => room.send(conn, cid ? { t: "error", message, cid } : { t: "error", message });
 
     socket.on("message", (data) => {
@@ -103,6 +107,7 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
           case "start":
             room.start(user.id);
             room.broadcastRoom();
+            agents?.onGameStarted(room);
             break;
           case "event":
             room.submit(user.id, msg.event);
@@ -116,6 +121,7 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
           case "rematch": {
             const next = roomsManager.rematch(room, user.id);
             next.broadcastRoom();
+            agents?.onGameStarted(next);
             break;
           }
           case "leave":

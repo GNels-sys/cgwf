@@ -17,6 +17,7 @@ export function Header() {
         <NavLink to="/cards">Cards</NavLink>
         <NavLink to="/play">Play</NavLink>
         {owner && <NavLink to="/admin/library">Library</NavLink>}
+        {owner && <NavLink to="/admin/agents">Agents</NavLink>}
       </nav>
       <NavLink to="/me" className="nav-user" aria-label="Your profile">
         {user ? (
