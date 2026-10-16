@@ -26,6 +26,7 @@ interface Scored {
 export class NameIndex {
   private entries: IndexEntry[] = [];
   private aliases: Array<{ norm: string; entry: IndexEntry }> = [];
+  private byNorm = new Map<string, IndexEntry>();
   builtAt: string | null = null;
 
   constructor(private readonly handle: DbHandle) {}
@@ -74,7 +75,17 @@ export class NameIndex {
     }
     this.entries = entries;
     this.aliases = aliases;
+    const byNorm = new Map<string, IndexEntry>();
+    // Real card names win over face aliases; non-tokens win over tokens.
+    for (const a of aliases) if (!a.entry.isToken && !byNorm.has(a.norm)) byNorm.set(a.norm, a.entry);
+    for (const e of entries) if (!e.isToken) byNorm.set(e.norm, e);
+    this.byNorm = byNorm;
     this.builtAt = new Date().toISOString();
+  }
+
+  /** Exact match on a normalised name or face name (non-token cards). */
+  exact(norm: string): IndexEntry | null {
+    return this.byNorm.get(norm) ?? null;
   }
 
   search(query: string, opts: { tokens?: boolean; limit?: number } = {}): IndexEntry[] {

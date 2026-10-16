@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * One row per Scryfall printing (English only). JSON columns hold the
@@ -57,5 +57,70 @@ export const meta = sqliteTable("meta", {
   value: text("value").notNull(),
 });
 
+/**
+ * Players. v1 identity is a per-device secret (we store only its hash); the
+ * email / password_hash columns are reserved so real sign-in can be added
+ * later without a migration of existing rows.
+ */
+export const users = sqliteTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    displayName: text("display_name").notNull(),
+    /** One of the preset avatar keys (see shared AVATARS). */
+    avatar: text("avatar").notNull(),
+    /** One of the preset colour keys (see shared AVATAR_COLORS). */
+    color: text("color").notNull(),
+    deviceTokenHash: text("device_token_hash").notNull(),
+    email: text("email"),
+    passwordHash: text("password_hash"),
+    createdAt: text("created_at").notNull(),
+    lastSeenAt: text("last_seen_at").notNull(),
+  },
+  (t) => [uniqueIndex("users_device_token_idx").on(t.deviceTokenHash), uniqueIndex("users_email_idx").on(t.email)],
+);
+
+export const decks = sqliteTable(
+  "decks",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** "commander" only in v1; kept as a column for later formats. */
+    format: text("format").notNull().default("commander"),
+    /** The pasted list, kept so an import can be re-run or inspected. */
+    sourceText: text("source_text"),
+    sourceUrl: text("source_url"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("decks_user_idx").on(t.userId)],
+);
+
+export const deckCards = sqliteTable(
+  "deck_cards",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    deckId: text("deck_id")
+      .notNull()
+      .references(() => decks.id, { onDelete: "cascade" }),
+    /** Scryfall printing id. */
+    cardId: text("card_id").notNull(),
+    quantity: integer("quantity").notNull().default(1),
+    /** "main" | "commander" | "sideboard" | "maybeboard" | "companion". */
+    board: text("board").notNull().default("main"),
+    /** User's category tag from the import ("Ramp", "Removal"), if any. */
+    category: text("category"),
+    /** Order within the list, for stable display. */
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [index("deck_cards_deck_idx").on(t.deckId), index("deck_cards_card_idx").on(t.cardId)],
+);
+
 export type CardRow = typeof cards.$inferSelect;
 export type NewCardRow = typeof cards.$inferInsert;
+export type UserRow = typeof users.$inferSelect;
+export type DeckRow = typeof decks.$inferSelect;
+export type DeckCardRow = typeof deckCards.$inferSelect;

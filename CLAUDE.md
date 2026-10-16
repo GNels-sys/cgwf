@@ -73,9 +73,32 @@ Search: `NameIndex` keeps one best printing per oracle id (paper > promo-free > 
 hi-res scan > newest) plus aliases for each face name; tiers exact > prefix > word > substring >
 bounded edit distance.
 
+## Identity and decks (Phase 2)
+
+- Identity: `POST /api/me/register` creates a user and returns a device token once; the client
+  keeps it in localStorage (`cgwf.token`) and sends `Authorization: Bearer`. The server stores only
+  the SHA-256 hash (`users.device_token_hash`). `requireUser` in `server/src/auth.ts` guards
+  routes; rate limits key on the user when signed in, else the IP.
+- Tables: `users`, `decks`, `deck_cards` (printing id + quantity + board + category + position).
+  Boards: main | commander | sideboard | maybeboard | companion. Format column kept, "commander" only.
+- Parser: `shared/src/deck/parse.ts` (pure text -> lines/boards/tags/markers); fixtures for the
+  five sites in `shared/src/deck/fixtures.ts`. Resolution against card data lives in
+  `server/src/decks/resolve.ts`: exact set+number, then exact name (preferring the named set),
+  then fuzzy -> "ambiguous" with candidates. Unlabelled lists (Moxfield/Goldfish) get the
+  "first small block of legendary creatures = commander" heuristic.
+- Routes: `POST /api/decks/parse`, `GET /api/decks/import-url?url=`, `GET/POST /api/decks`,
+  `GET/PATCH/DELETE /api/decks/:id`, `PUT /api/decks/:id/cards`. Warnings (size, singleton,
+  colour identity, commander count/partners) are computed on read, never block saving.
+- URL import finding (2026-10-15): Archidekt's `https://archidekt.com/api/decks/{id}/` is public
+  JSON (cards carry Scryfall `uid`, set code, collector number, categories; "Commander" category =
+  commander; categories with `includedInDeck=false` = maybeboard). Moxfield's API returns 403 to
+  non-browser clients, so Moxfield users paste the text export.
+- Client routes: `/` decks, `/decks/new` import (paste or Archidekt link -> review/fix -> save),
+  `/decks/:id`, `/cards` search, `/me` profile. `RequireUser` shows the first-run profile form.
+
 ## Phases
 
-1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(this phase)**
-2. Device identity, decks, decklist parser with per-site fixtures, printing resolution.
+1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
+2. Device identity, decks, decklist parser with per-site fixtures, printing resolution. **(done)**
 3. Rooms, join codes, WebSocket sync, event log + reducer, the table, hidden info, reconnect.
 4. Undo/revert, token finder, log panel, personalization, light animations.

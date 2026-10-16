@@ -19,7 +19,10 @@
     "colors": [],
     "color_identity": [],
     "keywords": [],
-    "legalities": { "commander": "legal", "vintage": "restricted" },
+    "legalities": {
+      "commander": "legal",
+      "vintage": "restricted"
+    },
     "image_uris": {
       "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000001.jpg",
       "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000001.jpg",
@@ -52,7 +55,9 @@
     "colors": [],
     "color_identity": [],
     "keywords": [],
-    "legalities": { "commander": "legal" },
+    "legalities": {
+      "commander": "legal"
+    },
     "image_uris": {
       "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000002.jpg",
       "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000002.jpg",
@@ -80,10 +85,18 @@
     "layout": "transform",
     "cmc": 1,
     "type_line": "Creature — Human Wizard // Creature — Human Insect",
-    "colors": ["U"],
-    "color_identity": ["U"],
-    "keywords": ["Transform"],
-    "legalities": { "commander": "legal" },
+    "colors": [
+      "U"
+    ],
+    "color_identity": [
+      "U"
+    ],
+    "keywords": [
+      "Transform"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
     "image_status": "highres_scan",
     "card_faces": [
       {
@@ -94,7 +107,9 @@
         "oracle_text": "At the beginning of your upkeep, look at the top card of your library. You may reveal that card. If an instant or sorcery card is revealed this way, transform Delver of Secrets.",
         "power": "1",
         "toughness": "1",
-        "colors": ["U"],
+        "colors": [
+          "U"
+        ],
         "artist": "Nils Hamm",
         "image_uris": {
           "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000003.jpg",
@@ -110,7 +125,9 @@
         "oracle_text": "Flying",
         "power": "3",
         "toughness": "2",
-        "colors": ["U"],
+        "colors": [
+          "U"
+        ],
         "artist": "Nils Hamm",
         "image_uris": {
           "small": "https://cards.scryfall.io/small/back/a/1/a1b2c3d4-0000-4000-8000-000000000003.jpg",
@@ -141,10 +158,18 @@
     "mana_cost": "{1}{R} // {1}{U}",
     "cmc": 4,
     "type_line": "Instant // Instant",
-    "colors": ["R", "U"],
-    "color_identity": ["R", "U"],
+    "colors": [
+      "R",
+      "U"
+    ],
+    "color_identity": [
+      "R",
+      "U"
+    ],
     "keywords": [],
-    "legalities": { "commander": "legal" },
+    "legalities": {
+      "commander": "legal"
+    },
     "image_uris": {
       "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000004.jpg",
       "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000004.jpg",
@@ -152,8 +177,26 @@
     },
     "image_status": "highres_scan",
     "card_faces": [
-      { "object": "card_face", "name": "Fire", "mana_cost": "{1}{R}", "type_line": "Instant", "oracle_text": "Fire deals 2 damage divided as you choose among one or two targets.", "colors": ["R"] },
-      { "object": "card_face", "name": "Ice", "mana_cost": "{1}{U}", "type_line": "Instant", "oracle_text": "Tap target permanent.\nDraw a card.", "colors": ["U"] }
+      {
+        "object": "card_face",
+        "name": "Fire",
+        "mana_cost": "{1}{R}",
+        "type_line": "Instant",
+        "oracle_text": "Fire deals 2 damage divided as you choose among one or two targets.",
+        "colors": [
+          "R"
+        ]
+      },
+      {
+        "object": "card_face",
+        "name": "Ice",
+        "mana_cost": "{1}{U}",
+        "type_line": "Instant",
+        "oracle_text": "Tap target permanent.\nDraw a card.",
+        "colors": [
+          "U"
+        ]
+      }
     ],
     "artist": "Franz Vohwinkel",
     "promo": false,
@@ -179,10 +222,16 @@
     "type_line": "Creature — Giant // Instant — Adventure",
     "power": "4",
     "toughness": "3",
-    "colors": ["R"],
-    "color_identity": ["R"],
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "R"
+    ],
     "keywords": [],
-    "legalities": { "commander": "legal" },
+    "legalities": {
+      "commander": "legal"
+    },
     "image_uris": {
       "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000005.jpg",
       "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000005.jpg",
@@ -190,8 +239,22 @@
     },
     "image_status": "highres_scan",
     "card_faces": [
-      { "object": "card_face", "name": "Bonecrusher Giant", "mana_cost": "{2}{R}", "type_line": "Creature — Giant", "oracle_text": "Whenever Bonecrusher Giant becomes the target of a spell, Bonecrusher Giant deals 2 damage to that spell's controller.", "power": "4", "toughness": "3" },
-      { "object": "card_face", "name": "Stomp", "mana_cost": "{1}{R}", "type_line": "Instant — Adventure", "oracle_text": "Damage can't be prevented this turn. Stomp deals 2 damage to any target." }
+      {
+        "object": "card_face",
+        "name": "Bonecrusher Giant",
+        "mana_cost": "{2}{R}",
+        "type_line": "Creature — Giant",
+        "oracle_text": "Whenever Bonecrusher Giant becomes the target of a spell, Bonecrusher Giant deals 2 damage to that spell's controller.",
+        "power": "4",
+        "toughness": "3"
+      },
+      {
+        "object": "card_face",
+        "name": "Stomp",
+        "mana_cost": "{1}{R}",
+        "type_line": "Instant — Adventure",
+        "oracle_text": "Damage can't be prevented this turn. Stomp deals 2 damage to any target."
+      }
     ],
     "artist": "Victor Adame Minguez",
     "promo": false,
@@ -217,10 +280,18 @@
     "type_line": "Creature — Goblin Warrior // Legendary Creature — Goblin Shaman",
     "power": "1",
     "toughness": "1",
-    "colors": ["R"],
-    "color_identity": ["R"],
-    "keywords": ["Haste"],
-    "legalities": { "commander": "legal" },
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "R"
+    ],
+    "keywords": [
+      "Haste"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
     "image_uris": {
       "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000006.jpg",
       "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000006.jpg",
@@ -228,8 +299,24 @@
     },
     "image_status": "highres_scan",
     "card_faces": [
-      { "object": "card_face", "name": "Akki Lavarunner", "mana_cost": "{3}{R}", "type_line": "Creature — Goblin Warrior", "oracle_text": "Haste\nWhenever Akki Lavarunner deals damage to an opponent, flip it.", "power": "1", "toughness": "1" },
-      { "object": "card_face", "name": "Tok-Tok, Volcano Born", "mana_cost": "", "type_line": "Legendary Creature — Goblin Shaman", "oracle_text": "Protection from red\nIf a red source would deal damage to a player, it deals that much damage plus 1 to that player instead.", "power": "2", "toughness": "2" }
+      {
+        "object": "card_face",
+        "name": "Akki Lavarunner",
+        "mana_cost": "{3}{R}",
+        "type_line": "Creature — Goblin Warrior",
+        "oracle_text": "Haste\nWhenever Akki Lavarunner deals damage to an opponent, flip it.",
+        "power": "1",
+        "toughness": "1"
+      },
+      {
+        "object": "card_face",
+        "name": "Tok-Tok, Volcano Born",
+        "mana_cost": "",
+        "type_line": "Legendary Creature — Goblin Shaman",
+        "oracle_text": "Protection from red\nIf a red source would deal damage to a player, it deals that much damage plus 1 to that player instead.",
+        "power": "2",
+        "toughness": "2"
+      }
     ],
     "artist": "Matt Cavotta",
     "promo": false,
@@ -287,10 +374,16 @@
     "cmc": 1,
     "type_line": "Instant",
     "oracle_text": "Lightning Bolt deals 3 damage to any target.",
-    "colors": ["R"],
-    "color_identity": ["R"],
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "R"
+    ],
     "keywords": [],
-    "legalities": { "commander": "legal" },
+    "legalities": {
+      "commander": "legal"
+    },
     "image_uris": {
       "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000008.jpg",
       "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000008.jpg",
@@ -318,10 +411,141 @@
     "mana_cost": "{R}",
     "cmc": 1,
     "type_line": "Instant",
-    "colors": ["R"],
-    "color_identity": ["R"],
-    "image_uris": { "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000009.jpg" },
+    "colors": [
+      "R"
+    ],
+    "color_identity": [
+      "R"
+    ],
+    "image_uris": {
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000009.jpg"
+    },
     "promo": false,
     "digital": false
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000010",
+    "oracle_id": "11111111-0000-4000-8000-000000000010",
+    "name": "Atraxa, Praetors' Voice",
+    "lang": "en",
+    "released_at": "2016-11-11",
+    "set": "cm2",
+    "set_name": "Commander Anthology Volume II",
+    "set_type": "commander",
+    "collector_number": "1",
+    "rarity": "mythic",
+    "layout": "normal",
+    "mana_cost": "{G}{W}{U}{B}",
+    "cmc": 4,
+    "type_line": "Legendary Creature — Phyrexian Angel Horror",
+    "oracle_text": "Flying, vigilance, deathtouch, lifelink\nAt the beginning of your end step, proliferate.",
+    "power": "4",
+    "toughness": "4",
+    "colors": [
+      "B",
+      "G",
+      "U",
+      "W"
+    ],
+    "color_identity": [
+      "B",
+      "G",
+      "U",
+      "W"
+    ],
+    "keywords": [
+      "Flying",
+      "Vigilance",
+      "Deathtouch",
+      "Lifelink",
+      "Proliferate"
+    ],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000010.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000010.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000010.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Victor Adame Minguez",
+    "promo": false,
+    "digital": false,
+    "booster": false,
+    "scryfall_uri": "https://scryfall.com/card/cm2/1/atraxa-praetors-voice"
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000011",
+    "oracle_id": "11111111-0000-4000-8000-000000000011",
+    "name": "Forest",
+    "lang": "en",
+    "released_at": "2023-08-04",
+    "set": "cmm",
+    "set_name": "Commander Masters",
+    "set_type": "masters",
+    "collector_number": "1044",
+    "rarity": "common",
+    "layout": "normal",
+    "mana_cost": "",
+    "cmc": 0,
+    "type_line": "Basic Land — Forest",
+    "oracle_text": "({T}: Add {G}.)",
+    "colors": [],
+    "color_identity": [
+      "G"
+    ],
+    "keywords": [],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000011.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000011.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000011.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Someone",
+    "promo": false,
+    "digital": false,
+    "booster": true,
+    "scryfall_uri": "https://scryfall.com/card/cmm/1044/forest"
+  },
+  {
+    "object": "card",
+    "id": "a1b2c3d4-0000-4000-8000-000000000012",
+    "oracle_id": "11111111-0000-4000-8000-000000000012",
+    "name": "Arcane Signet",
+    "lang": "en",
+    "released_at": "2020-04-17",
+    "set": "c20",
+    "set_name": "Commander 2020",
+    "set_type": "commander",
+    "collector_number": "234",
+    "rarity": "common",
+    "layout": "normal",
+    "mana_cost": "{2}",
+    "cmc": 2,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+    "colors": [],
+    "color_identity": [],
+    "keywords": [],
+    "legalities": {
+      "commander": "legal"
+    },
+    "image_uris": {
+      "small": "https://cards.scryfall.io/small/front/a/1/a1b2c3d4-0000-4000-8000-000000000012.jpg",
+      "normal": "https://cards.scryfall.io/normal/front/a/1/a1b2c3d4-0000-4000-8000-000000000012.jpg",
+      "large": "https://cards.scryfall.io/large/front/a/1/a1b2c3d4-0000-4000-8000-000000000012.jpg"
+    },
+    "image_status": "highres_scan",
+    "artist": "Dan Scott",
+    "promo": false,
+    "digital": false,
+    "booster": false,
+    "scryfall_uri": "https://scryfall.com/card/c20/234/arcane-signet"
   }
 ]

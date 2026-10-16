@@ -7,6 +7,8 @@ import { config } from "./config.js";
 import { openDb, type DbHandle } from "./db/index.js";
 import { registerImageRoutes } from "./images.js";
 import { registerCardRoutes } from "./routes/cards.js";
+import { registerDeckRoutes } from "./routes/decks.js";
+import { registerMeRoutes } from "./routes/me.js";
 import { Ingestor } from "./scryfall/ingest.js";
 import { NameIndex } from "./search/index.js";
 
@@ -42,6 +44,8 @@ export async function buildApp(opts: { dbFile?: string; logger?: boolean | "plai
 
   registerCardRoutes(app, { handle, index, ingestor });
   registerImageRoutes(app, handle);
+  registerMeRoutes(app, handle);
+  registerDeckRoutes(app, { handle, index });
 
   // In production the server also hosts the built client (a static SPA).
   const indexHtml = path.join(config.clientDist, "index.html");
