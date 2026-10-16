@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type ArchetypeTag, type Bracket, type LibraryDeckDetail } from "@cgwf/shared";
 import { api } from "../api";
 import { AnalysisBody } from "../components/BracketPanel";
 import { RequireUser } from "../components/RequireUser";
+import { StatsPanel } from "../components/StatsPanel";
 import { isOwner, useUser } from "../user";
 
 /** Owner-only: one library deck. Edit bracket, tags, primer, agent flag; re-run the analysis. */
@@ -19,6 +20,8 @@ function Editor({ id }: { id: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [draftNote, setDraftNote] = useState<string | null>(null);
+
+  const loadStats = useCallback(() => api.library.stats(id), [id]);
 
   const apply = (d: LibraryDeckDetail) => {
     setDeck(d);
@@ -168,12 +171,15 @@ function Editor({ id }: { id: string }) {
         </div>
       </section>
 
-      {a && (
-        <section className="bracket-panel">
-          <h3>Engine analysis</h3>
-          <AnalysisBody a={a} />
-        </section>
-      )}
+      <div className="analysis-row">
+        {a && (
+          <section className="bracket-panel">
+            <h3>Engine analysis</h3>
+            <AnalysisBody a={a} />
+          </section>
+        )}
+        <StatsPanel load={loadStats} version={deck.updatedAt} />
+      </div>
 
       <section className="deck-group">
         <h3>Cards</h3>

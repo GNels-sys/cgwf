@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { Board, DeckCardEntry, DeckDetail } from "@cgwf/shared";
 import { api } from "../api";
@@ -7,6 +7,7 @@ import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
 import { ManaCost } from "../components/ManaCost";
 import { RequireUser } from "../components/RequireUser";
+import { StatsPanel } from "../components/StatsPanel";
 import { isOwner, useUser } from "../user";
 
 const TYPE_ORDER = ["Creature", "Planeswalker", "Battle", "Instant", "Sorcery", "Artifact", "Enchantment", "Land", "Other"] as const;
@@ -56,6 +57,8 @@ function DeckView({ id }: { id: string }) {
       .then((r) => setDeck(r.deck))
       .catch((e: Error) => setError(e.message));
   }, [id]);
+
+  const loadStats = useCallback(() => api.decks.stats(id), [id]);
 
   const sections = useMemo(() => {
     if (!deck) return null;
@@ -169,7 +172,10 @@ function DeckView({ id }: { id: string }) {
         ))}
       </section>
 
-      <BracketPanel deckId={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} />
+      <div className="analysis-row">
+        <BracketPanel deckId={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} />
+        <StatsPanel load={loadStats} version={`${deck.updatedAt}:${deck.cards.length}`} />
+      </div>
 
       <div className="deck-columns">
         {sections.main.map((g) => (

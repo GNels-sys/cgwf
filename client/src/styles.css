@@ -10,6 +10,15 @@
   --border: #31413a;
   --radius: 10px;
   --card-ratio: 63 / 88;
+  /* Mana colours for charts: the same hues as the mana dots (ManaCost.tsx). White and black are
+     nudged per theme so a bar stays visible on the panel surface; the dots themselves are unchanged. */
+  --mana-W: #e8dfb8;
+  --mana-U: #2f7fd6;
+  --mana-B: #6b5f78;
+  --mana-R: #d64a3a;
+  --mana-G: #3f9a56;
+  --mana-C: #9a9a9a;
+  --mana-generic: #7d8a82;
   color-scheme: dark;
 }
 /* Light interface (Personalize -> Interface). Table themes and playmats keep their own colours. */
@@ -21,6 +30,10 @@
   --fg-muted: #5f6a63;
   --danger: #b8392a;
   --border: #d4ccb8;
+  --mana-W: #d9c98a;
+  --mana-B: #3a3240;
+  --mana-C: #8a8a8a;
+  --mana-generic: #9aa39d;
   color-scheme: light;
 }
 
