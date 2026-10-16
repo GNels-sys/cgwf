@@ -343,3 +343,11 @@ The deck tile headline and pip sort now include all fixed mana requirements: col
 Cards now uses the alien-plane artwork as the full-page, fixed viewport background, with aspect-preserving cover sizing and a theme-aware wash. The results container and heading no longer paint separate copies of the scene. Scrolling or changing result counts does not rescale the artwork. Card faces and frosted result tiles retain their existing presentation.
 
 Validation: typecheck and production build passed. All 198 tests passed on rerun after the existing agent-runner timing flake (extra mulligan decision). Browser review passed at 375×812, 812×375, and 1440×1000 in both themes, checking combined mana totals, equal deck tiles, stable scenery/navigation, and unchanged viewport background settings before/after card results. Evidence: `docs/design-previews/full-cards/`.
+
+## Restore redesign after a later deployment — 2026-10-16
+
+A later live build omitted the redesign: its CSS had none of the illustrated deck assets, collection metrics, or full Cards background. The seven design commits remained on `design-refresh`; `origin/main` contained the newer Phase 10 server work but none of those design commits. Integrated `origin/main` into `design-refresh` without conflicts. The resulting client bundles match the final redesign exactly, while the newer server and shared changes are retained.
+
+Validation: shared build, workspace typecheck, production build, all 223 tests, collection/Cards checks at all three sizes in both themes, and all six gameplay motion/theme/size checks. Gameplay checks cover draws, play, graveyard, exile, return to hand, cleanup, reduced motion, undo, glass overlays, and pointer interaction. Reports: `docs/design-previews/restoration/`.
+
+Release note: deploy a revision containing both `origin/main` and the design commits. Until the design pull request is merged into `main`, deploying `main` alone will omit the design again. The original design brief reserves merging into `main` for owner approval; restoration deployment uses the combined `design-refresh` branch.
