@@ -274,4 +274,6 @@ Current examples are retained in `design-previews/glass/`:
 [Frosted table menu](design-previews/glass/frosted-menu-landscape-dark.jpg),
 [Light table menu](design-previews/glass/frosted-menu-landscape-light.jpg), and
 [Draw in progress](design-previews/glass/drawing-landscape-dark.jpg).
-`qa-motion.json` records the dynamic checks and computed glass styles.
+`qa-motion.json` records the dynamic checks and computed glass styles for the menu,
+action sheet, and mana panel in all six size/theme combinations. The glass selector
+has enough specificity to retain translucency after game-specific surface rules.

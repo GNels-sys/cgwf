@@ -1348,14 +1348,14 @@ input[type="checkbox"] { accent-color: var(--accent); }
   --art-wash: #fff8e5c9;
 }
 @supports ((backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px))) {
-  .modal, .sheet, .mana-panel, .bell-panel, .triggers, .mulligan-box {
+  :root :is(.modal, .sheet, .mana-panel, .bell-panel, .triggers, .mulligan-box) {
     background: var(--glass);
     -webkit-backdrop-filter: blur(18px) saturate(115%);
     backdrop-filter: blur(18px) saturate(115%);
     border-color: var(--glass-edge);
     box-shadow: inset 0 1px 0 #ffffff20, 0 18px 60px #0005;
   }
-  .dialog { background: var(--glass-strong); }
+  :root .dialog { background: var(--glass-strong); }
   :is(.modal, .sheet, .mana-panel, .bell-panel, .triggers, .mulligan-box) .muted { color: var(--glass-muted); }
 }
 .modal-backdrop, .sheet-backdrop { background: #06100d24; }
