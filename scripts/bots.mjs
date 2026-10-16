@@ -10,7 +10,27 @@ let CODE = process.argv[3] ?? null;
 const WS_BASE = BASE.replace(/^http/, "ws");
 
 const LISTS = {
-  Georgie: `1 Atraxa, Praetors' Voice\n\n1 Sol Ring\n1 Arcane Signet\n1 Swords to Plowshares\n1 Counterspell\n1 Cultivate\n1 Eternal Witness\n1 Birds of Paradise\n1 Llanowar Elves\n1 Delver of Secrets\n1 Thassa's Oracle\n1 Rhystic Study\n1 Smothering Tithe\n4 Forest\n4 Plains\n3 Island\n3 Swamp\n`,
+  Georgie: `1 Atraxa, Praetors' Voice
+
+1 Sol Ring
+1 Arcane Signet
+1 Lotus Cobra
+1 Tireless Tracker
+1 Scute Swarm
+1 Glorious Anthem
+1 Lightning Greaves
+1 Swiftfoot Boots
+1 Rancor
+1 Grizzly Bears
+1 Soul Warden
+1 Phyrexian Arena
+1 Llanowar Elves
+1 Delver of Secrets
+3 Forest
+3 Plains
+2 Island
+2 Swamp
+`,
   Blair: `1 Krenko, Mob Boss\n\n1 Sol Ring\n1 Lightning Bolt\n1 Goblin Guide\n1 Skirk Prospector\n1 Impact Tremors\n1 Purphoros, God of the Forge\n1 Goblin Chieftain\n1 Blood Moon\n1 Chaos Warp\n12 Mountain\n`,
   Casey: `1 Yuriko, the Tiger's Shadow\n\n1 Sol Ring\n1 Brainstorm\n1 Ponder\n1 Thoughtseize\n1 Ornithopter\n1 Changeling Outcast\n1 Mana Leak\n1 Fatal Push\n6 Island\n6 Swamp\n`,
   Dana: `1 Muldrotha, the Gravetide\n\n1 Sol Ring\n1 Cultivate\n1 Kodama's Reach\n1 Eternal Witness\n1 Sakura-Tribe Elder\n1 Reanimate\n1 Animate Dead\n1 Counterspell\n5 Forest\n5 Island\n4 Swamp\n`,

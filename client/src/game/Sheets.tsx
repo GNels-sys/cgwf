@@ -52,11 +52,23 @@ export type Dialog =
   | { kind: "number"; title: string; initial: number; min?: number; max?: number; submitLabel?: string; onSubmit: (n: number) => void; quick?: number[] }
   | { kind: "text"; title: string; placeholder?: string; initial?: string; onSubmit: (s: string) => void }
   | { kind: "pick"; title: string; options: Array<{ label: string; value: string; hint?: string }>; onPick: (value: string) => void }
-  | { kind: "confirm"; title: string; body?: string | undefined; confirmLabel?: string; danger?: boolean; onConfirm: () => void };
+  | { kind: "confirm"; title: string; body?: string | undefined; confirmLabel?: string; danger?: boolean; onConfirm: () => void }
+  | {
+      kind: "effect";
+      title: string;
+      body?: string | undefined;
+      initial: { power: number; toughness: number; keywords: string[]; note?: string };
+      /** Show a free-text note field (manual anthems). */
+      withNote?: boolean;
+      submitLabel?: string;
+      onSubmit: (v: { power: number; toughness: number; keywords: string[]; note: string }) => void;
+    };
 
 export function DialogView({ dialog, onClose }: { dialog: Dialog; onClose: () => void }) {
   const [num, setNum] = useState(dialog.kind === "number" ? String(dialog.initial) : "");
   const [text, setText] = useState(dialog.kind === "text" ? (dialog.initial ?? "") : "");
+  const [fx, setFx] = useState(dialog.kind === "effect" ? { ...dialog.initial, note: dialog.initial.note ?? "" } : { power: 0, toughness: 0, keywords: [] as string[], note: "" });
+  const [kwInput, setKwInput] = useState("");
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -70,8 +82,9 @@ export function DialogView({ dialog, onClose }: { dialog: Dialog; onClose: () =>
     if (!Number.isFinite(n)) return;
     if (dialog.min !== undefined && n < dialog.min) return;
     if (dialog.max !== undefined && n > dialog.max) return;
-    dialog.onSubmit(n);
+    // Close first: a callback may open the next dialog in a chain, and that one must win.
     onClose();
+    dialog.onSubmit(n);
   };
 
   return (
@@ -107,8 +120,8 @@ export function DialogView({ dialog, onClose }: { dialog: Dialog; onClose: () =>
             onSubmit={(e) => {
               e.preventDefault();
               if (text.trim()) {
-                dialog.onSubmit(text.trim());
                 onClose();
+                dialog.onSubmit(text.trim());
               }
             }}
           >
@@ -128,8 +141,8 @@ export function DialogView({ dialog, onClose }: { dialog: Dialog; onClose: () =>
                 key={o.value}
                 className="sheet-action"
                 onClick={() => {
-                  dialog.onPick(o.value);
                   onClose();
+                  dialog.onPick(o.value);
                 }}
               >
                 <span>{o.label}</span>
@@ -137,6 +150,83 @@ export function DialogView({ dialog, onClose }: { dialog: Dialog; onClose: () =>
               </button>
             ))}
           </div>
+        )}
+        {dialog.kind === "effect" && (
+          <form
+            className="effect-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const extra = kwInput.trim().toLowerCase();
+              const keywords = extra && !fx.keywords.includes(extra) ? [...fx.keywords, extra] : fx.keywords;
+              onClose();
+              dialog.onSubmit({ power: Math.trunc(fx.power) || 0, toughness: Math.trunc(fx.toughness) || 0, keywords, note: fx.note.trim() });
+            }}
+          >
+            {dialog.body && <p className="muted small">{dialog.body}</p>}
+            <div className="pt-row">
+              <label>
+                <span className="muted small">Power</span>
+                <input type="number" inputMode="numeric" value={fx.power} onChange={(e) => setFx({ ...fx, power: Number(e.target.value) })} />
+              </label>
+              <span className="pt-slash">/</span>
+              <label>
+                <span className="muted small">Toughness</span>
+                <input type="number" inputMode="numeric" value={fx.toughness} onChange={(e) => setFx({ ...fx, toughness: Number(e.target.value) })} />
+              </label>
+            </div>
+            <div className="field">
+              <span>Keywords</span>
+              <div className="candidates">
+                {fx.keywords.map((k) => (
+                  <button key={k} type="button" className="chip is-selected" onClick={() => setFx({ ...fx, keywords: fx.keywords.filter((x) => x !== k) })} title="Remove">
+                    {k} &times;
+                  </button>
+                ))}
+                {fx.keywords.length === 0 && <span className="muted small">none</span>}
+              </div>
+              <div className="inline-field">
+                <input
+                  value={kwInput}
+                  onChange={(e) => setKwInput(e.target.value)}
+                  placeholder="add a keyword: flying, trample..."
+                  maxLength={40}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && kwInput.trim()) {
+                      e.preventDefault();
+                      const k = kwInput.trim().toLowerCase();
+                      if (!fx.keywords.includes(k)) setFx({ ...fx, keywords: [...fx.keywords, k] });
+                      setKwInput("");
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  onClick={() => {
+                    const k = kwInput.trim().toLowerCase();
+                    if (k && !fx.keywords.includes(k)) setFx({ ...fx, keywords: [...fx.keywords, k] });
+                    setKwInput("");
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+            {dialog.withNote && (
+              <label className="field">
+                <span>Note</span>
+                <input value={fx.note} onChange={(e) => setFx({ ...fx, note: e.target.value })} placeholder="Overrun, Craterhoof..." maxLength={60} />
+              </label>
+            )}
+            <div className="actions">
+              <button className="btn" type="button" onClick={onClose}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" type="submit">
+                {dialog.submitLabel ?? "Confirm"}
+              </button>
+            </div>
+          </form>
         )}
         {dialog.kind === "confirm" && (
           <>
@@ -148,8 +238,8 @@ export function DialogView({ dialog, onClose }: { dialog: Dialog; onClose: () =>
               <button
                 className={`btn ${dialog.danger ? "btn-danger" : "btn-primary"}`}
                 onClick={() => {
-                  dialog.onConfirm();
                   onClose();
+                  dialog.onConfirm();
                 }}
               >
                 {dialog.confirmLabel ?? "Yes"}

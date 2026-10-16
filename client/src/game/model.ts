@@ -1,4 +1,4 @@
-import { hasBackFace, viewCardName, type CardPrinting, type PlayerView, type ViewCard, type ViewPlayer } from "@cgwf/shared";
+import { deriveBattlefield, hasBackFace, SECTIONS, viewCardName, type CardPrinting, type DerivedBattlefield, type PlayerView, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 
 /** Small read helpers over the per-player view. */
 
@@ -20,7 +20,12 @@ export function imageFace(card: ViewCard, printing: CardPrinting | null): 0 | 1 
 }
 
 export function battlefieldCards(p: ViewPlayer): ViewCard[] {
-  return [...p.battlefield.lands, ...p.battlefield.creatures, ...p.battlefield.other];
+  return SECTIONS.flatMap((s) => p.battlefield[s]);
+}
+
+/** Derived P/T, keywords, attachments and anthems for one player's battlefield. */
+export function deriveFor(p: ViewPlayer, printings: Printings): DerivedBattlefield {
+  return deriveBattlefield(battlefieldCards(p), (c) => printingOf(c as ViewCard, printings), p.manualAnthems);
 }
 
 export function allVisibleCards(view: PlayerView): Map<string, ViewCard> {
@@ -55,4 +60,23 @@ export function counterSummary(counters: Record<string, number>): string {
   return Object.entries(counters)
     .map(([k, v]) => `${v} ${k}`)
     .join(", ");
+}
+
+export function manaTotal(p: ViewPlayer): number {
+  return Object.values(p.mana).reduce((a, b) => a + b, 0);
+}
+
+/** Group a section's cards into hosts with their attachments (attachments are drawn under the host). */
+export function stacksOf(cards: ViewCard[], all: ViewCard[]): Array<{ host: ViewCard; attachments: ViewCard[] }> {
+  const attachedTo = new Map<string, ViewCard[]>();
+  for (const c of all) {
+    if (!c.attachedTo) continue;
+    const list = attachedTo.get(c.attachedTo) ?? [];
+    list.push(c);
+    attachedTo.set(c.attachedTo, list);
+  }
+  const ids = new Set(all.map((c) => c.iid));
+  return cards
+    .filter((c) => !c.attachedTo || !ids.has(c.attachedTo))
+    .map((host) => ({ host, attachments: attachedTo.get(host.iid) ?? [] }));
 }

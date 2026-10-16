@@ -1,7 +1,7 @@
 import { useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { cardImagePath, type ViewCard } from "@cgwf/shared";
+import { cardImagePath, type DerivedCard, type ViewCard } from "@cgwf/shared";
 import { imageFace, nameOf, printingOf, type Printings } from "./model";
 
 interface Props {
@@ -9,21 +9,26 @@ interface Props {
   printings: Printings;
   onTap?: (card: ViewCard) => void;
   onHold?: (card: ViewCard) => void;
-  draggable?: boolean;
+  draggable?: boolean | undefined;
   selected?: boolean;
   /** Drawn smaller and offset: an attachment under its host. */
   attached?: boolean;
   dim?: boolean;
+  /** Derived P/T and keywords (from deriveBattlefield) for the P/T badge and keyword chevrons. */
+  derived?: DerivedCard | undefined;
+  /** A pending trigger points at this card. */
+  highlight?: boolean | undefined;
 }
 
 const HOLD_MS = 450;
 
 /**
  * One card on the table. Tap opens the action sheet; press-and-hold zooms.
- * Tapped cards turn sideways, counters show as badges, hidden cards show a
- * plain CGwF back (never the official card back).
+ * Tapped cards turn sideways, counters show as badges, creatures show their
+ * computed P/T and one chevron per keyword, hidden cards show a plain CGwF
+ * back (never the official card back).
  */
-export function CardTile({ card, printings, onTap, onHold, draggable = false, selected = false, attached = false, dim = false }: Props) {
+export function CardTile({ card, printings, onTap, onHold, draggable = false, selected = false, attached = false, dim = false, derived, highlight = false }: Props) {
   const printing = printingOf(card, printings);
   const name = nameOf(card, printings);
   const hidden = card.faceDown || (!card.printingId && !card.custom);
@@ -66,19 +71,22 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
     transform: CSS.Translate.toString(transform),
     opacity: isDragging ? 0.4 : dim ? 0.55 : 1,
   };
-  const badges = Object.entries(card.counters);
+  const badges = Object.entries(card.counters).filter(([k]) => !(derived?.isCreature && (k === "+1/+1" || k === "-1/-1")));
+  const showPt = derived?.isCreature && derived.power !== null && derived.toughness !== null && !hidden;
+  const ptChanged = derived ? derived.deltaPower !== 0 || derived.deltaToughness !== 0 : false;
+  const chevrons = derived && !hidden ? derived.keywords : [];
 
   return (
     <div
       ref={setNodeRef}
-      className={`tile${card.tapped ? " is-tapped" : ""}${selected ? " is-selected" : ""}${attached ? " is-attached" : ""}${card.isToken ? " is-token" : ""}${card.isCommander ? " is-commander" : ""}`}
+      className={`tile${card.tapped ? " is-tapped" : ""}${selected ? " is-selected" : ""}${attached ? " is-attached" : ""}${card.isToken ? " is-token" : ""}${card.isCommander ? " is-commander" : ""}${highlight ? " is-triggered" : ""}`}
       style={style}
       {...listeners}
       {...attributes}
       role="button"
       tabIndex={0}
       aria-label={name}
-      title={name}
+      title={chevrons.length ? `${name} - ${chevrons.join(", ")}` : name}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
@@ -107,6 +115,13 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
           <img src={cardImagePath(printing.id, "small", face)} alt="" draggable={false} loading="lazy" decoding="async" />
         )}
       </div>
+      {chevrons.length > 0 && (
+        <div className="tile-chevrons" aria-hidden="true">
+          {chevrons.map((k) => (
+            <span key={k} className="chevron" title={k} />
+          ))}
+        </div>
+      )}
       {badges.length > 0 && (
         <div className="tile-badges">
           {badges.map(([k, v]) => (
@@ -115,6 +130,11 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
             </span>
           ))}
         </div>
+      )}
+      {showPt && derived && (
+        <span className={`tile-pt${ptChanged ? " is-modified" : ""}`} title={`${derived.power}/${derived.toughness}`}>
+          {derived.power}/{derived.toughness}
+        </span>
       )}
       {card.isCommander && <span className="tile-mark" title="Commander">C</span>}
     </div>

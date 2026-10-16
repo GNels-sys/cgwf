@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import type { CardSummary, Color, LogEntry, PlayerView, ViewCard, ViewPlayer, Row } from "@cgwf/shared";
+import { defaultSection, SECTIONS, SECTION_LABELS, type CardSummary, type Color, type LogEntry, type PlayerView, type ViewCard, type ViewPlayer, type Row } from "@cgwf/shared";
 import { api } from "../api";
 import { Avatar } from "../components/Avatar";
 import { CardImage } from "../components/CardImage";
 import { Footer } from "../components/Footer";
 import type { RoomInfo } from "@cgwf/shared";
+import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
-import { battlefieldCards, counterSummary, nameOf, totalCommanderDamage, type Printings } from "./model";
+import { ManaSummary } from "./Mana";
+import { battlefieldCards, counterSummary, deriveFor, nameOf, totalCommanderDamage, type Printings } from "./model";
 
 /** Modal panels used by the table: zone viewer, opponent field, log, tokens, menu. */
 
@@ -50,8 +52,6 @@ export function CardList({ cards, printings, onTap, onHold, empty = "Nothing her
   );
 }
 
-const ROW_LABEL: Record<Row, string> = { lands: "Lands", creatures: "Creatures", other: "Other" };
-
 export function OpponentPanel({
   player,
   view,
@@ -62,6 +62,8 @@ export function OpponentPanel({
   onHold,
   onShowCards,
   onPlayerSheet,
+  onAnthems,
+  highlighted,
 }: {
   player: ViewPlayer;
   view: PlayerView;
@@ -72,8 +74,11 @@ export function OpponentPanel({
   onHold: (c: ViewCard) => void;
   onShowCards: (title: string, cards: ViewCard[]) => void;
   onPlayerSheet: (p: ViewPlayer) => void;
+  onAnthems: (p: ViewPlayer) => void;
+  highlighted: ReadonlySet<string>;
 }) {
   const active = view.activePlayer === player.id;
+  const derived = deriveFor(player, printings);
   return (
     <Panel title={player.name} subtitle={`${player.life} life${player.conceded ? " - conceded" : active ? " - active player" : ""}`} onClose={onClose} wide>
       <div className="opp-stats">
@@ -81,6 +86,7 @@ export function OpponentPanel({
         <span>Library {player.library.count}</span>
         {counterSummary(player.counters) && <span>{counterSummary(player.counters)}</span>}
         {totalCommanderDamage(player) > 0 && <span>Cmdr dmg {totalCommanderDamage(player)}</span>}
+        <ManaSummary player={player} />
         {me && (
           <button className="btn btn-small" onClick={() => onPlayerSheet(player)}>
             Counters
@@ -111,15 +117,7 @@ export function OpponentPanel({
           ))}
         </div>
       )}
-      {(["lands", "creatures", "other"] as const).map((row) => (
-        <div key={row} className="opp-row">
-          <span className="row-label">{ROW_LABEL[row]}</span>
-          {player.battlefield[row].length === 0 && <span className="muted small">-</span>}
-          {player.battlefield[row].map((c) => (
-            <CardTile key={c.iid} card={c} printings={printings} onTap={onTap} onHold={onHold} attached={Boolean(c.attachedTo)} />
-          ))}
-        </div>
-      ))}
+      <Battlefield player={player} printings={printings} derived={derived} onTap={onTap} onHold={onHold} highlighted={highlighted} onAnthems={() => onAnthems(player)} compact />
       {Object.keys(player.commanderDamage).length > 0 && (
         <p className="muted small">
           Commander damage taken:{" "}
@@ -192,7 +190,7 @@ export function TokenPanel({ onCreate, onClose }: { onCreate: (payload: { printi
     };
   }, [q, mode]);
 
-  const rowFor = (typeLineText: string): Row => (/Creature/.test(typeLineText) ? "creatures" : /Land/.test(typeLineText) ? "lands" : "other");
+  const rowFor = (typeLineText: string): Row => defaultSection(typeLineText);
 
   return (
     <Panel title="Create tokens" onClose={onClose} wide>
@@ -265,9 +263,11 @@ export function TokenPanel({ onCreate, onClose }: { onCreate: (payload: { printi
           <label className="field">
             <span>Row</span>
             <select value={row} onChange={(e) => setRow(e.target.value as Row)}>
-              <option value="creatures">Creatures</option>
-              <option value="other">Other</option>
-              <option value="lands">Lands</option>
+              {SECTIONS.map((sec) => (
+                <option key={sec} value={sec}>
+                  {SECTION_LABELS[sec]}
+                </option>
+              ))}
             </select>
           </label>
           <button className="btn btn-primary" type="submit" disabled={!name.trim()}>

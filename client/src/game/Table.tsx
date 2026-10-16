@@ -3,11 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { STEP_LABELS, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
-import { cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
+import { anthemActions, cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
+import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
 import { CardZoom } from "./CardZoom";
 import { LifeWidget } from "./LifeWidget";
-import { nameOf, seatOrderFrom, type Printings } from "./model";
+import { ManaBank, ManaSummary } from "./Mana";
+import { battlefieldCards, deriveFor, nameOf, seatOrderFrom, type Printings } from "./model";
+import { TriggersPanel } from "./Triggers";
 import { CardList, LogPanel, MenuPanel, OpponentPanel, Panel, TokenPanel } from "./Panels";
 import { ActionSheet, DialogView, type Action, type Dialog } from "./Sheets";
 import type { RoomSocket } from "./socket";
@@ -18,7 +21,7 @@ import type { RoomSocket } from "./socket";
  * through the server as an event; this component only renders the view.
  */
 
-type Sheet = { kind: "card"; card: ViewCard } | { kind: "library" } | { kind: "player"; player: ViewPlayer } | { kind: "dice" } | null;
+type Sheet = { kind: "card"; card: ViewCard } | { kind: "library" } | { kind: "player"; player: ViewPlayer } | { kind: "dice" } | { kind: "anthems"; player: ViewPlayer } | null;
 interface CardsPanel {
   title: string;
   subtitle?: string;
@@ -26,8 +29,6 @@ interface CardsPanel {
   /** "library": the panel follows my known library cards and offers Shuffle. */
   follow?: "library";
 }
-
-const ROW_LABEL: Record<Row, string> = { lands: "Lands", creatures: "Creatures", other: "Other" };
 
 function DropRow({ id, className, children }: { id: string; className: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -52,7 +53,11 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const me = view.viewer;
   const mePlayer = me ? view.players[me] : undefined;
   const [sheet, setSheet] = useState<Sheet>(null);
-  const [dialog, setDialog] = useState<Dialog | null>(null);
+  const [dialogState, setDialogState] = useState<{ d: Dialog; key: number } | null>(null);
+  const dialog = dialogState?.d ?? null;
+  const dialogSeq = useRef(0);
+  // Each dialog gets a fresh key so its form state never leaks into the next one in a chain.
+  const setDialog = useCallback((d: Dialog | null) => setDialogState(d ? { d, key: ++dialogSeq.current } : null), []);
   const [zoom, setZoom] = useState<ViewCard | null>(null);
   const [cardsPanel, setCardsPanel] = useState<CardsPanel | null>(null);
   const [opponent, setOpponent] = useState<string | null>(null);
@@ -85,7 +90,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     if (!cardsPanel) return null;
     if (cardsPanel.follow === "library") return mePlayer ? { ...cardsPanel, cards: mePlayer.library.known } : null;
     const ids = new Set(cardsPanel.cards.map((c) => c.iid));
-    const all = Object.values(view.players).flatMap((p) => [...p.graveyard, ...p.exile, ...p.command, ...p.hand.cards, ...p.library.known, ...p.battlefield.lands, ...p.battlefield.creatures, ...p.battlefield.other]);
+    const all = Object.values(view.players).flatMap((p) => [...p.graveyard, ...p.exile, ...p.command, ...p.hand.cards, ...p.library.known, ...battlefieldCards(p)]);
     return { ...cardsPanel, cards: all.filter((c) => ids.has(c.iid)) };
   }, [cardsPanel, view]);
 
@@ -108,6 +113,16 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   };
 
   const others = seatOrderFrom(view, me);
+  const myDerived = useMemo(() => (mePlayer ? deriveFor(mePlayer, printings) : null), [mePlayer, printings]);
+  const highlighted = useMemo(() => new Set(view.pendingTriggers.map((t) => t.iid)), [view.pendingTriggers]);
+  // For the zoom view: derived stats + attachments of whichever battlefield the card sits on.
+  const zoomExtras = useMemo(() => {
+    if (!zoom || zoom.zone.kind !== "battlefield") return { derived: undefined, attachments: [] as ViewCard[] };
+    const holder = view.players[zoom.zone.owner];
+    if (!holder) return { derived: undefined, attachments: [] as ViewCard[] };
+    const d = deriveFor(holder, printings);
+    return { derived: d.cards.get(zoom.iid), attachments: battlefieldCards(holder).filter((c) => c.attachedTo === zoom.iid) };
+  }, [zoom, view, printings]);
   const active = view.players[view.activePlayer];
   const isMyTurn = me === view.activePlayer;
   const canAct = Boolean(mePlayer && !mePlayer.conceded && view.phase !== "ended");
@@ -121,7 +136,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   if (sheet && me) {
     if (sheet.kind === "card") {
       const live = Object.values(view.players)
-        .flatMap((p) => [...p.graveyard, ...p.exile, ...p.command, ...p.hand.cards, ...p.library.known, ...p.battlefield.lands, ...p.battlefield.creatures, ...p.battlefield.other])
+        .flatMap((p) => [...p.graveyard, ...p.exile, ...p.command, ...p.hand.cards, ...p.library.known, ...battlefieldCards(p)])
         .find((c) => c.iid === sheet.card.iid);
       if (live) {
         const owner = view.players[live.zone.owner];
@@ -136,6 +151,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       sheetView = <ActionSheet title={p.id === me ? "Your counters" : `${p.name}'s counters`} subtitle={`${p.life} life`} actions={playerActions(ctx, p)} onClose={closeSheet} />;
     } else if (sheet.kind === "dice") {
       sheetView = <ActionSheet title="Dice and coins" subtitle="Results go to the log" actions={diceActions(ctx)} onClose={closeSheet} />;
+    } else if (sheet.kind === "anthems") {
+      const p = view.players[sheet.player.id] ?? sheet.player;
+      sheetView = <ActionSheet title={p.id === me ? "Anthems on your creatures" : `Anthems on ${p.name}'s creatures`} subtitle="Detected from card text; hide conditional ones, add what the parser misses" actions={anthemActions(ctx, p)} onClose={closeSheet} />;
     }
   }
 
@@ -200,8 +218,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
                   <span className="opp-meta">
                     <span title="Hand">H{p.hand.count}</span>
                     <span title="Library">L{p.library.count}</span>
-                    <span title="Battlefield">B{p.battlefield.lands.length + p.battlefield.creatures.length + p.battlefield.other.length}</span>
+                    <span title="Battlefield">B{battlefieldCards(p).length}</span>
                     {p.counters.poison ? <span className="is-poison">{p.counters.poison}p</span> : null}
+                    <ManaSummary player={p} />
                   </span>
                 </button>
               );
@@ -225,6 +244,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
                 </button>
               </>
             )}
+            {mePlayer && <ManaBank player={mePlayer} dispatch={sock.dispatch} disabled={!canAct} />}
             <button className="btn btn-small menu-btn" onClick={() => setShowMenu(true)} aria-label="Menu">
               &#8942;
             </button>
@@ -233,15 +253,18 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
         {/* ---- middle: my battlefield ---- */}
         <div className="table-mid">
-          {mePlayer ? (
-            (["lands", "creatures", "other"] as const).map((row) => (
-              <DropRow key={row} id={`row:${row}`} className="bf-row">
-                <span className="row-label">{ROW_LABEL[row]}</span>
-                {mePlayer.battlefield[row].map((c) => (
-                  <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={holdCard} draggable={canAct} attached={Boolean(c.attachedTo)} />
-                ))}
-              </DropRow>
-            ))
+          {mePlayer && myDerived ? (
+            <Battlefield
+              player={mePlayer}
+              printings={printings}
+              derived={myDerived}
+              onTap={tapCard}
+              onHold={holdCard}
+              draggable={canAct}
+              droppable={canAct}
+              highlighted={highlighted}
+              onAnthems={() => setSheet({ kind: "anthems", player: mePlayer })}
+            />
           ) : (
             <div className="spectating">
               <p className="muted">You are watching. Tap a player above to see their battlefield.</p>
@@ -288,6 +311,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
         <p className="table-notice">Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards. Card data and images courtesy of Scryfall.</p>
 
+        {me && canAct && <TriggersPanel triggers={view.pendingTriggers} me={me} dispatch={sock.dispatch} />}
         {sock.error && <div className="toast">{sock.error}</div>}
         {sock.status !== "open" && <div className="toast is-warn">{sock.status === "reconnecting" ? "Reconnecting..." : sock.status}</div>}
       </div>
@@ -336,8 +360,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       )}
 
       {sheetView}
-      {dialog && <DialogView dialog={dialog} onClose={() => setDialog(null)} />}
-      {zoom && <CardZoom card={zoom} printings={printings} onClose={() => setZoom(null)} />}
+      {dialogState && <DialogView key={dialogState.key} dialog={dialogState.d} onClose={() => setDialog(null)} />}
+      {zoom && <CardZoom card={zoom} printings={printings} derived={zoomExtras.derived} attachments={zoomExtras.attachments} onClose={() => setZoom(null)} />}
       {liveCardsPanel && (
         <Panel title={liveCardsPanel.title} {...(liveCardsPanel.subtitle ? { subtitle: liveCardsPanel.subtitle } : {})} onClose={() => setCardsPanel(null)} wide>
           {liveCardsPanel.follow === "library" && me && (
@@ -360,7 +384,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
         </Panel>
       )}
       {opponent && view.players[opponent] && (
-        <OpponentPanel player={view.players[opponent]!} view={view} printings={printings} me={me} onClose={() => setOpponent(null)} onTap={tapCard} onHold={holdCard} onShowCards={showCards} onPlayerSheet={(p) => setSheet({ kind: "player", player: p })} />
+        <OpponentPanel player={view.players[opponent]!} view={view} printings={printings} me={me} onClose={() => setOpponent(null)} onTap={tapCard} onHold={holdCard} onShowCards={showCards} onPlayerSheet={(p) => setSheet({ kind: "player", player: p })} onAnthems={(p) => setSheet({ kind: "anthems", player: p })} highlighted={highlighted} />
       )}
       {showLog && (
         <LogPanel
