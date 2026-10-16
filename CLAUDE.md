@@ -717,6 +717,43 @@ encoding. `--mana-W/U/B/R/G/C` in `styles.css` match the mana-dot hues, with whi
 nudged per theme so bars stay visible on the panel surface. Bar width animates only under
 `prefers-reduced-motion: no-preference`.
 
+## Admin overview (owner only)
+
+`/admin` (nav link only for the owner; others see "Owner only") shows who is on the platform and
+who is using it. `GET /api/admin/stats?sort=lastSeen|created|decks|games&q=&limit=&refresh=1`
+and `GET /api/admin/users/:id` sit behind `[requireUser, requireOwner]` (401 signed out, 403
+otherwise) in `server/src/routes/admin.ts`; shapes in `shared/src/admin.ts`; page in
+`client/src/pages/AdminPage.tsx` + `client/src/admin.css`; tests in `routes/admin.test.ts`.
+Everything is computed on request from existing tables (no migration) into a 60 s in-memory
+snapshot; `online` and "online now" are re-evaluated per request. Users with `is_agent = 1` are
+excluded from every people count. No game state is read: nothing here can leak hidden cards.
+
+What each number means and where it comes from:
+
+- **Players**: `users` rows (agents excluded); "with email" = `email` set, "device only" = null;
+  owners = `is_owner`.
+- **Last seen / active 24 h, 7 d, 30 d**: the later of `users.last_seen_at` and the newest
+  `sessions.last_seen_at` (bumped at most hourly by `sessionFromToken`).
+- **Online now**: connected to a live table (`RoomManager.tablesOf`), or heard from in the last
+  5 minutes (`Presence.seenWithin`, `ADMIN_ONLINE_MS`), or last seen within 5 minutes.
+- **Decks** = `decks`; **in the library** = `library_decks`; **submissions** = `library_submissions`
+  by status.
+- **Tables created** = `rooms.created_at` in the window; **games started** = `room_events` rows of
+  type `GameStarted` (`ts`) in the window.
+- **Agent games / spend** = distinct `agent_runs.room_id` and `sum(cost_usd)` for runs with
+  `started_at` in the last 30 days.
+- **Sign-ups per week** = `users.created_at` by Monday-based UTC week, 12 weeks ending now.
+  **Active players per week** = players with any stored timestamp in that week (created, last seen,
+  session created/seen, deck created/updated, table created, submission created, a `room_events`
+  row they authored). It is a lower bound: last-seen columns only keep the latest visit.
+- **Per player**: devices = `sessions` rows; decks; submissions by status; games played = distinct
+  rooms where they hold `room_members.role = 'player'` and the room has a `GameStarted` event;
+  games hosted = such rooms with `rooms.host_user_id` = them (the host role moves when the host
+  leaves); friends = `friendships` rows from them. Expanding a row loads that player's decks (with
+  the library bracket when `library_decks.source_key = deck:<id>` exists) and submission history.
+- Filter `q` matches the display name or email (case-insensitive); `limit` defaults to 100, max 500;
+  the CSV is built client-side from the rows shown.
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
@@ -734,5 +771,6 @@ nudged per theme so bars stay visible on the panel surface. Bar width animates o
    table invites, notification bell, agent deck queue). **(done)**
 9. Deck statistics panel beside Bracket (mana curve, pips, sources vs pips, breakdowns,
    functional counts), pure computation with an in-memory cache. **(done)**
+9b. Owner-only Admin overview at `/admin` (who is on the platform, who is active). **(done)**
 10. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority),
     browser push notifications (see Phase 8), password reset once there is an email provider.
