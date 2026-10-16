@@ -38,6 +38,8 @@ export const config = {
   clientDist: path.resolve(env("CLIENT_DIST", path.join(serverRoot, "../client/dist"))),
   /** Drizzle SQL migrations folder. */
   migrationsDir: path.resolve(env("MIGRATIONS_DIR", path.join(serverRoot, "drizzle"))),
+  /** Hand-maintained bracket data (the Game Changers list). */
+  bracketDataDir: path.resolve(env("BRACKET_DATA_DIR", path.join(serverRoot, "data", "brackets"))),
 } as const;
 
 export function ensureDataDirs(): void {

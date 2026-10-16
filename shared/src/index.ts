@@ -14,3 +14,4 @@ export * from "./settings.js";
 export * from "./game/sections.js";
 export * from "./game/effects.js";
 export * from "./game/triggers.js";
+export * from "./analysis.js";
