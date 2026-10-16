@@ -1393,7 +1393,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 /* Equal deck frames keep the collection steady with long names and partner commanders. */
 .deck-grid { grid-auto-rows: 1fr; align-items: stretch; }
 .deck-grid > li { display: flex; min-width: 0; }
-.deck-grid .deck-tile { display: grid; grid-template-rows: auto minmax(3em, auto) auto; align-content: start; width: 100%; height: 100%; min-width: 0; }
+.deck-grid .deck-tile { display: grid; grid-template-rows: auto minmax(3em, auto) auto 1fr; align-content: start; width: 100%; height: 100%; min-width: 0; }
 .deck-tile-art { aspect-ratio: 63 / 88; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
 .deck-tile-art .card-image, .deck-tile-art .deck-tile-blank { width: 100%; flex: 0 1 100%; }
 .deck-tile-art.n2 .card-image { width: calc(50% - 3px); flex-basis: calc(50% - 3px); }
@@ -1427,3 +1427,26 @@ body:has(.deck-page[data-realm="forest"]) { --realm-position: 0%; }
 body:has(.deck-page[data-realm="moon"]) { --realm-position: 50%; }
 body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
 .search-page .page-intro:not(.is-illustrated)::before { background-image: linear-gradient(90deg, var(--bg) 15%, var(--bg) 55%, transparent), url('/art/alien-plane.jpg'); }
+
+/* Collection comparison: the same analysis and pip counts as the deck detail. */
+.deck-collection-controls { margin: 12px 0 24px; padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--glass, var(--bg-elev)); backdrop-filter: blur(18px); }
+.deck-collection-fields { display: flex; align-items: end; flex-wrap: wrap; gap: 14px 22px; }
+.deck-collection-fields label { display: grid; gap: 6px; font-size: .8rem; font-weight: 600; min-width: 190px; }
+.deck-collection-fields select { width: 100%; min-height: 44px; padding: 10px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-elev); color: var(--fg); font: inherit; font-weight: 400; }
+.deck-collection-fields select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.deck-collection-fields > span { padding-bottom: 10px; }
+.deck-collection-controls p { margin: 12px 0 0; }
+.deck-tile-metrics { align-self: end; display: flex; flex-direction: column; align-items: start; gap: 9px; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; min-height: 140px; }
+.deck-bracket { font-size: .75rem; font-weight: 700; letter-spacing: .03em; padding: 5px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-elev); }
+.deck-pip-total { font-size: .85rem; }
+.deck-pip-total strong { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.deck-pip-breakdown { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: .7rem; font-variant-numeric: tabular-nums; }
+.deck-pip-breakdown > span { display: inline-flex; align-items: center; gap: 4px; }
+.deck-pip-breakdown i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #8888; }
+@media (max-width: 520px) {
+  .deck-collection-controls { padding: 12px; }
+  .deck-collection-fields { gap: 12px; }
+  .deck-collection-fields label { min-width: 0; flex: 1 1 140px; }
+  .deck-collection-fields > span { flex-basis: 100%; padding: 0; }
+  .deck-bracket { font-size: .68rem; padding: 5px 6px; }
+}

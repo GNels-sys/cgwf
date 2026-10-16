@@ -327,3 +327,11 @@ Screenshots and the measured geometry are in `design-previews/deck-scenes/`:
 [Phone collection](design-previews/deck-scenes/decks-portrait-dark.jpg),
 [Selected deck](design-previews/deck-scenes/selected-deck-desktop-dark.jpg), and
 [Alien-plane card results](design-previews/deck-scenes/card-results-desktop-dark.jpg).
+
+## Deck collection comparison — 2026-10-16
+
+Deck tiles now show the existing analysis engine's suggested bracket (B1–B5), plus the exact mana pip counts from the statistics endpoint. Colored/colorless pips are totaled and broken down using plain labeled color dots; generic mana is shown separately. Hybrid fractional counts are preserved. The helper text distinguishes mana requirements from a power score.
+
+A frosted collection toolbar filters brackets with per-bracket counts, and sorts by recent update, bracket ascending/descending, pip total descending, or deck name. Unavailable values stay last in numeric sorts. Pending analysis, unavailable values, empty filtered results, and retry are explicit. Analysis requests are paced to the existing 30/minute limit; short-lived, versioned, per-user in-memory caching avoids unnecessary repeat requests. Deck tiles remain equal-sized, and scenery follows the stable deck ID through sorting/filtering.
+
+Validation: typecheck, all 197 tests (including four new collection sorting tests), production build, and mocked browser review at 375×812, 812×375, and 1440×1000 in both themes. Browser checks cover B2/B3/B4 filters, empty brackets, bracket/pip/name sorts, fractional pips, equal tile dimensions, stable scenery, and navigation. A separate phone check exercises partial analysis failure and successful retry. Screenshots and reports: `docs/design-previews/deck-brackets/`.
