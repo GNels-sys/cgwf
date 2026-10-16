@@ -83,9 +83,10 @@ bounded edit distance.
 
 - Identity: `POST /api/me/register` creates a user and returns a device token once; the client
   keeps it in localStorage (`cgwf.token`) and sends `Authorization: Bearer`. The server stores only
-  the SHA-256 hash (`users.device_token_hash`). `requireUser` in `server/src/auth.ts` guards
-  routes; rate limits key on the user when signed in, else the IP.
-- Tables: `users`, `decks`, `deck_cards` (printing id + quantity + board + category + position).
+  the SHA-256 hash (since Phase 5 in `sessions.token_hash`, one row per device). `requireUser` in
+  `server/src/auth.ts` guards routes; rate limits key on the user when signed in, else the IP.
+- Tables: `users`, `sessions`, `decks`, `deck_cards` (printing id + quantity + board + category +
+  position).
   Boards: main | commander | sideboard | maybeboard | companion. Format column kept, "commander" only.
 - Parser: `shared/src/deck/parse.ts` (pure text -> lines/boards/tags/markers); fixtures for the
   five sites in `shared/src/deck/fixtures.ts`. Resolution against card data lives in
@@ -100,7 +101,8 @@ bounded edit distance.
   commander; categories with `includedInDeck=false` = maybeboard). Moxfield's API returns 403 to
   non-browser clients, so Moxfield users paste the text export.
 - Client routes: `/` decks, `/decks/new` import (paste or Archidekt link -> review/fix -> save),
-  `/decks/:id`, `/cards` search, `/me` profile. `RequireUser` shows the first-run profile form.
+  `/decks/:id`, `/cards` search, `/me` profile, `/signup`, `/signin`. `RequireUser` shows the
+  first-run profile form.
 
 ## The game (Phase 3)
 
@@ -254,6 +256,54 @@ bounded edit distance.
 - Touch targets are 44 px (chips, life buttons, close buttons, log lines, turn buttons); the table
   hides the site header/footer via `body.in-table`; `body { overflow-x: clip }`.
 
+## Accounts and the owner flag (Phase 5)
+
+- **Model.** Every visitor is still a device-only profile first (name + avatar, ten seconds, no
+  password). An account is the same `users` row with `email` (lower-cased, unique) and
+  `password_hash` filled in; nothing moves. Tokens live in `sessions` (id, user_id, token_hash,
+  device label from the User-Agent, created_at, last_seen_at), so one account can be signed in on
+  several devices and each one can be signed out on its own. `req.user` and `req.session` are set
+  by `requireUser`; the WebSocket uses `userFromToken`.
+- **Passwords** (`server/src/password.ts`): Node's built-in `crypto.scrypt` (N=16384, r=8, p=1,
+  16-byte salt, 64-byte key) in a self-describing record `scrypt$N$r$p$salt$hash`, verified with
+  `timingSafeEqual`; 8-128 characters. Sign-in verifies against a dummy record when the email is
+  unknown and always answers "email or password is wrong". **No email verification and no password
+  reset in this phase** (no email provider): the sign-up form says so.
+- **Routes:** `POST /api/auth/signup` {email, password} (needs the device token; 409 if the
+  profile already has an account or the email is taken), `POST /api/auth/signin` -> {token, user}
+  (new session; 20 per 15 min per IP), `POST /api/auth/password` {currentPassword, newPassword}
+  (drops every other session), `GET /api/me/sessions`, `DELETE /api/me/sessions/:id` (one device),
+  `DELETE /api/me/sessions` (everywhere), `POST /api/me/owner-claim` {code}. `GET /api/me` now
+  returns `email` (null for device-only) and `isOwner`.
+- **Collisions, kept simple:** signing in on a device that already has a device-only profile
+  REPLACES that identity on the device after a confirm dialog; the orphaned profile and its decks
+  stay on the server under it (reachable again only by its old token, which the client has
+  discarded). The sign-in page points the visitor to "add an email and password" instead when
+  that is what they want. A device-only profile cannot sign up with an email that is in use.
+- **Owner flag:** `users.is_owner`, granted ONLY by `POST /api/me/owner-claim` with a code that
+  matches the `OWNER_CLAIM_CODE` Fly secret (`secretsEqual`, constant time). Needs an account (not
+  a device-only profile), 5 attempts per hour per client plus 30 per hour globally, every attempt
+  logged at warn with user id, email, ip and result. A successful claim moves the flag (one
+  owner). The owner's email (`OWNER_EMAIL`, nelson.george.edward@gmail.com) is recorded in config
+  for the record only and never grants anything. `requireOwner(handle)` in `server/src/auth.ts` is
+  the preHandler for owner-only routes (401 signed out, 403 otherwise); Phase 7 builds on it.
+- **Migration** (0004 + 0005): 0004 creates `sessions`, adds `is_owner` and copies every
+  `users.device_token_hash` into a session row labelled "Earlier device"; 0005 drops the column.
+  `server/src/routes/auth.test.ts` builds a pre-Phase-5 database from migrations 0000-0003 and
+  proves the old token still works.
+- **Client:** `/signup` (wrapped in `RequireUser`, so a brand-new visitor does name + avatar
+  first), `/signin`, and the Account section of `/me` (prompt to create an account, signed-in
+  devices with Sign out, Sign out everywhere, Change password, owner code field + Owner badge).
+  `useUser()` exposes `signUp`, `signIn`, `signOut` (deletes this device's session),
+  `signOutEverywhere`, `refresh`.
+- **Later upgrades, where they plug in:** email verification = add `users.email_verified_at` +
+  a `verification_tokens` table and a mail sender behind an env flag, send on signup, and gate
+  nothing until the owner decides what verification should unlock. Password reset = the same
+  token table + a `/reset/:token` page. Passkeys = a `webauthn_credentials` table (user_id,
+  credential_id, public_key, counter) and two route pairs (register options/verify, login
+  options/verify) that end in `createSession`; `@simplewebauthn/server` is the boring choice.
+  Nothing else changes because every sign-in path only ever produces a session.
+
 ### Testing alone
 
 `node scripts/seed-field.mjs <base-url> <code> <token> "Lotus Cobra" "Rancor" ...` pulls named
@@ -272,4 +322,8 @@ https://cgwf.fly.dev too. The Vite proxy needs `ws: true` for `/api` (already se
 3b. Battlefield sections + assisted bookkeeping (attachment effects, anthems, triggers, mana). **(done)**
 4. Polish: token finder, silent undo, sentence log, card zoom, rematch, personalization
    (playmats, sleeves, uploads, themes, layout), animations, accessibility. **(done)**
-5. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority).
+5. Accounts (email + password on top of device profiles), multi-device sessions, owner flag
+   with a one-time claim code. **(done)**
+6. Deck analysis, brackets, agent deck library (parallel session).
+7. LLM opponents, owner-only (builds on `requireOwner`).
+8. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority).
