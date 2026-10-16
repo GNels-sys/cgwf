@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { isArchetypeTag, isBracket, type LibraryDeckDetail, type LibraryListResponse, type LibraryPatchRequest } from "@cgwf/shared";
+import { requireOwner, requireUser } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
 import { deckCards, decks } from "../db/schema.js";
-import { requireOwner } from "../library/ownerGate.js";
 import type { PreconImporter } from "../library/precons.js";
 import type { LibraryEntry, LibraryService } from "../library/service.js";
 
@@ -27,7 +27,8 @@ interface Deps {
  */
 export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
   const { handle, library, precons } = deps;
-  const owner = requireOwner(handle);
+  // requireUser first so req.user is set; requireOwner then checks users.is_owner (Phase 5).
+  const owner = [requireUser(handle), requireOwner(handle)];
 
   app.get<{ Querystring: { bracket?: string; tag?: string; q?: string; source?: string; agent?: string } }>("/api/library", { preHandler: owner }, async (req): Promise<LibraryListResponse> => {
     const bracket = Number(req.query.bracket);

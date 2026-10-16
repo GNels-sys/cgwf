@@ -105,12 +105,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
-/**
- * Owner check for admin-only UI (the server enforces it; this only hides links).
- * Phase 5 adds `isOwner` to the shared User type; until that merge the field is read loosely.
- */
+/** Owner check for admin-only UI (the server enforces it with requireOwner; this only hides links). */
 export function isOwner(user: User | null): boolean {
-  return Boolean(user && (user as { isOwner?: boolean }).isOwner);
+  return Boolean(user?.isOwner);
 }
 
 export function useUser(): UserState {

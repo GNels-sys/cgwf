@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
@@ -10,6 +11,7 @@ process.env.DATA_DIR = tmp;
 process.env.SKIP_AUTO_INGEST = "1";
 
 const { buildApp } = await import("../app.js");
+const { users } = await import("../db/schema.js");
 const { MTGJSON_DECK_LIST_URL, MTGJSON_USER_AGENT } = await import("./precons.js");
 const { SPELLBOOK_URL } = await import("../analysis/spellbook.js");
 const { THORACLE_VARIANT } = await import("../analysis/fixtures.js");
@@ -75,13 +77,13 @@ describe("deck library (owner only)", () => {
     const reg = await ctx.app.inject({ method: "POST", url: "/api/me/register", payload: { displayName: "Owner", avatar: "dragon", color: "gold" } });
     const owner = reg.json() as RegisterResponse;
     ownerToken = owner.token;
-    process.env.CGWF_OWNER_PLACEHOLDER_USER_ID = owner.user.id;
+    // Grant the owner flag directly (the claim-code flow is covered by auth.test.ts).
+    ctx.handle.db.update(users).set({ isOwner: true }).where(eq(users.id, owner.user.id)).run();
     const reg2 = await ctx.app.inject({ method: "POST", url: "/api/me/register", payload: { displayName: "Guest", avatar: "owl", color: "jade" }, remoteAddress: "10.2.2.2" });
     otherToken = (reg2.json() as RegisterResponse).token;
   });
 
   afterAll(async () => {
-    delete process.env.CGWF_OWNER_PLACEHOLDER_USER_ID;
     await ctx.app.close();
     fs.rmSync(tmp, { recursive: true, force: true });
   });

@@ -43,6 +43,13 @@
       "when": 1792132707938,
       "tag": "0005_spicy_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792134518903,
+      "tag": "0006_wakeful_puff_adder",
+      "breakpoints": true
     }
   ]
 }
