@@ -8,3 +8,4 @@ client/dev-dist
 *.md
 !README.md
 .github
+**/*.tsbuildinfo
