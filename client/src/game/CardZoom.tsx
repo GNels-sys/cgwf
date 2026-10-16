@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { hasBackFace, type ViewCard } from "@cgwf/shared";
+import { hasBackFace, type PlayerView, type ViewCard } from "@cgwf/shared";
 import { CardImage } from "../components/CardImage";
 import { ManaCost, OracleText } from "../components/ManaCost";
+import type { SleeveStyle } from "./look";
 import { imageFace, nameOf, printingOf, type Printings } from "./model";
 
-/** Big view of one card from the data we already have (no API round trip). */
-export function CardZoom({ card, printings, onClose }: { card: ViewCard; printings: Printings; onClose: () => void }) {
+/**
+ * Big view of one card from the data we already have (no API round trip):
+ * full image, oracle text for every face, counters and where it sits.
+ */
+export function CardZoom({ card, printings, view, sleeve, onClose }: { card: ViewCard; printings: Printings; view?: PlayerView; sleeve?: SleeveStyle | undefined; onClose: () => void }) {
   const printing = printingOf(card, printings);
   const [face, setFace] = useState<0 | 1>(imageFace(card, printing));
   useEffect(() => {
@@ -16,6 +20,10 @@ export function CardZoom({ card, printings, onClose }: { card: ViewCard; printin
 
   const twoFaced = printing ? hasBackFace(printing.layout) : false;
   const faces = printing?.faces.length ? printing.faces : printing ? [{ name: printing.name, manaCost: printing.manaCost, typeLine: printing.typeLine, oracleText: printing.oracleText, power: printing.power, toughness: printing.toughness, loyalty: printing.loyalty, defense: printing.defense }] : [];
+  const owner = view?.players[card.owner]?.name;
+  const controller = view?.players[card.zone.owner]?.name;
+  const where = `${card.zone.kind === "battlefield" ? `battlefield (${card.zone.row ?? "other"})` : card.zone.kind}${controller ? `, ${controller}` : ""}${owner && owner !== controller ? ` (owned by ${owner})` : ""}`;
+  const status = [card.tapped ? "tapped" : null, card.faceDown ? "face down" : null, card.isToken ? "token" : null, card.isCommander ? "commander" : null].filter(Boolean).join(", ");
 
   return (
     <div className="modal-backdrop zoom-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label={nameOf(card, printings)}>
@@ -24,7 +32,7 @@ export function CardZoom({ card, printings, onClose }: { card: ViewCard; printin
           {printing ? (
             <CardImage id={printing.id} name={printing.name} size="normal" face={face} loading="eager" />
           ) : (
-            <div className="tile-back is-custom zoom-custom">
+            <div className={`tile-back zoom-custom ${card.custom ? "is-custom" : (sleeve?.className ?? "sleeve-classic")}`} style={card.custom ? undefined : sleeve?.style}>
               <strong>{card.custom?.name ?? "Face-down card"}</strong>
               {card.custom && (
                 <>
@@ -45,9 +53,9 @@ export function CardZoom({ card, printings, onClose }: { card: ViewCard; printin
             </button>
           )}
         </div>
-        {printing && (
-          <div className="zoom-text">
-            {faces.map((f, i) => (
+        <div className="zoom-text">
+          {printing &&
+            faces.map((f, i) => (
               <section key={i} className={`card-face${twoFaced && i !== face ? " is-dim" : ""}`}>
                 <h2>
                   {f.name} <ManaCost cost={f.manaCost} size={14} />
@@ -63,16 +71,26 @@ export function CardZoom({ card, printings, onClose }: { card: ViewCard; printin
                 )}
               </section>
             ))}
-            {Object.keys(card.counters).length > 0 && (
-              <p className="muted small">
-                Counters:{" "}
-                {Object.entries(card.counters)
-                  .map(([k, v]) => `${v} ${k}`)
-                  .join(", ")}
-              </p>
-            )}
-          </div>
-        )}
+          {!printing && card.custom && (
+            <section className="card-face">
+              <h2>{card.custom.name}</h2>
+              <p className="type-line">{card.custom.typeLine}</p>
+              {card.custom.text && <OracleText text={card.custom.text} />}
+            </section>
+          )}
+          <p className="muted small zoom-where">
+            In {where}
+            {status ? ` - ${status}` : ""}
+          </p>
+          {Object.keys(card.counters).length > 0 && (
+            <p className="muted small">
+              Counters:{" "}
+              {Object.entries(card.counters)
+                .map(([k, v]) => `${v} ${k}`)
+                .join(", ")}
+            </p>
+          )}
+        </div>
         <button className="modal-close" onClick={onClose} aria-label="Close">
           &times;
         </button>

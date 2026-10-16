@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import type { CardSummary, Color, LogEntry, PlayerView, ViewCard, ViewPlayer, Row } from "@cgwf/shared";
-import { api } from "../api";
+import { useEffect, useRef } from "react";
+import type { LogEntry, PlayerView, ViewCard, ViewPlayer, Row, RoomInfo, RoomMember } from "@cgwf/shared";
+import { AVATAR_COLORS } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
-import { CardImage } from "../components/CardImage";
 import { Footer } from "../components/Footer";
-import type { RoomInfo } from "@cgwf/shared";
 import { CardTile } from "./CardTile";
+import { useMat, type SleeveStyle } from "./look";
 import { battlefieldCards, counterSummary, nameOf, totalCommanderDamage, type Printings } from "./model";
 
-/** Modal panels used by the table: zone viewer, opponent field, log, tokens, menu. */
+/** Modal panels used by the table: zone viewer, opponent field, log, menu. */
 
 function useEscape(onClose: () => void) {
   useEffect(() => {
@@ -18,11 +17,11 @@ function useEscape(onClose: () => void) {
   }, [onClose]);
 }
 
-export function Panel({ title, subtitle, onClose, children, wide = false }: { title: string; subtitle?: string | undefined; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
+export function Panel({ title, subtitle, onClose, children, wide = false, className = "" }: { title: string; subtitle?: string | undefined; onClose: () => void; children: React.ReactNode; wide?: boolean; className?: string }) {
   useEscape(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={`modal panel${wide ? " is-wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className={`modal panel${wide ? " is-wide" : ""}${className ? ` ${className}` : ""}`} role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
           <strong>{title}</strong>
           {subtitle && <span className="muted small">{subtitle}</span>}
@@ -36,13 +35,15 @@ export function Panel({ title, subtitle, onClose, children, wide = false }: { ti
   );
 }
 
-export function CardList({ cards, printings, onTap, onHold, empty = "Nothing here." }: { cards: ViewCard[]; printings: Printings; onTap: (c: ViewCard) => void; onHold: (c: ViewCard) => void; empty?: string }) {
+type SleeveOf = (ownerId: string) => SleeveStyle;
+
+export function CardList({ cards, printings, onTap, onHold, sleeveOf, empty = "Nothing here." }: { cards: ViewCard[]; printings: Printings; onTap: (c: ViewCard) => void; onHold: (c: ViewCard) => void; sleeveOf?: SleeveOf; empty?: string }) {
   if (cards.length === 0) return <p className="muted">{empty}</p>;
   return (
     <div className="card-list">
       {cards.map((c) => (
         <div key={c.iid} className="card-list-item">
-          <CardTile card={c} printings={printings} onTap={onTap} onHold={onHold} />
+          <CardTile card={c} printings={printings} onTap={onTap} onHold={onHold} sleeve={sleeveOf?.(c.owner)} />
           <span className="small">{nameOf(c, printings)}</span>
         </div>
       ))}
@@ -54,9 +55,11 @@ const ROW_LABEL: Record<Row, string> = { lands: "Lands", creatures: "Creatures",
 
 export function OpponentPanel({
   player,
+  member,
   view,
   printings,
   me,
+  sleeveOf,
   onClose,
   onTap,
   onHold,
@@ -64,9 +67,11 @@ export function OpponentPanel({
   onPlayerSheet,
 }: {
   player: ViewPlayer;
+  member: RoomMember | undefined;
   view: PlayerView;
   printings: Printings;
   me: string | null;
+  sleeveOf: SleeveOf;
   onClose: () => void;
   onTap: (c: ViewCard) => void;
   onHold: (c: ViewCard) => void;
@@ -74,8 +79,9 @@ export function OpponentPanel({
   onPlayerSheet: (p: ViewPlayer) => void;
 }) {
   const active = view.activePlayer === player.id;
+  const mat = useMat(member?.look);
   return (
-    <Panel title={player.name} subtitle={`${player.life} life${player.conceded ? " - conceded" : active ? " - active player" : ""}`} onClose={onClose} wide>
+    <Panel title={player.name} subtitle={`${player.life} life${player.conceded ? " - conceded" : active ? " - active player" : ""}`} onClose={onClose} wide className="opponent-panel">
       <div className="opp-stats">
         <span>Hand {player.hand.count}</span>
         <span>Library {player.library.count}</span>
@@ -103,23 +109,25 @@ export function OpponentPanel({
           </button>
         )}
       </div>
-      {player.hand.cards.length > 0 && (
-        <div className="opp-row">
-          <span className="row-label">Revealed</span>
-          {player.hand.cards.map((c) => (
-            <CardTile key={c.iid} card={c} printings={printings} onTap={onTap} onHold={onHold} />
-          ))}
-        </div>
-      )}
-      {(["lands", "creatures", "other"] as const).map((row) => (
-        <div key={row} className="opp-row">
-          <span className="row-label">{ROW_LABEL[row]}</span>
-          {player.battlefield[row].length === 0 && <span className="muted small">-</span>}
-          {player.battlefield[row].map((c) => (
-            <CardTile key={c.iid} card={c} printings={printings} onTap={onTap} onHold={onHold} attached={Boolean(c.attachedTo)} />
-          ))}
-        </div>
-      ))}
+      <div className={`opp-field mat ${mat.className}`} style={mat.style}>
+        {player.hand.cards.length > 0 && (
+          <div className="opp-row">
+            <span className="row-label">Revealed</span>
+            {player.hand.cards.map((c) => (
+              <CardTile key={c.iid} card={c} printings={printings} onTap={onTap} onHold={onHold} sleeve={sleeveOf(c.owner)} />
+            ))}
+          </div>
+        )}
+        {(["lands", "creatures", "other"] as const).map((row) => (
+          <div key={row} className="opp-row">
+            <span className="row-label">{ROW_LABEL[row]}</span>
+            {player.battlefield[row].length === 0 && <span className="muted small">-</span>}
+            {player.battlefield[row].map((c) => (
+              <CardTile key={c.iid} card={c} printings={printings} onTap={onTap} onHold={onHold} attached={Boolean(c.attachedTo)} sleeve={sleeveOf(c.owner)} />
+            ))}
+          </div>
+        ))}
+      </div>
       {Object.keys(player.commanderDamage).length > 0 && (
         <p className="muted small">
           Commander damage taken:{" "}
@@ -137,149 +145,46 @@ export function OpponentPanel({
   );
 }
 
-export function LogPanel({ log, canRevert, onRevert, onClose }: { log: LogEntry[]; canRevert: boolean; onRevert: (seq: number) => void; onClose: () => void }) {
+const TURN_LINE = /^(Turn \d+:|Everyone kept\.|Game started)/;
+
+/**
+ * The game log as sentences. Turn changes are drawn as separators, each line
+ * carries the actor's colour, and tapping a line (when allowed) rewinds to it.
+ */
+export function LogPanel({ log, members, canRevert, onRevert, onClose }: { log: LogEntry[]; members: RoomMember[]; canRevert: boolean; onRevert: (seq: number) => void; onClose: () => void }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
   }, [log.length]);
   const lastSeq = log.at(-1)?.seq ?? 0;
+  const colorOf = (actor: string): string | null => {
+    const m = members.find((x) => x.userId === actor);
+    return m ? AVATAR_COLORS[m.color] : null;
+  };
   return (
     <Panel title="Game log" subtitle={canRevert ? "Tap a line to rewind the game to just after it" : undefined} onClose={onClose}>
+      {log.length === 0 && <p className="muted">Nothing has happened yet.</p>}
       <ol className="log-list">
-        {log.map((l, i) => (
-          <li key={`${l.seq}-${i}`}>
-            <button className="log-line" disabled={!canRevert || l.seq >= lastSeq} onClick={() => onRevert(l.seq)}>
-              <span className="log-seq">#{l.seq}</span>
-              <span>{l.text}</span>
-            </button>
-          </li>
-        ))}
+        {log.map((l, i) => {
+          const turn = TURN_LINE.test(l.text);
+          const color = colorOf(l.actor);
+          return (
+            <li key={`${l.seq}-${i}`} className={turn ? "is-turn" : ""}>
+              <button className="log-line" disabled={!canRevert || l.seq >= lastSeq} onClick={() => onRevert(l.seq)} aria-label={`${l.text}${canRevert && l.seq < lastSeq ? ". Rewind to here" : ""}`}>
+                <span className="log-dot" style={color ? { background: color } : undefined} aria-hidden="true" />
+                <span className="log-text">{l.text}</span>
+                <span className="log-seq">#{l.seq}</span>
+              </button>
+            </li>
+          );
+        })}
         <div ref={end} />
       </ol>
     </Panel>
   );
 }
 
-const COLORS: Color[] = ["W", "U", "B", "R", "G"];
-
-export function TokenPanel({ onCreate, onClose }: { onCreate: (payload: { printingId: string | null; custom: { name: string; typeLine: string; power: string | null; toughness: string | null; colors: Color[]; text: string } | null; count: number; row: Row }) => void; onClose: () => void }) {
-  const [mode, setMode] = useState<"search" | "custom">("search");
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<CardSummary[]>([]);
-  const [count, setCount] = useState(1);
-  const [row, setRow] = useState<Row>("creatures");
-  const [name, setName] = useState("");
-  const [typeLine, setTypeLine] = useState("Creature");
-  const [pt, setPt] = useState("1/1");
-  const [colors, setColors] = useState<Color[]>([]);
-  const [text, setText] = useState("");
-
-  useEffect(() => {
-    if (mode !== "search" || q.trim().length < 2) {
-      setResults([]);
-      return;
-    }
-    const ctl = new AbortController();
-    const t = setTimeout(() => {
-      api
-        .search(q.trim(), true, ctl.signal)
-        .then((r) => setResults(r.results.filter((c) => c.isToken).slice(0, 24)))
-        .catch(() => {});
-    }, 200);
-    return () => {
-      clearTimeout(t);
-      ctl.abort();
-    };
-  }, [q, mode]);
-
-  const rowFor = (typeLineText: string): Row => (/Creature/.test(typeLineText) ? "creatures" : /Land/.test(typeLineText) ? "lands" : "other");
-
-  return (
-    <Panel title="Create tokens" onClose={onClose} wide>
-      <div className="row-between">
-        <div className="actions">
-          <button className={`chip${mode === "search" ? " is-selected" : ""}`} onClick={() => setMode("search")}>
-            Find a token
-          </button>
-          <button className={`chip${mode === "custom" ? " is-selected" : ""}`} onClick={() => setMode("custom")}>
-            Custom
-          </button>
-        </div>
-        <label className="inline-field small">
-          <span className="muted">How many</span>
-          <input type="number" inputMode="numeric" min={1} max={20} value={count} onChange={(e) => setCount(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} style={{ width: 64 }} />
-        </label>
-      </div>
-      {mode === "search" ? (
-        <>
-          <input className="token-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Token name: treasure, soldier, zombie..." autoFocus />
-          <div className="token-results">
-            {results.map((c) => (
-              <button key={c.id} className="token-result" onClick={() => onCreate({ printingId: c.id, custom: null, count, row: rowFor(c.typeLine) })}>
-                <CardImage id={c.id} name={c.name} size="small" />
-                <span className="small">{c.name}</span>
-                <span className="muted small">{c.typeLine.replace(/^Token /, "")}</span>
-              </button>
-            ))}
-            {q.trim().length >= 2 && results.length === 0 && <p className="muted small">No token by that name. Try the Custom tab.</p>}
-          </div>
-        </>
-      ) : (
-        <form
-          className="token-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!name.trim()) return;
-            const [power, toughness] = pt.includes("/") ? pt.split("/").map((s) => s.trim()) : [null, null];
-            onCreate({ printingId: null, custom: { name: name.trim(), typeLine: typeLine.trim() || "Token", power: power || null, toughness: toughness || null, colors, text: text.trim() }, count, row });
-          }}
-        >
-          <label className="field">
-            <span>Name</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} placeholder="Spirit" autoFocus />
-          </label>
-          <div className="two-up">
-            <label className="field">
-              <span>Type</span>
-              <input value={typeLine} onChange={(e) => setTypeLine(e.target.value)} maxLength={60} />
-            </label>
-            <label className="field">
-              <span>P/T</span>
-              <input value={pt} onChange={(e) => setPt(e.target.value)} maxLength={9} placeholder="1/1" />
-            </label>
-          </div>
-          <div className="field">
-            <span>Colours</span>
-            <div className="actions">
-              {COLORS.map((c) => (
-                <button key={c} type="button" className={`chip${colors.includes(c) ? " is-selected" : ""}`} onClick={() => setColors(colors.includes(c) ? colors.filter((x) => x !== c) : [...colors, c])}>
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-          <label className="field">
-            <span>Text (optional)</span>
-            <input value={text} onChange={(e) => setText(e.target.value)} maxLength={300} placeholder="Flying" />
-          </label>
-          <label className="field">
-            <span>Row</span>
-            <select value={row} onChange={(e) => setRow(e.target.value as Row)}>
-              <option value="creatures">Creatures</option>
-              <option value="other">Other</option>
-              <option value="lands">Lands</option>
-            </select>
-          </label>
-          <button className="btn btn-primary" type="submit" disabled={!name.trim()}>
-            Create {count > 1 ? `${count} tokens` : "token"}
-          </button>
-        </form>
-      )}
-    </Panel>
-  );
-}
-
-export function MenuPanel({ room, view, me, status, onClose, actions }: { room: RoomInfo; view: PlayerView; me: string | null; status: string; onClose: () => void; actions: Array<{ label: string; run: () => void; danger?: boolean; disabled?: boolean }> }) {
+export function MenuPanel({ room, view, me, status, onClose, actions }: { room: RoomInfo; view: PlayerView; me: string | null; status: string; onClose: () => void; actions: Array<{ label: string; run: () => void; danger?: boolean; disabled?: boolean; hint?: string | undefined }> }) {
   return (
     <Panel title={`Table ${room.code}`} subtitle={`Turn ${view.turn} - connection ${status}`} onClose={onClose}>
       <ul className="member-list">
@@ -289,8 +194,12 @@ export function MenuPanel({ room, view, me, status, onClose, actions }: { room: 
             <span>
               {m.name}
               {m.userId === me ? " (you)" : ""}
+              {m.userId === room.hostId ? <span className="muted small"> (host)</span> : null}
             </span>
-            <span className="muted small">{m.role === "player" ? (view.players[m.userId]?.conceded ? "conceded" : `seat ${(m.seat ?? 0) + 1}`) : "watching"}{m.online ? "" : " - offline"}</span>
+            <span className="muted small">
+              {m.role === "player" ? (view.players[m.userId]?.conceded ? "conceded" : `seat ${(m.seat ?? 0) + 1}`) : "watching"}
+              {m.online ? "" : " - offline"}
+            </span>
           </li>
         ))}
       </ul>
@@ -298,6 +207,7 @@ export function MenuPanel({ room, view, me, status, onClose, actions }: { room: 
         {actions.map((a) => (
           <button key={a.label} className={`sheet-action${a.danger ? " is-danger" : ""}`} disabled={a.disabled} onClick={a.run}>
             <span>{a.label}</span>
+            {a.hint && <small className="muted">{a.hint}</small>}
           </button>
         ))}
       </div>

@@ -7,6 +7,18 @@ CGwF is unofficial Fan Content permitted under the Fan Content Policy. Not appro
 Wizards. Portions of the materials used are property of Wizards of the Coast. (c) Wizards of the
 Coast LLC. Card data and images courtesy of [Scryfall](https://scryfall.com).
 
+## What it does
+
+- Import Commander decks (paste a list or an Archidekt link), with real card images.
+- Open a table, share a six-character code, seat up to four players plus spectators.
+- Play on a synced virtual table: hands and libraries stay hidden server-side, every action is
+  logged as a sentence, your own last action undoes silently, anyone can rewind from the log.
+- Find tokens from the Scryfall catalogue ("treasure", "2/2 zombie") or make a text-only one.
+- Personalize: playmat and card sleeves (presets or your own image, up to 2 MB, visible only to
+  your table), table theme, accent, light/dark interface, optional ambient sound, card size and
+  layout. Saved to your account.
+- Rematch from a finished table with the same seats and decks.
+
 ## Stack
 
 TypeScript everywhere. Server: Node 24 + Fastify + SQLite (better-sqlite3, Drizzle ORM).

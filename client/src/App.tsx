@@ -8,13 +8,16 @@ import { PlayPage } from "./pages/PlayPage";
 import { RoomPage } from "./pages/RoomPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SearchPage } from "./pages/SearchPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { SettingsProvider } from "./settings";
 import { UserProvider } from "./user";
 
 export function App() {
   return (
     <BrowserRouter>
       <UserProvider>
-        <div className="app-shell">
+        <SettingsProvider>
+          <div className="app-shell">
           <Header />
           <Routes>
             <Route path="/" element={<DecksPage />} />
@@ -24,10 +27,12 @@ export function App() {
             <Route path="/me" element={<ProfilePage />} />
             <Route path="/play" element={<PlayPage />} />
             <Route path="/room/:code" element={<RoomPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<DecksPage />} />
           </Routes>
           <Footer />
-        </div>
+          </div>
+        </SettingsProvider>
       </UserProvider>
     </BrowserRouter>
   );

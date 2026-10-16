@@ -3,19 +3,25 @@ import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { STEP_LABELS, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
+import { useSettings } from "../settings";
 import { cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
+import { setAmbient, stopAmbient } from "./ambient";
 import { CardTile } from "./CardTile";
 import { CardZoom } from "./CardZoom";
-import { LifeWidget } from "./LifeWidget";
+import { LifeTicks, LifeWidget, useLifeTicks } from "./LifeWidget";
+import { useMat, useSleeves, type Looks } from "./look";
 import { nameOf, seatOrderFrom, type Printings } from "./model";
-import { CardList, LogPanel, MenuPanel, OpponentPanel, Panel, TokenPanel } from "./Panels";
+import { CardList, LogPanel, MenuPanel, OpponentPanel, Panel } from "./Panels";
+import { SettingsPanel } from "./SettingsPanel";
 import { ActionSheet, DialogView, type Action, type Dialog } from "./Sheets";
 import type { RoomSocket } from "./socket";
+import { TokenFinder } from "./TokenFinder";
 
 /**
- * The table. Phone landscape first: opponents across the top, my battlefield
- * rows in the middle, hand + zones + life along the bottom. Every action goes
- * through the server as an event; this component only renders the view.
+ * The table. Phone landscape first: opponents across the top (or around the
+ * table), my battlefield rows on my playmat in the middle, hand + zones + life
+ * along the bottom (or top). Every action goes through the server as an event;
+ * this component only renders the view and applies the player's personalization.
  */
 
 type Sheet = { kind: "card"; card: ViewCard } | { kind: "library" } | { kind: "player"; player: ViewPlayer } | { kind: "dice" } | null;
@@ -38,17 +44,43 @@ function DropRow({ id, className, children }: { id: string; className: string; c
   );
 }
 
-function DropButton({ id, className, onClick, children }: { id: string; className?: string; onClick: () => void; children: React.ReactNode }) {
+function DropButton({ id, className, style, onClick, label, children }: { id: string; className?: string; style?: React.CSSProperties | undefined; onClick: () => void; label: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <button ref={setNodeRef} className={`zone-btn${className ? ` ${className}` : ""}${isOver ? " is-over" : ""}`} onClick={onClick}>
+    <button ref={setNodeRef} className={`zone-btn${className ? ` ${className}` : ""}${isOver ? " is-over" : ""}`} style={style} onClick={onClick} aria-label={label}>
       {children}
+    </button>
+  );
+}
+
+function OpponentChip({ p, member, active, side, size, onClick }: { p: ViewPlayer; member: RoomInfo["members"][number] | undefined; active: boolean; side: boolean; size: string; onClick: () => void }) {
+  const ticks = useLifeTicks(p.life);
+  const field = p.battlefield.lands.length + p.battlefield.creatures.length + p.battlefield.other.length;
+  return (
+    <button
+      className={`opp-chip is-${size}${active ? " is-active" : ""}${p.conceded ? " is-out" : ""}${member && !member.online ? " is-offline" : ""}${side ? " is-side" : ""}`}
+      onClick={onClick}
+      aria-label={`${p.name}, ${p.life} life, ${p.hand.count} in hand, ${p.library.count} in library, ${field} on the battlefield${active ? ", active player" : ""}${p.conceded ? ", conceded" : ""}. Open their battlefield`}
+    >
+      {member && <Avatar avatar={member.avatar} color={member.color} size={size === "small" ? 22 : size === "large" ? 34 : 26} />}
+      <span className="opp-name">{p.name}</span>
+      <span className="opp-life">
+        {p.life}
+        <LifeTicks ticks={ticks} />
+      </span>
+      <span className="opp-meta">
+        <span title="Hand">H{p.hand.count}</span>
+        <span title="Library">L{p.library.count}</span>
+        <span title="Battlefield">B{field}</span>
+        {p.counters.poison ? <span className="is-poison">{p.counters.poison}p</span> : null}
+      </span>
     </button>
   );
 }
 
 export function Table({ room, view, printings, sock }: { room: RoomInfo; view: PlayerView; printings: Printings; sock: RoomSocket }) {
   const navigate = useNavigate();
+  const { settings } = useSettings();
   const me = view.viewer;
   const mePlayer = me ? view.players[me] : undefined;
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -59,6 +91,35 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const [showLog, setShowLog] = useState(false);
   const [showTokens, setShowTokens] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [dismissedEnd, setDismissedEnd] = useState(false);
+  const wantRematch = useRef(false);
+
+  // Looks (playmat + sleeves) for everyone at the table.
+  const looks: Looks = useMemo(() => Object.fromEntries(room.members.map((m) => [m.userId, m.look])), [room.members]);
+  const sleeveOf = useSleeves(looks);
+  const myMat = useMat(me ? looks[me] : undefined);
+  const mySleeve = me ? sleeveOf(me) : null;
+
+  // The table takes the whole screen: hide the site chrome while it is mounted.
+  useEffect(() => {
+    document.body.classList.add("in-table");
+    return () => document.body.classList.remove("in-table");
+  }, []);
+
+  // Ambient sound follows the setting while a table is open.
+  useEffect(() => {
+    setAmbient(settings.ambient);
+    return () => stopAmbient();
+  }, [settings.ambient]);
+
+  // Rematch: the host navigates as soon as the new code arrives; others get a banner.
+  useEffect(() => {
+    if (room.nextCode && wantRematch.current) {
+      wantRematch.current = false;
+      navigate(`/room/${room.nextCode}`);
+    }
+  }, [room.nextCode, navigate]);
 
   const closeSheet = useCallback(() => setSheet(null), []);
   const showCards = useCallback((title: string, cards: ViewCard[], subtitle?: string) => setCardsPanel(subtitle ? { title, cards, subtitle } : { title, cards }), []);
@@ -110,7 +171,28 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const others = seatOrderFrom(view, me);
   const active = view.players[view.activePlayer];
   const isMyTurn = me === view.activePlayer;
-  const canAct = Boolean(mePlayer && !mePlayer.conceded && view.phase !== "ended");
+  const ended = view.phase === "ended";
+  const canAct = Boolean(mePlayer && !mePlayer.conceded && !ended);
+  const isHost = me !== null && room.hostId === me;
+
+  // ---- layout from settings ---------------------------------------------
+  const layout = settings.layout;
+  const around = layout.opponents === "around" && others.length >= 2;
+  const sideLeft = around ? others[0] : undefined;
+  const sideRight = around ? others[others.length - 1] : undefined;
+  const topOpponents = around ? others.slice(1, -1) : others;
+  const tableClass = [
+    "table",
+    `theme-${settings.theme}`,
+    `opp-${layout.opponentSize}`,
+    isMyTurn ? "is-my-turn" : "",
+    layout.compact ? "is-compact" : "",
+    layout.hand === "top" ? "hand-top" : "",
+    around ? "opp-around" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const tableStyle = { "--card-scale": layout.cardScale } as React.CSSProperties;
 
   // ---- mulligan overlay ------------------------------------------------
   const needBottom = mePlayer?.toBottom ?? 0;
@@ -149,68 +231,51 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       onSubmit: (n) => sock.dispatch({ type: "LifeChanged", payload: { player: p.id, delta: n } }),
     });
 
+  const concede = () =>
+    setDialog({ kind: "confirm", title: "Concede the game?", body: "You stay at the table as a spectator.", confirmLabel: "Concede", danger: true, onConfirm: () => sock.dispatch({ type: "PlayerConceded", payload: { player: me! } }) });
+  const leave = () =>
+    setDialog({
+      kind: "confirm",
+      title: "Leave the table?",
+      body: canAct ? "Leaving during a game concedes it. To come back later, just close the app instead." : undefined,
+      confirmLabel: "Leave",
+      danger: true,
+      onConfirm: () => {
+        sock.leave();
+        navigate("/play");
+      },
+    });
+  const rematch = () => {
+    wantRematch.current = true;
+    sock.send({ t: "rematch" });
+  };
+
   const menuActions: Action[] = [
     { label: "Game log", run: () => (setShowMenu(false), setShowLog(true)) },
+    { label: "Personalize", hint: "playmat, sleeves, layout", run: () => (setShowMenu(false), setShowSettings(true)) },
     { label: "Dice, coin, random opponent", run: () => (setShowMenu(false), setSheet({ kind: "dice" })), disabled: !canAct },
     { label: "Create tokens", run: () => (setShowMenu(false), setShowTokens(true)), disabled: !canAct },
-    { label: "Undo my last action", run: () => (setShowMenu(false), sock.send({ t: "undo" })), disabled: !canAct },
+    { label: "Undo my last action", hint: "only while nobody else has acted", run: () => (setShowMenu(false), sock.send({ t: "undo" })), disabled: !canAct },
     { label: "Untap all my permanents", run: () => (setShowMenu(false), sock.dispatch({ type: "UntapAll", payload: { player: me! } })), disabled: !canAct },
-    {
-      label: "Concede",
-      danger: true,
-      disabled: !canAct,
-      run: () => {
-        setShowMenu(false);
-        setDialog({ kind: "confirm", title: "Concede the game?", body: "You stay at the table as a spectator.", confirmLabel: "Concede", danger: true, onConfirm: () => sock.dispatch({ type: "PlayerConceded", payload: { player: me! } }) });
-      },
-    },
-    {
-      label: "Leave table",
-      danger: true,
-      run: () => {
-        setShowMenu(false);
-        setDialog({
-          kind: "confirm",
-          title: "Leave the table?",
-          body: canAct ? "Leaving during a game concedes it. To come back later, just close the app instead." : undefined,
-          confirmLabel: "Leave",
-          danger: true,
-          onConfirm: () => {
-            sock.leave();
-            navigate("/play");
-          },
-        });
-      },
-    },
+    ...(ended && isHost ? [{ label: "Rematch with the same decks", hint: "new game, same seats", run: () => (setShowMenu(false), rematch()) }] : []),
+    { label: "Concede", danger: true, disabled: !canAct, run: () => (setShowMenu(false), concede()) },
+    { label: "Leave table", danger: true, run: () => (setShowMenu(false), leave()) },
   ];
+
+  const renderChip = (p: ViewPlayer, side: boolean) => (
+    <OpponentChip key={p.id} p={p} member={room.members.find((m) => m.userId === p.id)} active={view.activePlayer === p.id} side={side} size={layout.opponentSize} onClick={() => setOpponent(p.id)} />
+  );
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className={`table${isMyTurn ? " is-my-turn" : ""}`}>
+      <div className={tableClass} style={tableStyle}>
         {/* ---- top: opponents + turn tracker ---- */}
         <div className="table-top">
-          <div className="opp-strip">
-            {others.map((p) => {
-              const member = room.members.find((m) => m.userId === p.id);
-              return (
-                <button key={p.id} className={`opp-chip${view.activePlayer === p.id ? " is-active" : ""}${p.conceded ? " is-out" : ""}${member && !member.online ? " is-offline" : ""}`} onClick={() => setOpponent(p.id)}>
-                  {member && <Avatar avatar={member.avatar} color={member.color} size={26} />}
-                  <span className="opp-name">{p.name}</span>
-                  <span className="opp-life">{p.life}</span>
-                  <span className="opp-meta">
-                    <span title="Hand">H{p.hand.count}</span>
-                    <span title="Library">L{p.library.count}</span>
-                    <span title="Battlefield">B{p.battlefield.lands.length + p.battlefield.creatures.length + p.battlefield.other.length}</span>
-                    {p.counters.poison ? <span className="is-poison">{p.counters.poison}p</span> : null}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <div className="opp-strip">{topOpponents.map((p) => renderChip(p, false))}</div>
           <div className="turn-bar">
             {view.phase === "mulligan" ? (
               <span className="turn-label">Mulligans</span>
-            ) : view.phase === "ended" ? (
+            ) : ended ? (
               <span className="turn-label">{view.winner ? `${view.players[view.winner]?.name} wins` : "Game over"}</span>
             ) : (
               <>
@@ -231,14 +296,17 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           </div>
         </div>
 
-        {/* ---- middle: my battlefield ---- */}
-        <div className="table-mid">
+        {around && sideLeft && <div className="table-side is-left">{renderChip(sideLeft, true)}</div>}
+        {around && sideRight && <div className="table-side is-right">{renderChip(sideRight, true)}</div>}
+
+        {/* ---- middle: my battlefield on my playmat ---- */}
+        <div className={`table-mid mat ${myMat.className}`} style={myMat.style}>
           {mePlayer ? (
             (["lands", "creatures", "other"] as const).map((row) => (
               <DropRow key={row} id={`row:${row}`} className="bf-row">
                 <span className="row-label">{ROW_LABEL[row]}</span>
                 {mePlayer.battlefield[row].map((c) => (
-                  <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={holdCard} draggable={canAct} attached={Boolean(c.attachedTo)} />
+                  <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={holdCard} draggable={canAct} attached={Boolean(c.attachedTo)} sleeve={sleeveOf(c.owner)} />
                 ))}
               </DropRow>
             ))
@@ -249,26 +317,30 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           )}
         </div>
 
-        {/* ---- bottom: zones, hand, life ---- */}
+        {/* ---- bottom (or top): zones, hand, life ---- */}
         {mePlayer && (
           <div className="table-bottom">
             <div className="zone-btns">
-              <DropButton id="zone:library" className="is-library" onClick={() => setSheet({ kind: "library" })}>
+              <DropButton id="zone:library" className={`is-library ${mySleeve?.className ?? ""}`} style={mySleeve?.style} onClick={() => setSheet({ kind: "library" })} label={`Library, ${mePlayer.library.count} cards`}>
                 <span>Library</span>
                 <strong>{mePlayer.library.count}</strong>
               </DropButton>
-              <DropButton id="zone:graveyard" onClick={() => showCards("Your graveyard", mePlayer.graveyard)}>
+              <DropButton id="zone:graveyard" onClick={() => showCards("Your graveyard", mePlayer.graveyard)} label={`Graveyard, ${mePlayer.graveyard.length} cards`}>
                 <span>Grave</span>
                 <strong>{mePlayer.graveyard.length}</strong>
               </DropButton>
-              <DropButton id="zone:exile" onClick={() => showCards("Your exile", mePlayer.exile)}>
+              <DropButton id="zone:exile" onClick={() => showCards("Your exile", mePlayer.exile)} label={`Exile, ${mePlayer.exile.length} cards`}>
                 <span>Exile</span>
                 <strong>{mePlayer.exile.length}</strong>
               </DropButton>
-              <DropButton id="zone:command" className="is-command" onClick={() => showCards("Your command zone", mePlayer.command)}>
+              <DropButton id="zone:command" className="is-command" onClick={() => showCards("Your command zone", mePlayer.command)} label={`Command zone, ${mePlayer.command.length} cards`}>
                 <span>Cmd</span>
                 <strong>{mePlayer.command.length}</strong>
               </DropButton>
+              <button className="zone-btn is-tokens" onClick={() => setShowTokens(true)} disabled={!canAct} aria-label="Create tokens">
+                <span>Token</span>
+                <strong>+</strong>
+              </button>
             </div>
             <DropRow id="zone:hand" className="hand">
               {mePlayer.hand.cards.length === 0 && <span className="muted small">Empty hand</span>}
@@ -288,8 +360,16 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
         <p className="table-notice">Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards. Card data and images courtesy of Scryfall.</p>
 
-        {sock.error && <div className="toast">{sock.error}</div>}
-        {sock.status !== "open" && <div className="toast is-warn">{sock.status === "reconnecting" ? "Reconnecting..." : sock.status}</div>}
+        {sock.error && (
+          <div className="toast" role="status">
+            {sock.error}
+          </div>
+        )}
+        {sock.status !== "open" && (
+          <div className="toast is-warn" role="status">
+            {sock.status === "reconnecting" ? "Reconnecting..." : sock.status}
+          </div>
+        )}
       </div>
 
       {/* ---- overlays ---- */}
@@ -332,12 +412,47 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
         </div>
       )}
       {view.phase === "mulligan" && mePlayer?.kept && needBottom === 0 && (
-        <div className="toast is-info">Waiting for {view.turnOrder.filter((id) => !view.players[id]!.kept).map((id) => view.players[id]!.name).join(", ") || "everyone"}...</div>
+        <div className="toast is-info" role="status">
+          Waiting for {view.turnOrder.filter((id) => !view.players[id]!.kept).map((id) => view.players[id]!.name).join(", ") || "everyone"}...
+        </div>
+      )}
+
+      {ended && !dismissedEnd && (
+        <div className="mulligan game-over">
+          <div className="mulligan-box">
+            <h2>{view.winner ? `${view.players[view.winner]?.name} wins` : "Game over"}</h2>
+            <p className="muted small">
+              {view.turn} turn{view.turn === 1 ? "" : "s"}. {room.nextCode ? "The host has started a rematch." : isHost ? "Play again with the same decks and seats, or leave the table." : `${room.members.find((m) => m.userId === room.hostId)?.name ?? "The host"} can start a rematch with the same decks.`}
+            </p>
+            <div className="actions">
+              {room.nextCode ? (
+                <button className="btn btn-primary btn-big" onClick={() => navigate(`/room/${room.nextCode}`)}>
+                  Join the rematch
+                </button>
+              ) : isHost ? (
+                <button className="btn btn-primary btn-big" onClick={rematch}>
+                  Rematch
+                </button>
+              ) : null}
+              <button className="btn" onClick={() => setDismissedEnd(true)}>
+                Look at the table
+              </button>
+              <button className="btn btn-danger" onClick={leave}>
+                Leave table
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {ended && dismissedEnd && room.nextCode && (
+        <button className="toast is-info is-action" onClick={() => navigate(`/room/${room.nextCode}`)}>
+          Rematch started: tap to join table {room.nextCode}
+        </button>
       )}
 
       {sheetView}
       {dialog && <DialogView dialog={dialog} onClose={() => setDialog(null)} />}
-      {zoom && <CardZoom card={zoom} printings={printings} onClose={() => setZoom(null)} />}
+      {zoom && <CardZoom card={zoom} printings={printings} view={view} sleeve={sleeveOf(zoom.owner)} onClose={() => setZoom(null)} />}
       {liveCardsPanel && (
         <Panel title={liveCardsPanel.title} {...(liveCardsPanel.subtitle ? { subtitle: liveCardsPanel.subtitle } : {})} onClose={() => setCardsPanel(null)} wide>
           {liveCardsPanel.follow === "library" && me && (
@@ -356,22 +471,35 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               </button>
             </div>
           )}
-          <CardList cards={liveCardsPanel.cards} printings={printings} onTap={tapCard} onHold={holdCard} empty="No cards here." />
+          <CardList cards={liveCardsPanel.cards} printings={printings} onTap={tapCard} onHold={holdCard} sleeveOf={sleeveOf} empty="No cards here." />
         </Panel>
       )}
       {opponent && view.players[opponent] && (
-        <OpponentPanel player={view.players[opponent]!} view={view} printings={printings} me={me} onClose={() => setOpponent(null)} onTap={tapCard} onHold={holdCard} onShowCards={showCards} onPlayerSheet={(p) => setSheet({ kind: "player", player: p })} />
+        <OpponentPanel
+          player={view.players[opponent]!}
+          member={room.members.find((m) => m.userId === opponent)}
+          view={view}
+          printings={printings}
+          me={me}
+          sleeveOf={sleeveOf}
+          onClose={() => setOpponent(null)}
+          onTap={tapCard}
+          onHold={holdCard}
+          onShowCards={showCards}
+          onPlayerSheet={(p) => setSheet({ kind: "player", player: p })}
+        />
       )}
       {showLog && (
         <LogPanel
           log={view.log}
+          members={room.members}
           canRevert={canAct}
           onClose={() => setShowLog(false)}
           onRevert={(seq) =>
             setDialog({
               kind: "confirm",
               title: `Rewind the game to just after #${seq}?`,
-              body: "Everything after that line is undone for everyone. The log keeps a note of the rewind.",
+              body: "Everything after that line is undone for everyone, and the log says who rewound it.",
               confirmLabel: "Rewind",
               danger: true,
               onConfirm: () => {
@@ -383,13 +511,18 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
         />
       )}
       {showTokens && me && (
-        <TokenPanel
+        <TokenFinder
           onClose={() => setShowTokens(false)}
           onCreate={({ printingId, custom, count, row }) => {
             sock.dispatch({ type: "TokenCreated", payload: { player: me, printing: printingId ? ({ id: printingId } as never) : null, custom, count, row } });
             setShowTokens(false);
           }}
         />
+      )}
+      {showSettings && (
+        <Panel title="Personalize" subtitle="Changes apply as you make them" onClose={() => setShowSettings(false)} wide>
+          <SettingsPanel />
+        </Panel>
       )}
       {showMenu && <MenuPanel room={room} view={view} me={me} status={sock.status} onClose={() => setShowMenu(false)} actions={menuActions} />}
     </DndContext>

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ProfileForm } from "../components/ProfileForm";
 import { RequireUser } from "../components/RequireUser";
 import { useUser } from "../user";
@@ -20,6 +20,13 @@ export function ProfilePage() {
                 navigate("/");
               }}
             />
+            <hr />
+            <p>
+              <Link to="/settings" className="btn">
+                Personalize your table
+              </Link>
+              <span className="muted small"> &nbsp; playmat, sleeves, theme, layout</span>
+            </p>
             <hr />
             <p className="muted small">
               Signing out forgets this device. Your decks stay on the server but you will not be able to reach them

@@ -56,10 +56,12 @@ export function useRoomSocket(code: string | null): RoomSocket {
       setStatus(attemptRef.current === 0 ? "connecting" : "reconnecting");
 
       ws.onopen = () => {
+        if (wsRef.current !== ws) return;
         attemptRef.current = 0;
         setStatus("open");
       };
       ws.onmessage = (e) => {
+        if (wsRef.current !== ws) return;
         let msg: ServerMessage;
         try {
           msg = JSON.parse(String(e.data)) as ServerMessage;
@@ -87,6 +89,9 @@ export function useRoomSocket(code: string | null): RoomSocket {
         }
       };
       ws.onclose = (e) => {
+        // A socket we already replaced (navigating from one table straight to another, e.g. a
+        // rematch) must not touch the new one when its close event arrives late.
+        if (wsRef.current !== ws) return;
         wsRef.current = null;
         if (closedRef.current || e.code === 4001 || e.code === 1000) {
           setStatus("closed");
@@ -127,6 +132,12 @@ export function useRoomSocket(code: string | null): RoomSocket {
       if (timerRef.current) window.clearTimeout(timerRef.current);
       wsRef.current?.close(1000, "navigated away");
       wsRef.current = null;
+      // Start the next table with a clean slate (the server sends its printings afresh).
+      printingsRef.current = {};
+      setPrintings({});
+      setView(null);
+      setRoom(null);
+      setError(null);
     };
   }, [code]);
 

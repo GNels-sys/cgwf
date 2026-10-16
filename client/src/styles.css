@@ -12,6 +12,17 @@
   --card-ratio: 63 / 88;
   color-scheme: dark;
 }
+/* Light interface (Personalize -> Interface). Table themes and playmats keep their own colours. */
+:root[data-ui="light"] {
+  --bg: #f3efe4;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #e9e3d3;
+  --fg: #1e2420;
+  --fg-muted: #5f6a63;
+  --danger: #b8392a;
+  --border: #d4ccb8;
+  color-scheme: light;
+}
 
 * {
   box-sizing: border-box;
@@ -32,6 +43,12 @@ body {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: clip;
+}
+/* The table owns the whole screen; the site header and footer sit underneath it, so hide them. */
+body.in-table .top-nav,
+body.in-table > #root > .app-shell > .site-footer {
+  display: none;
 }
 
 #root,

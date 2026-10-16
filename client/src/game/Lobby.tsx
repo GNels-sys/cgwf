@@ -62,7 +62,7 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
         </button>
       </div>
       <p className="muted small">
-        Friends join with the code or the link. {sock.status !== "open" && <span className="warn">({sock.status})</span>}
+        Friends join with the code or the link. <a href="/settings">Personalize</a> your playmat and sleeves while you wait. {sock.status !== "open" && <span className="warn">({sock.status})</span>}
       </p>
 
       <ul className="seat-list">
@@ -122,6 +122,8 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
           )}
         </label>
       )}
+
+      {sock.error && <p className="error small">{sock.error}</p>}
 
       {spectators.length > 0 && (
         <p className="muted small">

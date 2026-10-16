@@ -12,7 +12,11 @@ import type {
   ResolveResponse,
   SearchResponse,
   StatusResponse,
+  TokenSearchResponse,
+  UploadInfo,
+  UploadKind,
   User,
+  UserSettings,
 } from "@cgwf/shared";
 
 const TOKEN_KEY = "cgwf.token";
@@ -72,6 +76,8 @@ async function request<T>(url: string, opts: Options = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
+const blobCache = new Map<string, Promise<string | null>>();
+
 export const api = {
   status: (signal?: AbortSignal) => request<StatusResponse>("/api/status", { ...(signal ? { signal } : {}) }),
   search: (q: string, tokens: boolean, signal?: AbortSignal) =>
@@ -90,6 +96,52 @@ export const api = {
     remove: (id: string) => request<{ ok: true }>(`/api/decks/${encodeURIComponent(id)}`, { method: "DELETE" }),
     parse: (text: string) => request<ResolveResponse>("/api/decks/parse", { json: { text } }),
     importUrl: (url: string) => request<ImportUrlResponse>(`/api/decks/import-url?url=${encodeURIComponent(url)}`),
+  },
+
+  tokens: (q: string, signal?: AbortSignal) => request<TokenSearchResponse>(`/api/tokens?q=${encodeURIComponent(q)}`, { ...(signal ? { signal } : {}) }),
+
+  settings: {
+    get: () => request<{ settings: UserSettings }>("/api/me/settings"),
+    save: (patch: unknown) => request<{ settings: UserSettings }>("/api/me/settings", { method: "PUT", json: patch }),
+  },
+
+  uploads: {
+    list: () => request<{ uploads: UploadInfo[] }>("/api/uploads"),
+    remove: (id: string) => request<{ ok: true }>(`/api/uploads/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    /** Raw image body; the server checks the bytes and the 2 MB limit. */
+    async create(kind: UploadKind, file: File): Promise<UploadInfo> {
+      const headers: Record<string, string> = { Accept: "application/json", "Content-Type": file.type || "application/octet-stream" };
+      const token = getToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`/api/uploads?kind=${kind}`, { method: "POST", headers, body: file });
+      if (!res.ok) {
+        let message = `${res.status} ${res.statusText}`;
+        try {
+          message = ((await res.json()) as { error?: string }).error ?? message;
+        } catch {
+          /* non-JSON */
+        }
+        throw new ApiError(res.status, message);
+      }
+      return ((await res.json()) as { upload: UploadInfo }).upload;
+    },
+    /** Fetch a private upload with the device token and hand back a blob: URL (cached per id). */
+    async blobUrl(id: string): Promise<string | null> {
+      const cached = blobCache.get(id);
+      if (cached) return cached;
+      const job = (async () => {
+        const headers: Record<string, string> = {};
+        const token = getToken();
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const res = await fetch(`/api/uploads/${encodeURIComponent(id)}`, { headers });
+        if (!res.ok) return null;
+        return URL.createObjectURL(await res.blob());
+      })();
+      blobCache.set(id, job);
+      const url = await job;
+      if (!url) blobCache.delete(id);
+      return url;
+    },
   },
 
   rooms: {

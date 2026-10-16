@@ -74,7 +74,9 @@ function PlayHome() {
         </form>
       </div>
       {error && <p className="error">{error}</p>}
-      <p className="muted small">A table holds up to four players plus spectators. Share the code or the link; nobody needs an account.</p>
+      <p className="muted small">
+        A table holds up to four players plus spectators. Share the code or the link; nobody needs an account. <Link to="/settings">Personalize</Link> your playmat and sleeves before you sit down.
+      </p>
 
       {recent.length > 0 && (
         <>

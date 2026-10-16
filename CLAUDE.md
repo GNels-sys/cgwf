@@ -138,8 +138,9 @@ bounded edit distance.
   before persisting (one SQLite transaction: insert event + bump rooms.last_seq/status), then
   fans out per-connection views. `TokenCreated.printing` is replaced by the real printing from
   `cards` (clients cannot forge card data); custom tokens are length-capped.
-- Undo = a `Revert` to `last.seq - 1`, allowed only when the requester made the last event.
-  Explicit revert from the log is open to any seated player and is itself logged.
+- Undo = a `Revert {reason: "undo"}` to `last.seq - 1`, allowed only when the requester made the
+  last event; it is silent (the undone log line simply disappears). Explicit revert from the log is
+  open to any seated player and is announced ("Blair reverted the game to #12").
 - REST: `POST /api/rooms` (10/hour per user), `GET /api/rooms/mine`, `GET /api/rooms/decks`,
   `GET /api/rooms/:code`, `POST /api/rooms/:code/join`.
 - WebSocket `GET /api/rooms/:code/ws?token=<device token>` (`@fastify/websocket`, 256 KB frames,
@@ -151,6 +152,10 @@ bounded edit distance.
 - Reconnect: a new socket gets `room` + a full `state` (and its printings again). Nothing is
   kept client-side, so a phone that force-quits simply rejoins.
 - Leaving during a game concedes first; the host role passes to the next player.
+- Rematch (`rematch` message, host only, status ended): `RoomManager.rematch` creates a new room
+  with a fresh seed, copies every member with their seat and deck, starts it at once (or leaves it
+  as a lobby if a deck vanished) and stores `rooms.next_room_id` on the old room, which goes out as
+  `RoomInfo.nextCode` so every client can follow.
 
 ### Client (`client/src/game/`)
 
@@ -164,7 +169,44 @@ bounded edit distance.
 - Mulligan overlay handles London mulligans; `toBottom` in the state drives the "put N on the
   bottom" step. Pass turn untaps the new active player's permanents automatically (re-tap what
   should stay tapped).
-- Hidden cards draw a plain striped CGwF back, never the official card back.
+- Hidden cards draw the owner's sleeve (a CSS preset or their upload), never the official card back.
+- Table-to-table navigation (rematch) reuses `useRoomSocket` with a new code; the hook ignores
+  events from a socket it has already replaced (`wsRef.current !== ws`).
+
+## Polish (Phase 4)
+
+- **Log** (`reducer.ts`): every line is a past-tense sentence naming the actor ("Alex played Sol
+  Ring", "Blair lost 3 life (now 37)", "Alex put a +1/+1 counter on X (now 2)"); hidden cards are
+  "a card". `LogPanel` draws turn lines as separators with the actor's avatar colour.
+- **Token finder** (`GET /api/tokens?q=`, `client/src/game/TokenFinder.tsx`): searches `is_token`
+  printings, collapses them to one entry per name + P/T + colours + text (`distinctTokens`),
+  understands "2/2 zombie", lists popular tokens with no query, remembers recent ones in
+  localStorage, and keeps the text-only custom token. The Token button sits with the zone buttons.
+  Tokens cease to exist when they leave the battlefield (reducer `moveCard`).
+- **Personalization** (`shared/src/settings.ts`): `UserSettings` = playmat + sleeve (`Texture`:
+  preset id or upload id), table theme, accent, light/dark UI, ambient loop, layout (card scale,
+  hand top/bottom, opponent panel size, opponents in a strip or around the table, compact).
+  `sanitizeSettings` coerces anything into valid settings; stored as JSON in `user_settings`
+  (`GET/PUT /api/me/settings`). The client `SettingsProvider` applies UI + accent on
+  `<html>` and caches a copy in localStorage (`cgwf.settings`); `Table` applies the rest as CSS
+  classes/variables (`theme-*`, `is-compact`, `hand-top`, `opp-around`, `--card-scale`).
+  `RoomMember.look` carries each player's playmat + sleeve to the whole table and is rebroadcast
+  when settings change (`RoomManager.userChanged`). Presets are pure CSS (`mat-*`, `sleeve-*`
+  in game.css); no image files.
+- **Uploads** (`server/src/uploads.ts`, `routes/settings.ts`): `POST /api/uploads?kind=playmat|sleeve`
+  takes the raw image body (JPEG/PNG/WebP/GIF, 2 MB, validated by magic bytes, 12 per user),
+  stores it under `DATA_DIR/uploads/<id>.<ext>` with a row in `uploads`. `GET /api/uploads/:id`
+  needs the device token and serves only to the owner or someone sharing a room with them
+  (`canSeeUploadsOf`), with `Cache-Control: private, immutable`; the client fetches with the
+  token and shows a `blob:` URL (`look.ts`). `DELETE` removes the file and settings fall back.
+- **Ambient sound** (`ambient.ts`): rain and fireplace are synthesised with the Web Audio API
+  (filtered noise), so nothing is downloaded or licensed. Off by default.
+- **Animations**: card arrival fade, flip on face/face-down change, tap rotation, floating life
+  ticks (`useLifeTicks`). All disabled under `prefers-reduced-motion` (game.css, styles.css).
+- **Game over**: overlay with winner, Rematch (host), Look at the table, Leave; non-hosts get a
+  "Join the rematch" button / toast when `nextCode` arrives.
+- Touch targets are 44 px (chips, life buttons, close buttons, log lines, turn buttons); the table
+  hides the site header/footer via `body.in-table`; `body { overflow-x: clip }`.
 
 ### Testing alone
 
@@ -179,5 +221,6 @@ https://cgwf.fly.dev too. The Vite proxy needs `ws: true` for `/api` (already se
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
 2. Device identity, decks, decklist parser with per-site fixtures, printing resolution. **(done)**
 3. Rooms, join codes, WebSocket sync, event log + reducer, the table, hidden info, reconnect. **(done)**
-4. Polish: smarter token finder, personalization, light animations, play-again from a finished
-   table, per-event view deltas if bandwidth matters.
+4. Polish: token finder, silent undo, sentence log, card zoom, rematch, personalization
+   (playmats, sleeves, uploads, themes, layout), animations, accessibility. **(done)**
+5. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority).
