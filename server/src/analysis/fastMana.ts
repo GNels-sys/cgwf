@@ -1,5 +1,6 @@
 import { normalizeName } from "@cgwf/shared";
 import { expanded, isArtifact, isCreature, isInstantOrSorcery, isLand, text, type AnalysisCard } from "./cards.js";
+import { expandedHits, findCardDraw, findInteraction, findRamp, hitCount } from "./functional.js";
 
 /**
  * Fast mana: cards that produce more mana than they cost in the first turns.
@@ -61,39 +62,18 @@ export function detectFastMana(cards: AnalysisCard[]): string[] {
   return out;
 }
 
-/** Cheap rocks and dorks plus land ramp: ordinary ramp, counted for the stats line. */
+/** Cheap rocks and dorks plus land ramp: ordinary ramp, counted for the stats line (see functional.ts). */
 export function countRamp(cards: AnalysisCard[]): number {
-  let n = 0;
-  for (const c of expanded(cards)) {
-    const t = text(c);
-    if (isLand(c)) continue;
-    if (c.cmc <= 3 && (isArtifact(c) || isCreature(c)) && /(?:\{t\}|\{q\}|: ?)add \{|\badd one mana of any color\b|\badd \{[wubrgc]\}/.test(t)) n++;
-    else if (/\bsearch your library for (?:a|up to \w+|two|three) (?:basic )?(?:land|forest|plains|island|swamp|mountain)/.test(t)) n++;
-    else if (/\bput (?:a|that|target|up to \w+) (?:basic )?land cards? (?:from (?:your hand|your graveyard|among them) )?onto the battlefield\b/.test(t)) n++;
-    else if (/\byou may play an additional land\b/.test(t)) n++;
-  }
-  return n;
+  return hitCount(expandedHits(cards, findRamp));
 }
 
+/** Removal + counterspells (functional.ts), counted with duplicates. */
 export function countInteraction(cards: AnalysisCard[]): number {
-  let n = 0;
-  for (const c of expanded(cards)) {
-    const t = text(c);
-    if (/\bcounter target (?:spell|creature spell|noncreature spell|instant or sorcery spell|activated or triggered ability|activated ability|triggered ability)\b/.test(t)) n++;
-    else if (/\b(?:destroy|exile) (?:target|up to \w+ target|all|each) (?:creature|nonland permanent|permanent|artifact|enchantment|artifact or enchantment|creature or planeswalker|planeswalker)/.test(t)) n++;
-    else if (/\bdeals? \d+ damage to (?:any target|target creature|target creature or planeswalker|each creature)\b/.test(t)) n++;
-    else if (/\breturn target (?:creature|nonland permanent|permanent) (?:an opponent controls )?to its owner's hand\b/.test(t)) n++;
-  }
-  return n;
+  return hitCount(expandedHits(cards, findInteraction));
 }
 
 export function countCardDraw(cards: AnalysisCard[]): number {
-  let n = 0;
-  for (const c of expanded(cards)) {
-    const t = text(c);
-    if (/\bdraw (?:a card|two cards|three cards|x cards|that many cards|cards equal to)\b/.test(t) && !/\bopponent draws?\b|\beach player draws\b/.test(t)) n++;
-  }
-  return n;
+  return hitCount(expandedHits(cards, findCardDraw));
 }
 
 /** Free interaction (pitch / "if you control a commander" spells): a strong Bracket 4 tell. */

@@ -14,13 +14,25 @@ export interface AnalysisCard {
   colorIdentity: string[];
   quantity: number;
   board: "main" | "commander";
+  /** Printed colours (Scryfall `colors`); empty for colourless cards and most lands. */
+  colors: string[];
+  /** Printed power/toughness of the front face ("3", "*", "1+*"), null for non-creatures. */
+  power: string | null;
+  toughness: string | null;
+}
+
+interface FaceLike {
+  power?: string | null;
+  toughness?: string | null;
 }
 
 export function fromRow(
-  row: Pick<CardRow, "name" | "typeLine" | "oracleText" | "manaCost" | "cmc" | "keywords" | "colorIdentity">,
+  row: Pick<CardRow, "name" | "typeLine" | "oracleText" | "manaCost" | "cmc" | "keywords" | "colorIdentity"> & Partial<Pick<CardRow, "colors" | "power" | "toughness" | "faces">>,
   quantity: number,
   board: "main" | "commander",
 ): AnalysisCard {
+  // Two-faced cards keep P/T on the faces; the front face is what the deck list casts.
+  const front = (row.faces as FaceLike[] | undefined)?.[0];
   return {
     name: row.name,
     typeLine: row.typeLine,
@@ -31,6 +43,9 @@ export function fromRow(
     colorIdentity: row.colorIdentity ?? [],
     quantity,
     board,
+    colors: row.colors ?? [],
+    power: row.power ?? front?.power ?? null,
+    toughness: row.toughness ?? front?.toughness ?? null,
   };
 }
 

@@ -9,8 +9,10 @@ export function card(
   name: string,
   typeLine: string,
   oracleText: string,
-  opts: Partial<Pick<AnalysisCard, "manaCost" | "cmc" | "keywords" | "colorIdentity" | "quantity" | "board">> = {},
+  opts: Partial<Pick<AnalysisCard, "manaCost" | "cmc" | "keywords" | "colorIdentity" | "quantity" | "board" | "colors" | "power" | "toughness">> = {},
 ): AnalysisCard {
+  // Colours default to the coloured symbols in the mana cost, as Scryfall's `colors` would be.
+  const costColors = [...new Set((opts.manaCost ?? "").match(/[WUBRG]/g) ?? [])];
   return {
     name,
     typeLine,
@@ -21,6 +23,9 @@ export function card(
     colorIdentity: opts.colorIdentity ?? [],
     quantity: opts.quantity ?? 1,
     board: opts.board ?? "main",
+    colors: opts.colors ?? costColors,
+    power: opts.power ?? null,
+    toughness: opts.toughness ?? null,
   };
 }
 
