@@ -77,6 +77,12 @@ export class DeckAnalyzer {
       .run();
   }
 
+  /** Engine only, no Spellbook request (uses a cached answer when one exists). For list views. */
+  analyzeSync(cards: AnalysisCard[]): DeckAnalysis {
+    const cached = this.readCache(DeckAnalyzer.listHash(cards));
+    return analyzeDeck(cards, { gameChangers: loadGameChangers(), combos: cached ?? undefined });
+  }
+
   /**
    * Full analysis. `combos: "cached"` uses the cache and asks Spellbook on a
    * miss; `"refresh"` always asks; `"skip"` never asks (fast, for lists).

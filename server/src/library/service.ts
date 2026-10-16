@@ -13,7 +13,7 @@ import {
 import type { DeckAnalyzer } from "../analysis/service.js";
 import { primerSkeleton } from "../analysis/index.js";
 import type { DbHandle } from "../db/index.js";
-import { cards, libraryDeckCards, libraryDecks, type LibraryDeckRow } from "../db/schema.js";
+import { cards, libraryDeckCards, libraryDecks, users, type LibraryDeckRow } from "../db/schema.js";
 
 /**
  * The owner's deck library. Rows come from the precon importer or from "add my
@@ -54,8 +54,10 @@ export class LibraryService {
     private readonly analyzer: DeckAnalyzer,
   ) {}
 
-  private toSummary(row: LibraryDeckRow, cardCount: number): LibraryDeckSummary {
+  private toSummary(row: LibraryDeckRow, cardCount: number, createdByName: string | null = null): LibraryDeckSummary {
     return {
+      createdBy: row.createdBy,
+      createdByName,
       id: row.id,
       name: row.name,
       source: row.source as "precon" | "user",
@@ -103,7 +105,15 @@ export class LibraryService {
       .orderBy(asc(libraryDecks.bracket), desc(libraryDecks.releaseDate), asc(libraryDecks.name))
       .all();
     const counts = this.countsFor(rows.map((r) => r.id));
-    return rows.map((r) => this.toSummary(r, counts.get(r.id) ?? 0));
+    const names = this.namesFor(rows.map((r) => r.createdBy));
+    return rows.map((r) => this.toSummary(r, counts.get(r.id) ?? 0, r.createdBy ? (names.get(r.createdBy) ?? null) : null));
+  }
+
+  /** Display names of the players credited with user decks (Phase 8 submissions). */
+  private namesFor(ids: Array<string | null>): Map<string, string> {
+    const unique = [...new Set(ids.filter((v): v is string => Boolean(v)))];
+    if (unique.length === 0) return new Map();
+    return new Map(this.handle.db.select({ id: users.id, name: users.displayName }).from(users).where(inArray(users.id, unique)).all().map((u) => [u.id, u.name]));
   }
 
   getRow(id: string): LibraryDeckRow | undefined {
@@ -137,7 +147,7 @@ export class LibraryService {
     });
     const cardCount = cardsOut.filter((c) => c.board !== "sideboard").reduce((n, c) => n + c.quantity, 0);
     return {
-      ...this.toSummary(row, cardCount),
+      ...this.toSummary(row, cardCount, row.createdBy ? (this.namesFor([row.createdBy]).get(row.createdBy) ?? null) : null),
       primer: row.primer,
       analysis: (row.analysis as DeckAnalysis | null) ?? null,
       cards: cardsOut,

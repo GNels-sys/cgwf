@@ -134,6 +134,11 @@ export class LiveRoom {
     return new Set([...this.conns].map((c) => c.userId));
   }
 
+  /** Phase 8: users with an open socket to this table (for friends' presence). */
+  connectedUserIds(): string[] {
+    return [...this.onlineIds()];
+  }
+
   info(forUserId: string | null): RoomInfo {
     const row = this.refreshRow();
     const rows = this.members();
@@ -498,6 +503,18 @@ export class RoomManager {
     for (const room of this.live.values()) {
       if (room.connectionCount > 0 && room.member(userId)) room.broadcastRoom();
     }
+  }
+
+  /** Phase 8: which live table (if any) each of these users is connected to right now. */
+  tablesOf(userIds: Iterable<string>): Map<string, { code: string; status: RoomStatus }> {
+    const want = new Set(userIds);
+    const out = new Map<string, { code: string; status: RoomStatus }>();
+    if (want.size === 0) return out;
+    for (const room of this.live.values()) {
+      if (room.connectionCount === 0 || room.status === "ended") continue;
+      for (const id of room.connectedUserIds()) if (want.has(id) && !out.has(id)) out.set(id, { code: room.code, status: room.status });
+    }
+    return out;
   }
 
   get(code: string): LiveRoom | null {

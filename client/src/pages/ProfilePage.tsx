@@ -4,6 +4,7 @@ import { PASSWORD_MIN, type SessionInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { ProfileForm } from "../components/ProfileForm";
 import { RequireUser } from "../components/RequireUser";
+import { FriendCode } from "./FriendsPage";
 import { useUser } from "../user";
 
 function timeAgo(iso: string): string {
@@ -184,6 +185,26 @@ function OwnerClaim() {
   );
 }
 
+/** Friend code line for the profile page (the Friends page has the full list). */
+function FriendCodeLine() {
+  const [code, setCode] = useState<string | null>(null);
+  useEffect(() => {
+    api.social
+      .friendCode()
+      .then((r) => setCode(r.code))
+      .catch(() => setCode(null));
+  }, []);
+  return (
+    <p>
+      <strong>Friend code</strong> {code ? <FriendCode code={code} /> : <span className="muted">...</span>}
+      <br />
+      <span className="muted small">
+        Friends add you with this code, so two players called the same thing never get mixed up. <Link to="/friends">Manage friends</Link>
+      </span>
+    </p>
+  );
+}
+
 export function ProfilePage() {
   const { user, update, signOut } = useUser();
   const navigate = useNavigate();
@@ -201,6 +222,8 @@ export function ProfilePage() {
                 navigate("/");
               }}
             />
+            <hr />
+            <FriendCodeLine />
             <hr />
             <p>
               <Link to="/settings" className="btn">
@@ -226,15 +249,15 @@ export function ProfilePage() {
               <>
                 <div className="notice">
                   <p>
-                    <strong>Create an account to use your decks on other devices.</strong>
+                    <strong>Create an account to keep your decks safe and use them on other devices.</strong>
                   </p>
                   <p className="muted small">
-                    Right now only this device knows you. Adding an email and password keeps everything (name, decks, playmats) and lets
-                    you sign in from your phone and your computer.
+                    Right now only this device knows you: lose the phone or clear the browser and the decks are gone. An email and password
+                    keep everything (name, decks, playmats, friends) and let you sign in from your phone and your computer. It takes a minute.
                   </p>
                   <div className="actions">
                     <Link to="/signup" className="btn btn-primary">
-                      Add email and password
+                      Create an account
                     </Link>
                     <Link to="/signin" className="btn">
                       I already have an account

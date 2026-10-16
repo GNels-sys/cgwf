@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { BRACKET_NAMES, MAX_SEATS, type AgentPick, type Bracket, type RoomInfo } from "@cgwf/shared";
+import { useCallback, useEffect, useState } from "react";
+import { BRACKET_NAMES, MAX_SEATS, type AgentPick, type Bracket, type FriendInfo, type RoomInfo, type RoomInviteInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { Avatar } from "../components/Avatar";
 import { isOwner, useUser } from "../user";
@@ -129,6 +129,8 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
 
       {sock.error && <p className="error small">{sock.error}</p>}
 
+      <InviteFriends room={room} />
+
       {owner && isHost && <AgentsControl room={room} />}
 
       {spectators.length > 0 && (
@@ -147,6 +149,114 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
         )}
       </div>
     </main>
+  );
+}
+
+/** Any member: invite friends to this table. Invitees get a bell notification with a Join button. */
+function InviteFriends({ room }: { room: RoomInfo }) {
+  const [friends, setFriends] = useState<FriendInfo[] | null>(null);
+  const [invites, setInvites] = useState<RoomInviteInfo[]>([]);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [f, i] = await Promise.all([api.social.friends(), api.social.roomInvites(room.code)]);
+      setFriends(f.friends);
+      setInvites(i.invites);
+    } catch {
+      setFriends([]);
+    }
+  }, [room.code]);
+
+  useEffect(() => {
+    if (!open) return;
+    void load();
+    const t = setInterval(() => void load(), 15_000);
+    return () => clearInterval(t);
+  }, [open, load]);
+
+  const here = new Set(room.members.map((m) => m.userId));
+  const invitedState = (userId: string) => invites.find((i) => i.to.userId === userId)?.status ?? null;
+
+  const invite = async (f: FriendInfo) => {
+    setBusy(f.userId);
+    setNote(null);
+    try {
+      await api.social.invite(room.code, [f.userId]);
+      setNote(`Invited ${f.name}. They get a notification with a Join button.`);
+      await load();
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!open)
+    return (
+      <p>
+        <button className="btn btn-small" onClick={() => setOpen(true)}>
+          Invite friends
+        </button>
+        <span className="muted small"> &nbsp; or share the code / link above</span>
+      </p>
+    );
+
+  const candidates = (friends ?? []).filter((f) => !here.has(f.userId));
+  return (
+    <section className="notice invite-box">
+      <div className="row-between">
+        <strong>Invite friends</strong>
+        <button className="btn btn-small" onClick={() => setOpen(false)}>
+          Close
+        </button>
+      </div>
+      {friends === null ? (
+        <p className="muted small">Loading...</p>
+      ) : candidates.length === 0 ? (
+        <p className="muted small">
+          {friends.length === 0 ? (
+            <>
+              No friends yet. Add them by code on the <a href="/friends">Friends</a> page, or share the link above.
+            </>
+          ) : (
+            "Everyone on your friends list is already here."
+          )}
+        </p>
+      ) : (
+        <ul className="people-list compact">
+          {candidates.map((f) => {
+            const st = invitedState(f.userId);
+            return (
+              <li key={f.userId}>
+                <span className={`presence-dot${f.online ? " is-online" : ""}`} aria-hidden="true" />
+                <Avatar avatar={f.avatar} color={f.color} size={28} />
+                <span className="people-main">
+                  <strong>{f.name}</strong>
+                  <span className="muted small">{f.table ? `at table ${f.table.code}` : f.online ? "online" : "offline"}</span>
+                </span>
+                {st === "pending" ? (
+                  <span className="muted small">invited</span>
+                ) : st === "declined" ? (
+                  <button className="btn btn-small" disabled={busy === f.userId} onClick={() => void invite(f)}>
+                    Invite again
+                  </button>
+                ) : st === "accepted" ? (
+                  <span className="muted small">accepted</span>
+                ) : (
+                  <button className="btn btn-small btn-primary" disabled={busy === f.userId} onClick={() => void invite(f)}>
+                    Invite
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {note && <p className="small muted">{note}</p>}
+    </section>
   );
 }
 

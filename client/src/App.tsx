@@ -13,6 +13,9 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SignInPage, SignUpPage } from "./pages/AccountPages";
+import { FriendsPage } from "./pages/FriendsPage";
+import { Landing, StartPage, WelcomePage } from "./pages/WelcomePage";
+import { NotificationsProvider } from "./components/Bell";
 import { SettingsProvider } from "./settings";
 import { UserProvider } from "./user";
 
@@ -21,10 +24,14 @@ export function App() {
     <BrowserRouter>
       <UserProvider>
         <SettingsProvider>
+          <NotificationsProvider>
           <div className="app-shell">
           <Header />
           <Routes>
-            <Route path="/" element={<DecksPage />} />
+            <Route path="/" element={<Landing app={<DecksPage />} />} />
+            <Route path="/welcome" element={<WelcomePage />} />
+            <Route path="/start" element={<StartPage />} />
+            <Route path="/friends" element={<FriendsPage />} />
             <Route path="/cards" element={<SearchPage />} />
             <Route path="/decks/new" element={<ImportPage />} />
             <Route path="/decks/:id" element={<DeckPage />} />
@@ -37,10 +44,11 @@ export function App() {
             <Route path="/admin/library" element={<LibraryPage />} />
             <Route path="/admin/library/:id" element={<LibraryDeckPage />} />
             <Route path="/admin/agents" element={<AgentsPage />} />
-            <Route path="*" element={<DecksPage />} />
+            <Route path="*" element={<Landing app={<DecksPage />} />} />
           </Routes>
           <Footer />
           </div>
+          </NotificationsProvider>
         </SettingsProvider>
       </UserProvider>
     </BrowserRouter>

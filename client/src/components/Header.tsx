@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { Avatar } from "./Avatar";
+import { Bell } from "./Bell";
 import { isOwner, useUser } from "../user";
 
 export function Header() {
@@ -16,9 +17,11 @@ export function Header() {
         </NavLink>
         <NavLink to="/cards">Cards</NavLink>
         <NavLink to="/play">Play</NavLink>
+        {user && <NavLink to="/friends">Friends</NavLink>}
         {owner && <NavLink to="/admin/library">Library</NavLink>}
         {owner && <NavLink to="/admin/agents">Agents</NavLink>}
       </nav>
+      {user && <Bell />}
       <NavLink to="/me" className="nav-user" aria-label="Your profile">
         {user ? (
           <>
@@ -26,7 +29,7 @@ export function Header() {
             <span className="nav-user-name">{user.displayName}</span>
           </>
         ) : (
-          <span className="nav-user-name">Sign in</span>
+          <span className="nav-user-name">Start</span>
         )}
       </NavLink>
     </header>
