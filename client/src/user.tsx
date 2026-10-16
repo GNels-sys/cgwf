@@ -1,10 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { RegisterRequest, User } from "@cgwf/shared";
+import type { RegisterRequest, SignInRequest, SignUpRequest, User } from "@cgwf/shared";
 import { api, ApiError, getToken, setToken } from "./api";
 
 /**
- * Device identity. The token lives in localStorage; the user record comes
- * from the server. No passwords in v1 (see users table for the later upgrade).
+ * Identity on this device. The session token lives in localStorage; the user
+ * record comes from the server. A visitor starts as a device-only profile
+ * (name + avatar); adding an email + password makes it an account that can
+ * sign in elsewhere. Signing in here replaces this device's identity.
  */
 interface UserState {
   user: User | null;
@@ -12,7 +14,17 @@ interface UserState {
   loading: boolean;
   register: (body: RegisterRequest) => Promise<void>;
   update: (body: Partial<RegisterRequest>) => Promise<void>;
-  signOut: () => void;
+  /** Add an email + password to the current profile (nothing else changes). */
+  signUp: (body: SignUpRequest) => Promise<void>;
+  /** Replace this device's identity with an existing account. */
+  signIn: (body: SignInRequest) => Promise<void>;
+  /** Sign out this device only (deletes its session on the server when it can). */
+  signOut: () => Promise<void>;
+  /** Sign out every device of this account, this one included. */
+  signOutEverywhere: () => Promise<void>;
+  /** Re-read /api/me (after an owner claim, for example). */
+  refresh: () => Promise<void>;
+  setUser: (user: User) => void;
 }
 
 const Ctx = createContext<UserState | null>(null);
@@ -30,7 +42,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setUser(r.user);
       })
       .catch((e: unknown) => {
-        // A 401 means the token is dead (server reset); anything else keeps the token for a retry.
+        // A 401 means the token is dead (signed out elsewhere or server reset); anything else keeps the token for a retry.
         if (e instanceof ApiError && e.status === 401) setToken(null);
       })
       .finally(() => {
@@ -52,12 +64,44 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setUser(r.user);
   }, []);
 
-  const signOut = useCallback(() => {
+  const signUp = useCallback(async (body: SignUpRequest) => {
+    const r = await api.auth.signUp(body);
+    setUser(r.user);
+  }, []);
+
+  const signIn = useCallback(async (body: SignInRequest) => {
+    const r = await api.auth.signIn(body);
+    setToken(r.token);
+    setUser(r.user);
+  }, []);
+
+  const signOut = useCallback(async () => {
+    try {
+      const { sessions } = await api.auth.sessions();
+      const current = sessions.find((s) => s.current);
+      if (current) await api.auth.signOutSession(current.id);
+    } catch {
+      /* offline or already dead: forgetting the token is what matters */
+    }
     setToken(null);
     setUser(null);
   }, []);
 
-  const value = useMemo(() => ({ user, loading, register, update, signOut }), [user, loading, register, update, signOut]);
+  const signOutEverywhere = useCallback(async () => {
+    await api.auth.signOutEverywhere();
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const r = await api.me();
+    setUser(r.user);
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, loading, register, update, signUp, signIn, signOut, signOutEverywhere, refresh, setUser }),
+    [user, loading, register, update, signUp, signIn, signOut, signOutEverywhere, refresh],
+  );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

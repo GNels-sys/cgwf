@@ -11,6 +11,7 @@ import { RoomPage } from "./pages/RoomPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { SignInPage, SignUpPage } from "./pages/AccountPages";
 import { SettingsProvider } from "./settings";
 import { UserProvider } from "./user";
 
@@ -27,6 +28,8 @@ export function App() {
             <Route path="/decks/new" element={<ImportPage />} />
             <Route path="/decks/:id" element={<DeckPage />} />
             <Route path="/me" element={<ProfilePage />} />
+            <Route path="/signin" element={<SignInPage />} />
+            <Route path="/signup" element={<SignUpPage />} />
             <Route path="/play" element={<PlayPage />} />
             <Route path="/room/:code" element={<RoomPage />} />
             <Route path="/settings" element={<SettingsPage />} />

@@ -1,10 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import type { ClientMessage, CreateRoomResponse, MyRoomsResponse, RoomResponse } from "@cgwf/shared";
-import { hashToken, rateLimitKey, requireUser } from "../auth.js";
+import { rateLimitKey, requireUser, userFromToken } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
-import { users } from "../db/schema.js";
-import { eq } from "drizzle-orm";
 import { isRoomCode, normalizeRoomCode } from "../rooms/codes.js";
 import { RoomError, type LiveRoom, type RoomManager } from "../rooms/live.js";
 
@@ -67,7 +65,7 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
 
   app.get<{ Params: { code: string }; Querystring: { token?: string } }>("/api/rooms/:code/ws", { websocket: true }, (socket: WebSocket, req) => {
     const token = typeof req.query.token === "string" ? req.query.token : "";
-    const user = token.length >= 20 && token.length <= 128 ? handle.db.select().from(users).where(eq(users.deviceTokenHash, hashToken(token))).get() : undefined;
+    const user = userFromToken(handle, token);
     const room = findRoom(req.params.code);
     if (!user || !room) {
       socket.send(JSON.stringify({ t: "error", message: user ? "no room with that code" : "sign in required" }));

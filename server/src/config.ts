@@ -32,6 +32,10 @@ export const config = {
   skipAutoIngest: env("SKIP_AUTO_INGEST", "0") === "1",
   /** Optional shared secret allowing POST /api/admin/* from outside the machine. */
   adminToken: env("ADMIN_TOKEN", ""),
+  /** One-time code that grants the owner flag (POST /api/me/owner-claim). Unset = claiming disabled. */
+  ownerClaimCode: env("OWNER_CLAIM_CODE", ""),
+  /** Recorded for the record only; ownership is never granted by email. */
+  ownerEmail: env("OWNER_EMAIL", "nelson.george.edward@gmail.com"),
   appName: "CGwF",
   appVersion: env("APP_VERSION", "0.1.0"),
   /** Directory the client build lands in (served as static files in production). */

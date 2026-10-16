@@ -15,6 +15,7 @@ import { registerAnalysisRoutes } from "./routes/analysis.js";
 import { registerLibraryRoutes } from "./routes/library.js";
 import { registerCardRoutes } from "./routes/cards.js";
 import { registerDeckRoutes } from "./routes/decks.js";
+import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMeRoutes } from "./routes/me.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
@@ -78,6 +79,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   registerLibraryRoutes(app, { handle, library, precons });
   registerImageRoutes(app, handle);
   registerMeRoutes(app, handle);
+  registerAuthRoutes(app, handle);
   registerDeckRoutes(app, { handle, index });
   registerRoomRoutes(app, { handle, roomsManager });
   registerSettingsRoutes(app, { handle, onSettingsChanged: (userId) => roomsManager.userChanged(userId) });

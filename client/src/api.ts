@@ -1,5 +1,6 @@
 import type {
   CardResponse,
+  ChangePasswordRequest,
   CreateDeckRequest,
   CreateRoomResponse,
   DeckAnalysisResponse,
@@ -16,6 +17,9 @@ import type {
   RegisterResponse,
   ResolveResponse,
   SearchResponse,
+  SessionInfo,
+  SignInRequest,
+  SignUpRequest,
   StatusResponse,
   TokenSearchResponse,
   UploadInfo,
@@ -92,6 +96,18 @@ export const api = {
   register: (body: RegisterRequest) => request<RegisterResponse>("/api/me/register", { json: body }),
   me: () => request<{ user: User }>("/api/me"),
   updateMe: (body: Partial<RegisterRequest>) => request<{ user: User }>("/api/me", { method: "PATCH", json: body }),
+
+  auth: {
+    /** Add an email + password to the current device profile. */
+    signUp: (body: SignUpRequest) => request<{ user: User }>("/api/auth/signup", { json: body }),
+    /** Open a new session for an existing account; the token replaces this device's identity. */
+    signIn: (body: SignInRequest) => request<RegisterResponse>("/api/auth/signin", { json: body }),
+    changePassword: (body: ChangePasswordRequest) => request<{ ok: true }>("/api/auth/password", { json: body }),
+    sessions: () => request<{ sessions: SessionInfo[] }>("/api/me/sessions"),
+    signOutSession: (id: string) => request<{ ok: true }>(`/api/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    signOutEverywhere: () => request<{ ok: true }>("/api/me/sessions", { method: "DELETE" }),
+    claimOwner: (code: string) => request<{ user: User }>("/api/me/owner-claim", { json: { code } }),
+  },
 
   decks: {
     list: () => request<{ decks: DeckSummary[] }>("/api/decks"),

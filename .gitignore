@@ -13,3 +13,4 @@ client/dev-dist/
 
 # Hand-maintained bracket data ships with the server (DATA_DIR is ./data at the repo root, not this).
 !server/data/
+.claude/

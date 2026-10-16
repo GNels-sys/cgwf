@@ -18,6 +18,8 @@ Coast LLC. Card data and images courtesy of [Scryfall](https://scryfall.com).
   your table), table theme, accent, light/dark interface, optional ambient sound, card size and
   layout. Saved to your account.
 - Rematch from a finished table with the same seats and decks.
+- Start in ten seconds with just a name and an avatar; add an email and password later to use
+  your decks on other devices, see which devices are signed in and sign any of them out.
 
 ## Stack
 
@@ -77,6 +79,14 @@ fly ssh console -C "node server/dist/cli.js ingest --force"
 
 Optional: set `ADMIN_TOKEN` as a Fly secret to allow `POST /api/admin/ingest` with an
 `x-admin-token` header from outside the machine.
+
+Owner access: set `OWNER_CLAIM_CODE` as a Fly secret to a long random string. The person who
+runs the server creates an account, opens their profile, and enters that code once under
+"Owner access"; the account is then flagged as the owner (for owner-only features). Attempts are
+rate-limited and logged. Without the secret, claiming is disabled.
+
+Accounts have no email verification or password reset yet (there is no email provider), so
+keep your password somewhere safe.
 
 ## Install on a phone
 
