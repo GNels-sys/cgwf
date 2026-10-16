@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isTokenCard, shouldKeep, toCardRow, type ScryfallCard } from "./map.js";
+import { isTokenCard, pickPurchaseUris, shouldKeep, toCardRow, toPurchaseLinks, type ScryfallCard } from "./map.js";
 import sample from "./fixtures/cards.sample.json" with { type: "json" };
 
 const cards = sample as ScryfallCard[];
@@ -53,5 +53,26 @@ describe("shouldKeep", () => {
   });
   it("drops art series", () => {
     expect(shouldKeep({ ...byName("Sol Ring"), layout: "art_series" })).toBe(false);
+  });
+});
+
+describe("purchase_uris (Phase 10)", () => {
+  it("keeps tcgplayer, cardmarket and cardhoarder https links and drops everything else", () => {
+    const row = toCardRow(byName("Sol Ring"), 1);
+    expect(row.purchaseUris).toEqual({
+      tcgplayer: expect.stringContaining("https://www.tcgplayer.com/product/223733"),
+      cardmarket: expect.stringContaining("https://www.cardmarket.com/"),
+      cardhoarder: expect.stringContaining("https://www.cardhoarder.com/"),
+    });
+    expect(Object.keys(row.purchaseUris ?? {})).not.toContain("ebay");
+    expect(Object.keys(row.purchaseUris ?? {})).not.toContain("amazon");
+  });
+
+  it("stores null when Scryfall lists no links, and the API shape fills every key", () => {
+    const bolt = cards.find((c) => c.name === "Lightning Bolt")!;
+    expect(toCardRow(bolt, 1).purchaseUris).toBeNull();
+    expect(toPurchaseLinks(null)).toBeNull();
+    expect(toPurchaseLinks({ tcgplayer: "https://t" })).toEqual({ tcgplayer: "https://t", cardmarket: null, cardhoarder: null });
+    expect(pickPurchaseUris({ tcgplayer: "http://insecure", cardmarket: "javascript:alert(1)" })).toBeNull();
   });
 });

@@ -754,6 +754,62 @@ What each number means and where it comes from:
 - Filter `q` matches the display name or email (case-insensitive); `limit` defaults to 100, max 500;
   the CSV is built client-side from the rows shown.
 
+## Local stores bridge (Phase 10)
+
+CGwF can show which **Las Vegas stores have a card in stock** (from the owner's Singles site,
+vegas-mtg) and Scryfall's **marketplace links** for a printing. The rule that governs all of it:
+**CGwF only links out and never sells anything.** No prices are charged here, no cart, no
+affiliate programme of our own; every link leaves the app for the store's own site (or Scryfall's
+TCGplayer / Cardmarket / Cardhoarder links, which Scryfall provides in its bulk data). The UI must
+say where the data came from ("from local store data, updated X ago") and that stock is a
+snapshot to confirm with the store.
+
+- **Purchase links** (migration 0009, `cards.purchase_uris` JSON): `pickPurchaseUris` in
+  `scryfall/map.ts` keeps only `tcgplayer`, `cardmarket`, `cardhoarder` and only https URLs;
+  `rowToPrinting` / `rowToSummary` expose them as `purchaseUris: {tcgplayer, cardmarket,
+  cardhoarder}` (each nullable; the field itself is optional on `CardPrinting` / `CardSummary`
+  so existing literals compile). Existing rows get links on the next ingest; after the Phase 10
+  deploy run `node server/dist/cli.js ingest --force` through `fly ssh console` once.
+- **The Singles site's service API** (vegas-mtg `README.md` "Service API"): `POST
+  /api/v1/availability {oracleIds[]}` (max 400) and `GET /api/v1/stores`, header
+  `x-service-token`, read-only, keyed by Scryfall oracle id. Shapes mirrored in
+  `shared/src/singles.ts` (`SinglesListing`, `SinglesStore`, `SinglesAvailabilityResponse`,
+  `SinglesStoresResponse`).
+- **Secrets**: `SINGLES_API_URL` (`https://vegas-mtg.fly.dev`) and `SINGLES_API_TOKEN` (the same
+  value as `SERVICE_API_TOKEN` on the vegas-mtg app; kept only in
+  `C:\Openclaw\cgwf-secrets\singles-service-token.txt`, never in a repo). Both unset = the bridge
+  answers `status: "unconfigured"` and never calls out. `SINGLES_TIMEOUT_MS` (4000) bounds a call.
+- **Client** (`server/src/singles/client.ts`, `SinglesClient`): hard timeout; **15-minute
+  in-memory cache keyed by the sorted set of oracle ids** (a deck page is one key, a card page
+  another; up to 1000 entries); concurrent callers for the same key share one request; id sets
+  over 400 are chunked. **Circuit breaker**: three consecutive failures (timeout, network, 401/403,
+  429, 5xx, bad JSON) open it for 60 s, during which every call answers `unavailable` at once
+  with no request; after the cooldown one probe goes through (half-open) and a success closes it.
+  While open or on a failed call, a cached answer up to 6x the TTL old is served instead, marked
+  `stale`. `ctx.singles.status()` reports breaker state, cache size and counters. Nothing is
+  written to the database and nothing is retried in a loop: a Singles outage costs CGwF at most
+  one 4 s wait per key before the breaker opens.
+- **Routes** (`server/src/routes/singles.ts`, all `requireUser`, read-only, per-user rate
+  limits): `GET /api/cards/:id/availability` (60/min; the printing's oracle id -> every store that
+  stocks any printing of the card, grouped by store, cheapest store first, listings cheapest
+  first, plus `purchaseLinks`), `GET /api/decks/:id/shopping` (own deck, 30/min) and
+  `GET /api/library/:id/shopping` (owner): main + commander entries -> per card the cheapest
+  local listing anywhere and which store, every store's coverage (`cardsCovered`, `total` =
+  sum of that store's cheapest price x quantity, `missing` names) sorted most coverage then
+  cheapest, `bestStore`, and a summary with `cheapestAnywhereTotal` and the missing names;
+  `GET /api/stores` (30/min) passes the store list through. Every answer carries
+  `source: "local stores"`, `status` ok | unavailable | unconfigured (+ `reason`), `dataAsOf`
+  (the Singles site's newest scrape), `fetchedAt` and `cached`. Stock counts are not enforced in
+  totals (a store may list fewer copies than a deck needs); listings carry `quantity` for the UI.
+  Aggregation is the pure `server/src/singles/shopping.ts`.
+- **Tests**: `scryfall/map.test.ts` (link filtering), `singles/client.test.ts` (success, 401,
+  timeout, breaker open / probe / recover, stale fallback, dedupe, chunking),
+  `singles/shopping.test.ts` (hand-worked fixture deck), `routes/singles.test.ts` (routes against
+  the fixture deck with a fake Singles site, including an outage and an unconfigured server).
+- **UI** (deferred until the design refresh merges): purchase-link buttons and an "Available in
+  Las Vegas" panel on the card detail, a deck shopping panel (per-store coverage, best single
+  store), a Stores page, and the "updated X ago, from local store data" note everywhere.
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
@@ -772,5 +828,8 @@ What each number means and where it comes from:
 9. Deck statistics panel beside Bracket (mana curve, pips, sources vs pips, breakdowns,
    functional counts), pure computation with an in-memory cache. **(done)**
 9b. Owner-only Admin overview at `/admin` (who is on the platform, who is active). **(done)**
-10. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority),
+10. Local stores bridge: Scryfall purchase links in `cards`, read-only client for the Singles
+    site's service API (cache + breaker), availability / shopping / stores routes. **(server done;
+    UI waits for the design refresh)**
+11. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority),
     browser push notifications (see Phase 8), password reset once there is an email provider.

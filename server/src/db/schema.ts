@@ -41,6 +41,8 @@ export const cards = sqliteTable(
     inBooster: integer("in_booster", { mode: "boolean" }).notNull().default(false),
     artist: text("artist"),
     scryfallUri: text("scryfall_uri").notNull().default(""),
+    /** Scryfall purchase_uris (tcgplayer, cardmarket, cardhoarder), Phase 10; null when Scryfall lists none. */
+    purchaseUris: text("purchase_uris", { mode: "json" }).$type<Record<string, string> | null>(),
     /** Ingest run that last saw this printing; rows from older runs are pruned. */
     seenRun: integer("seen_run").notNull().default(0),
   },
