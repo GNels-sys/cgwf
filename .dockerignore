@@ -1,0 +1,10 @@
+node_modules
+**/node_modules
+data
+.env
+.git
+**/dist
+client/dev-dist
+*.md
+!README.md
+.github

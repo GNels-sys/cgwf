@@ -1,0 +1,28 @@
+{
+  "name": "cgwf",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Card Games with Friends - a private virtual card table",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w shared && npm run build -w client && npm run build -w server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run",
+    "start": "node server/dist/index.js",
+    "ingest": "node server/dist/cli.js ingest",
+    "db:generate": "npm run db:generate -w server"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
