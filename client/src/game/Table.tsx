@@ -1,3 +1,4 @@
+import { useTableMotion } from "./useTableMotion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
@@ -42,7 +43,7 @@ interface CardsPanel {
 function DropRow({ id, className, children }: { id: string; className: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} className={`${className}${isOver ? " is-over" : ""}`}>
+    <div ref={setNodeRef} data-zone={id.replace("zone:", "")} className={`${className}${isOver ? " is-over" : ""}`}>
       {children}
     </div>
   );
@@ -51,7 +52,7 @@ function DropRow({ id, className, children }: { id: string; className: string; c
 function DropButton({ id, className, style, onClick, label, children }: { id: string; className?: string; style?: React.CSSProperties | undefined; onClick: () => void; label: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <button ref={setNodeRef} className={`zone-btn${className ? ` ${className}` : ""}${isOver ? " is-over" : ""}`} style={style} onClick={onClick} aria-label={label}>
+    <button ref={setNodeRef} data-zone={id.replace("zone:", "")} className={`zone-btn${className ? ` ${className}` : ""}${isOver ? " is-over" : ""}`} style={style} onClick={onClick} aria-label={label}>
       {children}
     </button>
   );
@@ -64,6 +65,7 @@ function OpponentChip({ p, member, active, side, size, onClick }: { p: ViewPlaye
     <button
       className={`opp-chip is-${size}${active ? " is-active" : ""}${p.conceded ? " is-out" : ""}${member && !member.online ? " is-offline" : ""}${side ? " is-side" : ""}${member?.isAgent ? " is-agent" : ""}${member?.thinking ? " is-thinking" : ""}`}
       onClick={onClick}
+      data-player-id={p.id}
       aria-label={`${p.name}, ${p.life} life, ${p.hand.count} in hand, ${p.library.count} in library, ${field} on the battlefield${active ? ", active player" : ""}${p.conceded ? ", conceded" : ""}. Open their battlefield`}
     >
       {member && <Avatar avatar={member.avatar} color={member.color} size={size === "small" ? 22 : size === "large" ? 34 : 26} />}
@@ -87,6 +89,8 @@ function OpponentChip({ p, member, active, side, size, onClick }: { p: ViewPlaye
 }
 
 export function Table({ room, view, printings, sock }: { room: RoomInfo; view: PlayerView; printings: Printings; sock: RoomSocket }) {
+  const tableRef = useRef<HTMLDivElement>(null);
+  useTableMotion(tableRef, view, sock.status === "open");
   const navigate = useNavigate();
   const { settings } = useSettings();
   const me = view.viewer;
@@ -288,7 +292,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className={tableClass} style={tableStyle}>
+      <div ref={tableRef} className={tableClass} style={tableStyle}>
         {/* ---- top: opponents + turn tracker ---- */}
         <div className="table-top">
           <div className="opp-strip">{topOpponents.map((p) => renderChip(p, false))}</div>

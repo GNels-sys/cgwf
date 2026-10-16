@@ -32,7 +32,7 @@ export default defineConfig({
         // The app shell works offline; API and images are fetched live (images cache separately).
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//, /^\/img\//],
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,jpg,woff2}"],
         runtimeCaching: [
           {
             urlPattern: /^\/img\//,

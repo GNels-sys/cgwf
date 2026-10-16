@@ -193,3 +193,85 @@ interior matrix. Additional local captures are available at
 | Library editor | [Desktop](design-previews/interiors/library-deck-desktop-dark.jpg) |
 | Computer opponents | [Desktop](design-previews/interiors/agents-desktop-dark.jpg) |
 | Admin | [Desktop](design-previews/interiors/admin-desktop-dark.jpg) |
+
+
+## Illustrated glass and gameplay motion (2026-10-16)
+
+### Artwork and frosted surfaces
+
+`client/public/art/realms.jpg` is a new original environment painting made with the
+built-in ImageGen tool: woodland, moonlit observatory ruins, and an ember sanctuary.
+It is 1536×1024, JPEG quality 86, 351,986 bytes. Different portions of this image
+appear behind deck tiles, interior headers, library rows, friend invitations, and
+host/join panels. The image and glaze are separate background pseudo-elements;
+complete card faces, names, artist lines, and copyright stay sharp and unobscured.
+
+Generation prompt: "Use case: stylized-concept. Asset type: original fantasy environment
+illustration for subtle website panel backgrounds. A panoramic painterly triptych with
+three equal vertical regions seamlessly flowing into each other, no visible frame or
+text: left an emerald ancient woodland with luminous fireflies and immense mossy roots,
+center a teal moonlit ruined observatory above mist with distant spires and crystalline
+pools, right a warm ember volcanic mountain sanctuary with copper light and floating
+ash. Rich sophisticated hand-painted fantasy world concept art. Atmospheric, low visual
+clutter, no characters, no lettering, no logos, no existing franchise designs. Wide
+1536x1024 composition. These scenes will become subdued frosted backgrounds behind UI
+text; keep broad soft masses, beautiful depths and restrained luminous accents."
+
+Glass tokens: `--glass` is `#172722b3` in dark mode and `#fffdf1c7` in light mode;
+`--glass-strong` gives number/confirmation dialogs a denser fill. Dedicated
+`--glass-muted` colors keep supporting text readable. Menus, action sheets, card
+modals, mana panels, notifications, triggers, and mulligan panels use 18px backdrop
+blur and subtle warm edges. Backdrops lightly dim the table instead of blacking it
+out. Browsers without backdrop-filter keep the original opaque surface fallback.
+The artwork is compressed; `.jpg` shell art is now included in the PWA precache
+alongside the existing assets (17 entries, about 1.25 MiB total).
+
+### Motion behavior
+
+`useTableMotion.ts` is a presentation-only hook using native Web Animations. No library
+or dependency was added, and no action, event, reducer, socket, or game rule changed.
+Data attributes on existing tiles/zones provide geometry. The hook compares authorized
+per-player views after React renders the new state and draws noninteractive ghosts:
+
+- Library to hand: 360ms sleeve arc; the real card is already present and actionable.
+- Hand/command zone to battlefield: a short physical card trail and arrival outline.
+- Visible card to graveyard: 460ms departure with a restrained ember edge. This is a
+  zone-move treatment, not a rules-engine assertion that a card was destroyed; discard
+  and sacrifice use the same graveyard treatment.
+- Exile: a quiet violet edge; return to hand: a soft blue edge. Library-to-graveyard or
+  exile moves can use a sleeve trail when the source was not previously visible.
+- Existing tap/untap rotation, flips, life ticks, and trigger highlights remain. New
+  token/card arrivals use an outline instead of fading an actionable tile out. Menus
+  settle by 8px over 150ms, with no hidden or delayed actions.
+
+Trails are capped at six per update and removed on completion, the next update, or
+unmount. They have `aria-hidden` and `pointer-events: none`. Initial load, disconnected
+state, background tabs, large event jumps, and rewinds skip travel. Rewinds are detected
+from log history as well as sequence numbers, because a silent undo can increase the
+wire sequence while shortening the public log. There is no trail if native animation
+support is unavailable. The live reduced-motion media query cancels in-flight native
+animations immediately; CSS motion is also disabled.
+
+Hidden-information boundaries remain intact: drawing uses a sleeve; no hidden card
+identity is requested or inferred. A departing face may reuse only an image already
+on the current viewer's screen. Moves into libraries always use a sleeve. Opponents'
+hidden hands are never enumerated or exposed by the effect.
+
+### Verification
+
+All 193 tests, type checking, and production build pass. The 138-check interior matrix
+was repeated with no JavaScript errors or page overflow. Dynamic browser checks at
+375×812, 812×375, and 1440×1000, in both themes, exercised drawing, playing,
+graveyard/exile moves, returning to hand, immediate input availability, cleanup,
+reduced motion, switching reduced motion on mid-animation, and silent-undo suppression.
+The motion checks used synthetic synchronized views and did not write to any database.
+These remain browser-emulated checks rather than physical-phone or live multiplayer
+testing. Gameplay timing and multi-card effects are decorative and deliberately brief.
+
+Current examples are retained in `design-previews/glass/`:
+[Decks](design-previews/glass/decks-desktop-dark.jpg),
+[Phone decks](design-previews/glass/decks-portrait-dark.jpg),
+[Frosted table menu](design-previews/glass/frosted-menu-landscape-dark.jpg),
+[Light table menu](design-previews/glass/frosted-menu-landscape-light.jpg), and
+[Draw in progress](design-previews/glass/drawing-landscape-dark.jpg).
+`qa-motion.json` records the dynamic checks and computed glass styles.

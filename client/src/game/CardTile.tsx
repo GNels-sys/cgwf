@@ -112,6 +112,7 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
   return (
     <div
       ref={setNodeRef}
+      data-card-id={card.iid}
       className={`tile${card.tapped ? " is-tapped" : ""}${selected ? " is-selected" : ""}${attached ? " is-attached" : ""}${card.isToken ? " is-token" : ""}${card.isCommander ? " is-commander" : ""}${highlight ? " is-triggered" : ""}${flipping ? " is-flipping" : ""}`}
       style={style}
       {...listeners}

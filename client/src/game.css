@@ -1992,3 +1992,39 @@
   .settings-page .settings > section { padding: 18px; }
   .settings-page .swatch { width: 64px; height: 80px; }
 }
+
+/* Decorative motion overlays never participate in hit testing or layout. */
+.motion-card {
+  position: fixed;
+  z-index: 48;
+  pointer-events: none;
+  border: 1px solid #e5c17f;
+  border-radius: 5px;
+  box-shadow: 0 6px 20px #0007, 0 0 12px #dfb76d55;
+  transform-origin: center;
+  contain: layout style;
+}
+.motion-card:empty::before { content: "\25c7"; position: absolute; inset: 8%; border: 1px solid #dfb76d88; border-radius: 18% 3%; color: #e9cf92; display: grid; place-items: center; font: 28px Georgia, serif; }
+.motion-card img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: inherit; }
+.motion-graveyard { border-color: #e99362; box-shadow: 0 5px 20px #0007, -8px -10px 22px #e5793a70; }
+.motion-exile { border-color: #bfa2f2; box-shadow: 0 0 28px #ac85ed77; }
+.motion-return { border-color: #8bbddd; box-shadow: 0 0 20px #86bde55e; }
+@supports ((backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px))) {
+  .sheet-action { background: color-mix(in srgb, var(--bg-elev-2) 65%, transparent); }
+  .sheet-close, .modal-close { background: color-mix(in srgb, var(--bg-elev-2) 80%, transparent); }
+}
+.sheet-head > strong, .panel-head > strong { font: 1.4rem var(--font-display); }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet, .modal, .mana-panel, .bell-panel { animation: glass-arrive 150ms ease-out; }
+  .tile.is-triggered .tile-inner { animation: trigger-breathe 1.8s ease-in-out infinite; }
+  .table.is-my-turn .table-top { animation: turn-arrive 450ms ease-out; }
+}
+@keyframes glass-arrive { from { transform: translateY(8px); } to { transform: translateY(0); } }
+@keyframes trigger-breathe { 0%, 100% { box-shadow: 0 0 0 2px #7bd36b, 0 0 7px #7bd36b55; } 50% { box-shadow: 0 0 0 2px #7bd36b, 0 0 15px #7bd36b88; } }
+@keyframes turn-arrive { from { border-bottom-color: #f5d89e; } to { border-bottom-color: var(--border); } }
+@media (prefers-reduced-motion: reduce) { .motion-card { display: none !important; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tile { animation: card-ready 220ms ease-out; }
+}
+@keyframes card-ready { from { outline: 1px solid #dfb76d88; outline-offset: 2px; } to { outline: 1px solid transparent; outline-offset: 4px; } }
