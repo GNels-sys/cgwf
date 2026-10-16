@@ -115,6 +115,11 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
           case "revert":
             room.revert(user.id, Number(msg.toSeq));
             break;
+          case "rematch": {
+            const next = roomsManager.rematch(room, user.id);
+            next.broadcastRoom();
+            break;
+          }
           case "leave":
             room.leave(user.id);
             room.broadcastRoom();

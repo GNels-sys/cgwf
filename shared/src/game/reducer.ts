@@ -285,7 +285,7 @@ function checkEnded(state: GameState, ev: GameEvent): void {
   if (alive.length <= 1 && state.turnOrder.length >= 2) {
     state.phase = "ended";
     state.winner = alive[0] ?? null;
-    log(state, ev, state.winner ? `${player(state, state.winner).name} wins the game` : "The game is over");
+    log(state, ev, state.winner ? `${player(state, state.winner).name} won the game` : "The game is over");
   }
 }
 
@@ -295,7 +295,7 @@ function maybeFinishMulligans(state: GameState, ev: GameEvent): void {
   state.phase = "playing";
   state.turn = 1;
   state.step = "untap";
-  log(state, ev, `Everyone kept. Turn 1: ${player(state, state.activePlayer).name}`);
+  log(state, ev, `Everyone kept. Turn 1: ${player(state, state.activePlayer).name} goes first`);
 }
 
 // ---------------------------------------------------------------- start
@@ -391,7 +391,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       shuffleLibrary(state, p);
       draw(state, p, HAND_SIZE);
       p.mulligans++;
-      log(state, ev, `${p.name} mulligans (${p.mulligans})`);
+      log(state, ev, `${p.name} took a mulligan (${p.mulligans})`);
       break;
     }
     case "HandKept": {
@@ -400,7 +400,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (state.phase !== "mulligan") fail("mulligans are over");
       p.kept = true;
       p.toBottom = Math.min(p.mulligans, p.zones.hand.length);
-      log(state, ev, p.mulligans ? `${p.name} keeps and will put ${p.mulligans} on the bottom` : `${p.name} keeps`);
+      log(state, ev, p.mulligans ? `${p.name} kept and will put ${p.mulligans} on the bottom` : `${p.name} kept their hand`);
       maybeFinishMulligans(state, ev);
       break;
     }
@@ -410,7 +410,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requireActor(ev, p.id, "that player");
       const want = Math.max(1, Math.min(50, Math.floor(ev.payload.count)));
       const n = draw(state, p, want);
-      log(state, ev, n === want ? `${p.name} draws ${n === 1 ? "a card" : `${n} cards`}` : `${p.name} draws ${n} (library empty)`);
+      log(state, ev, n === want ? `${p.name} drew ${n === 1 ? "a card" : `${n} cards`}` : `${p.name} drew ${n} (library empty)`);
       break;
     }
     case "CardMoved": {
@@ -431,10 +431,10 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const name = alive ? describe(alive, publicBefore) : cardName(c);
       const toLabel = zoneLabel(to.kind, dest, ev.actor === to.owner, to.kind === "battlefield" ? alive?.zone.row : undefined);
       const fromLabel = zoneLabel(fromKind, player(state, fromOwner), ev.actor === fromOwner);
-      if (!alive) log(state, ev, `${actorName} removes token ${name}`);
-      else if (to.kind === "library") log(state, ev, `${actorName} puts ${name} on the ${to.position === "bottom" ? "bottom" : "top"} of ${toLabel}`);
-      else if (fromKind === "hand" && to.kind === "battlefield") log(state, ev, `${actorName} plays ${name}${to.faceDown ? " face down" : ""}`);
-      else log(state, ev, `${actorName} moves ${name} from ${fromLabel} to ${toLabel}${to.faceDown ? " face down" : ""}`);
+      if (!alive) log(state, ev, `${actorName} removed the ${name} token`);
+      else if (to.kind === "library") log(state, ev, `${actorName} put ${name} on the ${to.position === "bottom" ? "bottom" : "top"} of ${toLabel}`);
+      else if (fromKind === "hand" && to.kind === "battlefield") log(state, ev, `${actorName} played ${name}${to.faceDown ? " face down" : ""}`);
+      else log(state, ev, `${actorName} moved ${name} from ${fromLabel} to ${toLabel}${to.faceDown ? " face down" : ""}`);
       break;
     }
     case "CardTapped": {
@@ -442,14 +442,14 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const c = card(state, ev.payload.iid);
       if (c.zone.kind !== "battlefield") fail("only permanents tap");
       c.tapped = ev.payload.tapped;
-      log(state, ev, `${actorName} ${c.tapped ? "taps" : "untaps"} ${describe(c, false)}`);
+      log(state, ev, `${actorName} ${c.tapped ? "tapped" : "untapped"} ${describe(c, false)}`);
       break;
     }
     case "UntapAll": {
       requirePlaying(state);
       const p = player(state, ev.payload.player);
       const n = untapAll(state, p);
-      log(state, ev, `${actorName} untaps ${n === 1 ? "1 permanent" : `${n} permanents`}${p.id === ev.actor ? "" : ` of ${p.name}'s`}`);
+      log(state, ev, `${actorName} untapped ${n === 1 ? "1 permanent" : `${n} permanents`}${p.id === ev.actor ? "" : ` of ${p.name}'s`}`);
       break;
     }
     case "CardFlipped": {
@@ -458,7 +458,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (c.zone.kind === "hand" || c.zone.kind === "library") requireActor(ev, c.zone.owner, "the owner");
       if (!c.printing || c.printing.faces.length < 2) fail("that card has only one face");
       c.face = c.face === 0 ? 1 : 0;
-      log(state, ev, `${actorName} transforms ${describe(c, false)}`);
+      log(state, ev, `${actorName} transformed ${describe(c, false)}`);
       break;
     }
     case "CardTurned": {
@@ -468,7 +468,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const publicBefore = isPublic(c);
       c.faceDown = ev.payload.faceDown;
       if (!c.faceDown) c.revealedTo = null;
-      log(state, ev, c.faceDown ? `${actorName} turns ${describe(c, publicBefore)} face down` : `${actorName} turns ${describe(c, false)} face up`);
+      log(state, ev, c.faceDown ? `${actorName} turned ${describe(c, publicBefore)} face down` : `${actorName} turned ${describe(c, false)} face up`);
       break;
     }
     case "CardRevealed": {
@@ -476,7 +476,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const c = card(state, ev.payload.iid);
       requireActor(ev, c.zone.owner, "the owner");
       c.revealedTo = "all";
-      log(state, ev, `${actorName} reveals ${cardName(c)}${c.zone.kind === "hand" ? " from their hand" : ""}`);
+      log(state, ev, `${actorName} revealed ${cardName(c)}${c.zone.kind === "hand" ? " from their hand" : ""}`);
       break;
     }
     case "CounterChanged": {
@@ -489,7 +489,8 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const next = Math.max(0, (c.counters[kind] ?? 0) + delta);
       if (next === 0) delete c.counters[kind];
       else c.counters[kind] = next;
-      log(state, ev, `${actorName} ${delta >= 0 ? "adds" : "removes"} ${Math.abs(delta)} ${kind} counter${Math.abs(delta) === 1 ? "" : "s"} ${delta >= 0 ? "to" : "from"} ${describe(c, false)} (now ${next})`);
+      const howMany = Math.abs(delta) === 1 ? `a ${kind} counter` : `${Math.abs(delta)} ${kind} counters`;
+      log(state, ev, `${actorName} ${delta >= 0 ? "put" : "removed"} ${howMany} ${delta >= 0 ? "on" : "from"} ${describe(c, false)} (now ${next})`);
       break;
     }
     case "LifeChanged": {
@@ -499,7 +500,9 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (typeof ev.payload.value === "number") p.life = Math.trunc(ev.payload.value);
       else p.life += Math.trunc(ev.payload.delta ?? 0);
       const d = p.life - before;
-      log(state, ev, `${p.name}${p.id === ev.actor ? "" : ` (by ${actorName})`}: life ${before} → ${p.life} (${d >= 0 ? "+" : ""}${d})`);
+      const by = p.id === ev.actor ? "" : ` (by ${actorName})`;
+      if (d === 0) log(state, ev, `${p.name}${by} set their life to ${p.life}`);
+      else log(state, ev, `${p.name}${by} ${d > 0 ? "gained" : "lost"} ${Math.abs(d)} life (now ${p.life})`);
       break;
     }
     case "PlayerCounterChanged": {
@@ -510,7 +513,8 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const next = Math.max(0, (p.counters[kind] ?? 0) + Math.trunc(ev.payload.delta));
       if (next === 0) delete p.counters[kind];
       else p.counters[kind] = next;
-      log(state, ev, `${p.name}: ${kind} ${next}`);
+      const dlt = Math.trunc(ev.payload.delta);
+      log(state, ev, `${p.name} ${dlt >= 0 ? "got" : "lost"} ${Math.abs(dlt)} ${kind} (now ${next})`);
       break;
     }
     case "CommanderDamage": {
@@ -520,7 +524,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (!cmd.isCommander) fail("not a commander");
       const next = Math.max(0, (p.commanderDamage[cmd.iid] ?? 0) + Math.trunc(ev.payload.delta));
       p.commanderDamage[cmd.iid] = next;
-      log(state, ev, `${p.name} has taken ${next} from ${cardName(cmd)}`);
+      log(state, ev, `${p.name} has taken ${next} damage from ${cardName(cmd)} in total`);
       break;
     }
     case "CommanderTaxChanged": {
@@ -538,7 +542,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const p = player(state, ev.payload.player);
       requireActor(ev, p.id, "the owner");
       shuffleLibrary(state, p);
-      log(state, ev, `${p.name} shuffles their library`);
+      log(state, ev, `${p.name} shuffled their library`);
       break;
     }
     case "LibraryRevealed": {
@@ -552,7 +556,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
         c.revealedTo = "all";
         names.push(cardName(c));
       }
-      log(state, ev, `${p.name} reveals the top of their library: ${names.join(", ") || "(empty)"}`);
+      log(state, ev, `${p.name} revealed the top of their library: ${names.join(", ") || "(empty)"}`);
       break;
     }
     case "LibraryLooked": {
@@ -561,7 +565,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requireActor(ev, p.id, "the owner");
       const n = Math.max(1, Math.min(50, Math.floor(ev.payload.count)));
       for (const iid of p.zones.library.slice(0, n)) addReveal(card(state, iid), p.id);
-      log(state, ev, `${p.name} looks at the top ${n === 1 ? "card" : `${n} cards`} of their library`);
+      log(state, ev, `${p.name} looked at the top ${n === 1 ? "card" : `${n} cards`} of their library`);
       break;
     }
     case "LibrarySearched": {
@@ -569,7 +573,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const p = player(state, ev.payload.player);
       requireActor(ev, p.id, "the owner");
       for (const iid of p.zones.library) addReveal(card(state, iid), p.id);
-      log(state, ev, `${p.name} searches their library`);
+      log(state, ev, `${p.name} searched their library`);
       break;
     }
     case "Milled": {
@@ -587,7 +591,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
         p.zones.graveyard.push(iid);
         names.push(cardName(c));
       }
-      log(state, ev, `${p.name} mills ${names.length}: ${names.join(", ") || "(empty)"}`);
+      log(state, ev, `${p.name} milled ${names.length}: ${names.join(", ") || "(empty)"}`);
       break;
     }
     case "TokenCreated": {
@@ -602,7 +606,8 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
         c.isToken = true;
         p.zones.battlefield[row].push(c.iid);
       }
-      log(state, ev, `${actorName} creates ${count} ${custom?.name ?? printing?.name ?? "token"} token${count === 1 ? "" : "s"}${p.id === ev.actor ? "" : ` for ${p.name}`}`);
+      const tokenName = custom?.name ?? printing?.name ?? "token";
+      log(state, ev, `${actorName} created ${count === 1 ? `a ${tokenName} token` : `${count} ${tokenName} tokens`}${p.id === ev.actor ? "" : ` for ${p.name}`}`);
       break;
     }
     case "CardCopied": {
@@ -615,7 +620,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       c.isToken = true;
       c.face = src.face;
       p.zones.battlefield[row].push(c.iid);
-      log(state, ev, `${actorName} creates a token copy of ${describe(src, false)}`);
+      log(state, ev, `${actorName} created a token copy of ${describe(src, false)}`);
       break;
     }
     case "Attached": {
@@ -633,10 +638,10 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
           c.zone = { kind: "battlefield", owner: host.zone.owner, row: host.zone.row ?? "other" };
           zoneList(player(state, host.zone.owner), "battlefield", host.zone.row).push(c.iid);
         }
-        log(state, ev, `${actorName} attaches ${describe(c, false)} to ${describe(host, false)}`);
+        log(state, ev, `${actorName} attached ${describe(c, false)} to ${describe(host, false)}`);
       } else {
         c.attachedTo = null;
-        log(state, ev, `${actorName} unattaches ${describe(c, false)}`);
+        log(state, ev, `${actorName} unattached ${describe(c, false)}`);
       }
       break;
     }
@@ -648,7 +653,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       state.step = "untap";
       const p = player(state, state.activePlayer);
       const n = untapAll(state, p);
-      log(state, ev, `Turn ${state.turn}: ${p.name}${n ? ` (untapped ${n})` : ""}`);
+      log(state, ev, `Turn ${state.turn}: ${p.name}'s turn${n ? ` (untapped ${n})` : ""}`);
       break;
     }
     case "StepAdvanced": {
@@ -661,17 +666,17 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
         state.step = "untap";
         const p = player(state, state.activePlayer);
         const n = untapAll(state, p);
-        log(state, ev, `Turn ${state.turn}: ${p.name}${n ? ` (untapped ${n})` : ""}`);
+        log(state, ev, `Turn ${state.turn}: ${p.name}'s turn${n ? ` (untapped ${n})` : ""}`);
       } else {
         state.step = STEPS[i + 1] as Step;
-        log(state, ev, `${STEP_LABELS[state.step]}`);
+        log(state, ev, `${actorName} moved to ${STEP_LABELS[state.step]}`);
       }
       break;
     }
     case "StepSet": {
       requirePlaying(state);
       state.step = ev.payload.step;
-      log(state, ev, `${actorName} moves to ${STEP_LABELS[state.step]}`);
+      log(state, ev, `${actorName} jumped to ${STEP_LABELS[state.step]}`);
       break;
     }
     case "DiceRolled": {
@@ -683,13 +688,13 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
         state.rng = rng;
         rolls.push(v + 1);
       }
-      log(state, ev, `${actorName} rolls ${count > 1 ? `${count}d${sides}: ${rolls.join(" + ")} = ${rolls.reduce((a, b) => a + b, 0)}` : `a d${sides}: ${rolls[0]}`}`);
+      log(state, ev, `${actorName} rolled ${count > 1 ? `${count}d${sides}: ${rolls.join(" + ")} = ${rolls.reduce((a, b) => a + b, 0)}` : `a d${sides}: ${rolls[0]}`}`);
       break;
     }
     case "CoinFlipped": {
       const [v, rng] = nextInt(state.rng, 2);
       state.rng = rng;
-      log(state, ev, `${actorName} flips a coin: ${v === 0 ? "heads" : "tails"}`);
+      log(state, ev, `${actorName} flipped a coin: ${v === 0 ? "heads" : "tails"}`);
       break;
     }
     case "RandomOpponent": {
@@ -698,7 +703,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (!others.length) fail("no opponents left");
       const [i, rng] = nextInt(state.rng, others.length);
       state.rng = rng;
-      log(state, ev, `${p.name} picks a random opponent: ${player(state, others[i]!).name}`);
+      log(state, ev, `${p.name} picked a random opponent: ${player(state, others[i]!).name}`);
       break;
     }
     case "PlayerConceded": {
@@ -707,7 +712,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (p.conceded) fail("already conceded");
       p.conceded = true;
       p.kept = true;
-      log(state, ev, `${p.name} concedes`);
+      log(state, ev, `${p.name} conceded`);
       if (state.activePlayer === p.id && state.phase === "playing") {
         state.activePlayer = nextActivePlayer(state);
       }
@@ -727,6 +732,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
  * Rebuild state from the whole log. A Revert event rewinds to just after
  * `toSeq` (events are 1-based and contiguous) and later events continue from
  * there; nested reverts work because the prefix is replayed the same way.
+ * A Revert with reason "undo" is silent; any other revert is logged.
  */
 export function replay(events: readonly GameEvent[], seed: string): GameState | null {
   let state: GameState | null = null;
@@ -737,8 +743,12 @@ export function replay(events: readonly GameEvent[], seed: string): GameState | 
       if (state) {
         state = clone(state);
         state.seq = ev.seq;
-        const who = ev.actor === SYSTEM_ACTOR ? "The table" : (state.players[ev.actor]?.name ?? "Someone");
-        log(state, ev, `${who} ${ev.payload.reason === "undo" ? "undoes their last action" : `reverts the game to #${to}`}`);
+        // A quiet undo (own last action, nobody acted since) leaves no trace in the log: the undone
+        // line simply disappears. An explicit revert is announced so everyone knows what happened.
+        if (ev.payload.reason !== "undo") {
+          const who = ev.actor === SYSTEM_ACTOR ? "The table" : (state.players[ev.actor]?.name ?? "Someone");
+          log(state, ev, `${who} reverted the game to #${to}`);
+        }
       }
       continue;
     }

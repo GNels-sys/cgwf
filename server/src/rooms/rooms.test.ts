@@ -300,7 +300,9 @@ describe("rooms over WebSocket", () => {
     alex.send({ t: "undo" });
     const vb2 = await blair.stateSince(m);
     expect(vb2.players[alexId]!.hand.count).toBe(7);
-    expect(vb2.log.at(-1)!.text).toContain("undoes");
+    // Quiet undo: the "played" line is gone and nothing else was added.
+    expect(vb2.log.at(-1)!.text).not.toContain(playedName);
+    expect(vb2.log.map((l) => l.text).join("\n")).not.toMatch(/undo|revert/i);
 
     // A forged printing is replaced by the real one; an unknown id is refused.
     m = blair.mark();
@@ -323,7 +325,7 @@ describe("rooms over WebSocket", () => {
     alex.send({ t: "revert", toSeq: seqBeforeTokens });
     const vb4 = await blair.stateSince(m);
     expect(vb4.players[blairId]!.battlefield.other).toHaveLength(0);
-    expect(vb4.log.at(-1)!.text).toMatch(/reverts the game to #\d+/);
+    expect(vb4.log.at(-1)!.text).toMatch(/reverted the game to #\d+/);
   });
 
   it("reconnect: a client that drops rejoins by replaying the persisted log, even after a server restart", async () => {
@@ -349,5 +351,54 @@ describe("rooms over WebSocket", () => {
     expect(Object.keys(again.printings).length).toBeGreaterThan(0);
     await again.close();
     alex = again;
+  });
+
+  it("rematch: once the game has ended the host opens a new table with the same seats and decks", async () => {
+    await alex.connect(port, code);
+    await blair.connect(port, code);
+    const alexId = (await alex.stateSince(0)).viewer!;
+    const blairId = (await blair.stateSince(0)).viewer!;
+    let m = alex.mark();
+    alex.send({ t: "rematch" });
+    expect(await alex.errorSince(m)).toMatch(/still going/);
+    m = blair.mark();
+    blair.send({ t: "event", event: { type: "PlayerConceded", payload: { player: blairId } } });
+    const ended = await blair.stateSince(m);
+    expect(ended.phase).toBe("ended");
+    expect(ended.winner).toBe(alexId);
+    m = alex.mark();
+    blair.send({ t: "rematch" });
+    expect(await blair.errorSince(blair.mark() - 1)).toMatch(/host/);
+    alex.send({ t: "rematch" });
+    const info = await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.nextCode !== null, m);
+    const nextCode = info.room.nextCode!;
+    expect(nextCode).not.toBe(code);
+    // Everyone at the old table learns the new code too.
+    const blairInfo = await blair.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.nextCode === nextCode);
+    expect(blairInfo.room.status).toBe("ended");
+    await alex.close();
+    await blair.close();
+
+    const alex2 = new Client("alex3", alex.token);
+    const blair2 = new Client("blair3", blair.token);
+    await alex2.connect(port, nextCode);
+    await blair2.connect(port, nextCode);
+    const fresh = await alex2.stateSince(0);
+    expect(fresh.phase).toBe("mulligan");
+    expect(fresh.seq).toBe(1);
+    expect(fresh.players[alexId]!.seat).toBe(0);
+    expect(fresh.players[blairId]!.seat).toBe(1);
+    expect(fresh.players[alexId]!.hand.cards).toHaveLength(7);
+    expect(alex2.nameOf(fresh.players[alexId]!.command[0]!.printingId)).toBe("Atraxa, Praetors' Voice");
+    const room2 = await alex2.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room");
+    expect(room2.room.hostId).toBe(alexId);
+    expect(room2.room.members.find((x) => x.userId === blairId)?.seat).toBe(1);
+    // A fresh seed: a second press is idempotent and does not open a third room.
+    alex2.send({ t: "rematch" });
+    expect(await alex2.errorSince(alex2.mark() - 1)).toMatch(/still going/);
+    await alex2.close();
+    await blair2.close();
+    alex = alex2;
+    blair = blair2;
   });
 });

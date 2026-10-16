@@ -201,7 +201,7 @@ describe("reducer", () => {
     }
     s = g.push(A, { type: "CardMoved", payload: { iid: creature.iid, to: { kind: "battlefield", owner: A } } });
     expect(a().zones.battlefield.creatures).toContain(creature.iid);
-    expect(s.log.at(-1)!.text).toContain(`plays ${creature.printing!.name}`);
+    expect(s.log.at(-1)!.text).toBe(`Alex played ${creature.printing!.name}`);
 
     s = g.push(A, { type: "CardTapped", payload: { iid: creature.iid, tapped: true } });
     expect(s.cards[creature.iid]!.tapped).toBe(true);
@@ -283,7 +283,7 @@ describe("reducer", () => {
       const a = g1.push(A, { type: "DiceRolled", payload: { player: A, sides: 20 } }).log.at(-1)!.text;
       const b = g2.push(A, { type: "DiceRolled", payload: { player: A, sides: 20 } }).log.at(-1)!.text;
       expect(a).toBe(b);
-      expect(a).toMatch(/rolls a d20: \d+/);
+      expect(a).toMatch(/rolled a d20: \d+/);
     }
     expect(g1.push(A, { type: "CoinFlipped", payload: { player: A } }).log.at(-1)!.text).toMatch(/heads|tails/);
     expect(g1.push(A, { type: "RandomOpponent", payload: { player: A } }).log.at(-1)!.text).toContain("Blair");
@@ -296,17 +296,60 @@ describe("reducer", () => {
     const hand0 = g.state!.players[A]!.zones.hand[0]!;
     g.push(A, { type: "CardMoved", payload: { iid: hand0, to: { kind: "battlefield", owner: A } } }); // 4
     g.push(A, { type: "LifeChanged", payload: { player: A, delta: -5 } }); // 5
+    const logBeforeUndo = g.state!.log.map((l) => l.text);
+    expect(logBeforeUndo.at(-1)).toBe("Alex lost 5 life (now 35)");
     let s = g.push(A, { type: "Revert", payload: { toSeq: 4, reason: "undo" } }); // 6
     expect(s.players[A]!.life).toBe(40);
     expect(s.cards[hand0]!.zone.kind).toBe("battlefield");
     expect(s.seq).toBe(6);
-    expect(s.log.at(-1)!.text).toContain("undoes");
+    // A quiet undo: the undone line is gone and nothing announces the undo.
+    expect(s.log.map((l) => l.text)).toEqual(logBeforeUndo.slice(0, -1));
+    expect(s.log.map((l) => l.text).join("\n")).not.toMatch(/undo|revert/i);
     s = g.push(A, { type: "LifeChanged", payload: { player: A, delta: -1 } }); // 7
     expect(s.players[A]!.life).toBe(39);
+    // An explicit revert by anyone is announced in the log.
     s = g.push(B, { type: "Revert", payload: { toSeq: 3 } }); // 8
     expect(s.cards[hand0]!.zone.kind).toBe("hand");
     expect(s.players[A]!.life).toBe(40);
+    expect(s.log.at(-1)!.text).toBe("Blair reverted the game to #3");
     expect(replay(g.events, SEED)).toEqual(s);
+  });
+
+  it("log lines read as sentences and tokens vanish when they leave the battlefield", () => {
+    const g = new Game();
+    g.start();
+    let s = g.keepAll();
+    const text = () => s.log.at(-1)!.text;
+    s = g.push(A, { type: "CardsDrawn", payload: { player: A, count: 2 } });
+    expect(text()).toBe("Alex drew 2 cards");
+    s = g.push(B, { type: "LifeChanged", payload: { player: B, delta: 3 } });
+    expect(text()).toBe("Blair gained 3 life (now 43)");
+    s = g.push(A, { type: "LifeChanged", payload: { player: B, value: 20 } });
+    expect(text()).toBe("Blair (by Alex) lost 23 life (now 20)");
+    s = g.push(B, { type: "PlayerCounterChanged", payload: { player: B, kind: "poison", delta: 2 } });
+    expect(text()).toBe("Blair got 2 poison (now 2)");
+    s = g.push(A, { type: "TokenCreated", payload: { player: A, printing: null, custom: { name: "Treasure", typeLine: "Artifact — Treasure", power: null, toughness: null, colors: [], text: "" }, count: 3, row: "other" } });
+    expect(text()).toBe("Alex created 3 Treasure tokens");
+    const tokens = s.players[A]!.zones.battlefield.other.slice(-3);
+    s = g.push(A, { type: "CardTapped", payload: { iid: tokens[0]!, tapped: true } });
+    expect(text()).toBe("Alex tapped Treasure");
+    s = g.push(A, { type: "CounterChanged", payload: { iid: tokens[1]!, kind: "+1/+1", delta: 1 } });
+    expect(text()).toBe("Alex put a +1/+1 counter on Treasure (now 1)");
+    s = g.push(A, { type: "CounterChanged", payload: { iid: tokens[1]!, kind: "+1/+1", delta: -1 } });
+    expect(text()).toBe("Alex removed a +1/+1 counter from Treasure (now 0)");
+    // Sacrificed (graveyard), exiled and bounced tokens all cease to exist.
+    s = g.push(A, { type: "CardMoved", payload: { iid: tokens[0]!, to: { kind: "graveyard", owner: A } } });
+    s = g.push(A, { type: "CardMoved", payload: { iid: tokens[1]!, to: { kind: "exile", owner: A } } });
+    s = g.push(A, { type: "CardMoved", payload: { iid: tokens[2]!, to: { kind: "hand", owner: A } } });
+    for (const t of tokens) expect(s.cards[t]).toBeUndefined();
+    expect(s.players[A]!.zones.graveyard).toHaveLength(0);
+    expect(s.players[A]!.zones.exile).toHaveLength(0);
+    expect(s.players[A]!.zones.hand).toHaveLength(9);
+    expect(text()).toBe("Alex removed the Treasure token");
+    s = g.push(A, { type: "DiceRolled", payload: { player: A, sides: 6, count: 2 } });
+    expect(text()).toMatch(/^Alex rolled 2d6: \d \+ \d = \d+$/);
+    s = g.push(B, { type: "PlayerConceded", payload: { player: B } });
+    expect(s.log.map((l) => l.text).slice(-2)).toEqual(["Blair conceded", "Alex won the game"]);
   });
 });
 
@@ -422,11 +465,11 @@ describe("per-player view (hidden information)", () => {
     let s = g.keepAll();
     const h = s.players[A]!.zones.hand[0]!;
     s = g.push(A, { type: "CardMoved", payload: { iid: h, to: { kind: "battlefield", owner: A, faceDown: true } } });
-    expect(s.log.at(-1)!.text).toBe("Alex plays a card face down");
+    expect(s.log.at(-1)!.text).toBe("Alex played a card face down");
     s = g.push(A, { type: "CardMoved", payload: { iid: h, to: { kind: "hand", owner: A } } });
-    expect(s.log.at(-1)!.text).toContain("moves a card");
+    expect(s.log.at(-1)!.text).toContain("moved a card");
     s = g.push(A, { type: "CardsDrawn", payload: { player: A, count: 1 } });
-    expect(s.log.at(-1)!.text).toBe("Alex draws a card");
+    expect(s.log.at(-1)!.text).toBe("Alex drew a card");
     expect(s.log.map((l) => l.text).join("\n")).not.toContain("Secret");
   });
 });
