@@ -95,6 +95,7 @@ export class NameIndex {
 
     for (const c of candidates) {
       if (c.norm === q) consider(c.entry, 0);
+      else if (c.norm.startsWith(`${q} `)) consider(c.entry, 0.5); // whole leading word(s)
       else if (c.norm.startsWith(q)) consider(c.entry, 1);
       else if (c.norm.includes(` ${q}`)) consider(c.entry, 2);
       else if (c.norm.includes(q)) consider(c.entry, 3);

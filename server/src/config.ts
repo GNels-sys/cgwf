@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,13 @@ function env(name: string, fallback: string): string {
 
 const here = path.dirname(fileURLToPath(import.meta.url)); // server/src or server/dist
 const serverRoot = path.resolve(here, "..");
-const dataDir = path.resolve(env("DATA_DIR", "./data"));
+const repoRoot = path.resolve(serverRoot, "..");
+
+// Settings come from the environment; in development a .env at the repo root fills the gaps.
+// Paths are resolved against the repo root so `npm run dev -w server` and `node server/dist/index.js`
+// agree on where ./data lives, whatever the current directory is.
+dotenv.config({ path: path.join(repoRoot, ".env"), quiet: true });
+const dataDir = path.resolve(repoRoot, env("DATA_DIR", "./data"));
 
 export const config = {
   port: Number(env("PORT", "8080")),
