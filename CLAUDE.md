@@ -86,7 +86,8 @@ bounded edit distance.
   the SHA-256 hash (since Phase 5 in `sessions.token_hash`, one row per device). `requireUser` in
   `server/src/auth.ts` guards routes; rate limits key on the user when signed in, else the IP.
 - Tables: `users`, `sessions`, `decks`, `deck_cards` (printing id + quantity + board + category +
-  position); Phase 6 adds `combo_cache`, `library_decks`, `library_deck_cards`.
+  position); Phase 6 adds `combo_cache`, `library_decks`, `library_deck_cards`; Phase 7 adds
+  `users.is_agent`, `agent_runs`, `agent_decisions`.
   Boards: main | commander | sideboard | maybeboard | companion. Format column kept, "commander" only.
 - Parser: `shared/src/deck/parse.ts` (pure text -> lines/boards/tags/markers); fixtures for the
   five sites in `shared/src/deck/fixtures.ts`. Resolution against card data lives in
@@ -446,6 +447,109 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
   the model call behind an owner-only route. Agent opponents should pick from
   `library.list({agentEligible: true})`.
 
+## Computer opponents (Phase 7, owner only)
+
+"Agents" are Claude-driven seats. Everything lives in `server/src/agents/`; nothing here runs unless
+`AGENTS_ENABLED=1` (a Fly secret; off = every agent route answers 404 and the lobby control is hidden).
+
+### Non-negotiables, enforced in code
+
+- **Agents are ordinary seats.** An agent is a `users` row with `is_agent = 1` (no sessions, no
+  sign-in) and a `decks` copy of a library deck (`decks.source_url = library:<id>`), seated in the
+  lobby like anyone else. `AgentRunner` subscribes to `LiveRoom.onState` (the true state), builds its
+  OWN view with `viewFor(state, me)` - the same filter a human client gets - and acts only through
+  `room.submit(me, event)`, the same validation + reducer path as a WebSocket client. The prompt
+  builder (`prompt.ts`) takes a `PlayerView` + printings and nothing else; `prompt.test.ts` proves
+  that other hands and every library never appear in the text (own hand does).
+- **Owner only.** All of `routes/agents.ts` runs behind `[requireUser, requireOwner]` plus the flag;
+  the lobby control, the reasoning drawer, `/admin/agents` and "Draft with Claude" are hidden for
+  non-owners and refused server-side.
+- **Spend control.** `AGENT_MAX_USD_PER_GAME` (default 6) and `AGENT_MAX_USD_PER_DAY` (default 25)
+  are checked before every model call (`AgentManager.mayCall`) from the usage the API returned
+  (`pricing.ts`: $2 / $10 per MTok on Sonnet, cache write 1.25x, cache read 0.1x); when a cap is hit
+  the agent posts "stops playing: <reason>" in the log and concedes, the run is marked `capped`.
+  `AGENT_MAX_TOKENS_PER_DECISION` (1500), `AGENT_DECISION_TIMEOUT_MS` (60 s) and
+  `AGENT_MAX_CALLS_PER_TURN` (8) bound each decision and turn. Primer drafts count toward the daily
+  cap through `meta.agent_draft_spend:<date>`.
+
+### Runtime (`server/src/agents/`)
+
+- `manager.ts` (`AgentManager`): `addAgents(room, host, {count, bracket})` removes existing agents,
+  takes `library.list({agentEligible: true, bracket})` (falls back to any eligible deck), shuffles,
+  then greedily picks decks sharing the fewest archetype tags with the host's deck (analysed with
+  combos skipped) and with each other; creates the bot user ("Krenko bot", random avatar), the deck
+  copy, joins + seats it on the next free seat. `onGameStarted(room)` / `ensureRunning(room)` start
+  one runner per seated agent (also called on every WebSocket attach, so a game resumes after the
+  machine restarts); `agent_runs` rows track mode (`live` | `dry_run`), status and totals.
+  `record()` writes `agent_decisions` (tokens, cost, latency, outcome, rationale, tool calls).
+- `runner.ts` (`AgentRunner`): per state change it decides whether to act. Mulligans are a RULE,
+  not a model call (keep with 2-5 lands in seven, one mulligan at most; bottoms the priciest
+  spells). On its turn it draws (not on the game's first turn) and sets `main1`, then loops: one
+  model call -> execute every `tool_use` in order (`tools.ts` `mapToolCall` validates against the
+  view, `room.submit` validates with the reducer; errors go back as `tool_result is_error`) ->
+  feed results + a compact re-render -> until `pass_turn`, `concede`, the call limit (then it
+  passes with a note), three invalid calls in a row, a timeout, an API error or a refusal (all pass
+  the turn with a log note). On an opponent's turn it only acts when the table lists pending
+  triggers on ITS permanents (one call, then dismisses what is left). The runner never blocks for
+  other players and never looks at `state.cards` directly.
+- `tools.ts`: the vocabulary, one tool per event: play_land, cast_permanent, cast_spell (reveals,
+  moves to graveyard), tap_cards, move_card, attach, change_counters, change_life, player_counter,
+  commander_damage, create_token (custom tokens), draw_cards, shuffle_library, search_library
+  (result lists the library), adjust_mana, set_step (main1 | combat | main2 | end), attack (taps
+  attackers + `NoteAdded`; applies damage only when the defender is another agent), resolve_trigger,
+  dismiss_triggers, flip_card, untap_all, say (`NoteAdded`), pass_turn, concede. Player references
+  accept "me" or a display name. **Adding an action:** add the event to shared types + reducer,
+  a tool definition and a `case` in `mapToolCall`, a line in `server/data/agents/rules-primer.md`
+  telling the model when to use it, and a case in `tools.test.ts`.
+- `prompt.ts`: `systemPrompt` = behaviour line + rules primer + effects primer + deck primer (cache
+  breakpoint, identical for every decision of a game); `renderState` = players (life, counters,
+  commander damage, hand/library counts, command zone, battlefield by section with ids, graveyard
+  tail), own hand with full oracle text, known library cards, mana pool, pending triggers, log
+  tail; `renderDelta` is the shorter re-render between tool batches.
+- `llm.ts`: `AnthropicLlm` (`@anthropic-ai/sdk`, `messages.create`, `claude-sonnet-5-5` by default
+  via `AGENT_MODEL`, `output_config.effort: "low"` with the model's adaptive thinking, no forced
+  tool choice - Sonnet 5.5 rejects it - system block with `cache_control`); `ScriptedLlm` for tests.
+  Refusals (`stop_reason: "refusal"`) are recorded with their category and pass the turn.
+- `policy.ts`: the dry run (no `ANTHROPIC_API_KEY`): land, cheapest affordable permanent, attack
+  with last turn's creatures when the defender has no untapped creatures or we outpower them 3:1,
+  pass. Also the mulligan rules.
+- `server/data/agents/rules-primer.md` + `effects-primer.md`: what the model is told about this
+  table (stack-less, humans enforce rules, tool semantics, combat as tracked here). Edit freely;
+  loaded once per process.
+- `NoteAdded` event (shared): `{player, text}` -> log line "Name: text" (200 chars). Humans may use
+  it later as chat.
+
+### Routes and UI
+
+- `GET /api/agents/status`, `GET /api/agents/games`, `POST /api/rooms/:code/agents {count,
+  bracket}` (host + owner, lobby only; returns the picks), `DELETE /api/rooms/:code/agents`,
+  `GET /api/rooms/:code/agents` (runs + last 60 decisions + spend), `POST /api/library/:id/draft-primer
+  {force?}` (Claude fills the Phase 6 skeleton; cached per deck via `library_decks.primer_drafted_at`
+  / `primer_model`, `force` redrafts).
+- Lobby: "Computer opponents" box for the owner-host (bracket, how many, Add / Re-roll / Remove,
+  the picks with tags). `RoomMember.isAgent` / `.thinking` (from `LiveRoom.setAgentPresence`) drive
+  the BOT chip, the pulsing "…" while a decision is in flight, and "online" for agents.
+  Table menu -> "Agent reasoning" (owner): runs, rationale per decision, tool calls with errors,
+  cost and latency, polled every 4 s. `/admin/agents`: flags, caps, today's spend, recent games.
+- Tables (migration 0007): `users.is_agent`, `library_decks.primer_drafted_at` + `primer_model`,
+  `agent_runs`, `agent_decisions`.
+
+### Cost expectations (Sonnet 5.5, effort low)
+
+A decision sends the cached system prompt (~6-8k tokens, read at $0.20/MTok after the first call)
+plus 2-4k uncached tokens of state and returns a few hundred tokens: roughly $0.01-0.02 per call. A
+turn is one to four calls; a three-agent, ten-turn game lands around $1-3, inside the $6 cap.
+Measured numbers from real games are in the Phase 7 hand-over note.
+
+### What agents do badly (known)
+
+- They cannot block: a human attacking an agent resolves damage themselves (the attacker's
+  `attack` tool applies damage only between agents). They cannot respond on the stack.
+- They apply spell effects by hand with the bookkeeping tools, so complicated cards are often
+  under-applied; the primer tells them to say what they are doing.
+- Summoning sickness and mana are not enforced by the table; the primer and the dry run respect
+  them, the model usually does. Humans should undo (log -> revert) anything illegal.
+
 ### Testing alone
 
 `node scripts/seed-field.mjs <base-url> <code> <token> "Lotus Cobra" "Rancor" ...` pulls named
@@ -468,5 +572,5 @@ https://cgwf.fly.dev too. The Vite proxy needs `ws: true` for `/api` (already se
    with a one-time claim code. **(done)**
 6. Deck analysis engine, Commander Bracket panel, MTGJSON precon import, owner deck library
    with primers. **(done)**
-7. LLM opponents, owner-only (builds on `requireOwner`).
+7. Computer opponents driven by Claude Sonnet, owner-only, behind AGENTS_ENABLED with USD caps. **(done)**
 8. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority).

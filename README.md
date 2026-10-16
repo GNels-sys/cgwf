@@ -23,7 +23,10 @@ Coast LLC. Card data and images courtesy of [Scryfall](https://scryfall.com).
   turns, two-card infinite combos found by Commander Spellbook), strategy tags and a summary.
   No AI involved; the Game Changers list is a dated file you can edit by hand.
 - Owner only: a deck library of every Commander precon (imported from MTGJSON) plus your own
-  decks, each with a bracket, tags and a primer, for the future AI opponents to pilot.
+  decks, each with a bracket, tags and a primer, for the computer opponents to pilot.
+- Owner only: computer opponents driven by Claude. Add one to three to a table from the lobby;
+  they pick library decks of the bracket you choose, play through the same table actions you
+  use, announce attacks in the log, and stop when a spending cap is reached.
 - Start in ten seconds with just a name and an avatar; add an email and password later to use
   your decks on other devices, see which devices are signed in and sign any of them out.
 
@@ -100,6 +103,21 @@ Deck library: once you are the owner, open **Library** in the top bar and press 
 [Commander Spellbook](https://commanderspellbook.com) for combos; answers are cached per list.
 When Wizards changes the Game Changers list, edit `server/data/brackets/game_changers.json` and
 redeploy.
+
+## Playing against computer opponents (owner)
+
+1. Set the Fly secrets once: `ANTHROPIC_API_KEY` (your key) and `AGENTS_ENABLED=1`. Without the key
+   the agents play a scripted "dry run" that costs nothing. Optional caps: `AGENT_MAX_USD_PER_GAME`
+   (default 6), `AGENT_MAX_USD_PER_DAY` (default 25).
+2. In **Library**, tick "Agent-eligible" on the decks you want bots to play (precons at Bracket 2
+   are a good start) and optionally press "Draft with Claude" to write each deck's primer.
+3. Open **Play**, create a table, sit down with your deck. The lobby shows "Computer opponents":
+   pick the bracket and how many, press Add (re-roll until you like the decks), then Start.
+4. Bots take their turns on their own: a pulsing BOT chip means one is thinking. They announce
+   attacks in the log; you decide your blocks and change your own life as usual. If a bot does
+   something illegal, revert it from the log like any other action.
+5. Table menu -> **Agent reasoning** shows every decision with its one-line rationale, the actions
+   it took and the running cost; **Agents** in the top bar lists recent games and today's spend.
 
 ## Install on a phone
 
