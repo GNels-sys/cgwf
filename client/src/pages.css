@@ -18,6 +18,15 @@
   display: flex;
   gap: 4px;
   flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.top-nav nav::-webkit-scrollbar {
+  display: none;
+}
+.top-nav nav a {
+  white-space: nowrap;
 }
 .top-nav nav a {
   color: var(--fg-muted);
@@ -659,6 +668,7 @@ hr {
   .library-row-tags {
     display: none;
   }
+}
 /* Account */
 .account-who {
   display: flex;

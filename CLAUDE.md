@@ -97,13 +97,15 @@ bounded edit distance.
 - Routes: `POST /api/decks/parse`, `GET /api/decks/import-url?url=`, `GET/POST /api/decks`,
   `GET/PATCH/DELETE /api/decks/:id`, `PUT /api/decks/:id/cards`. Warnings (size, singleton,
   colour identity, commander count/partners) are computed on read, never block saving.
+  Phase 8 adds `users.friend_code`, `friendships`, `friend_requests`, `room_invites`,
+  `notifications`, `library_submissions`.
 - URL import finding (2026-10-15): Archidekt's `https://archidekt.com/api/decks/{id}/` is public
   JSON (cards carry Scryfall `uid`, set code, collector number, categories; "Commander" category =
   commander; categories with `includedInDeck=false` = maybeboard). Moxfield's API returns 403 to
   non-browser clients, so Moxfield users paste the text export.
-- Client routes: `/` decks, `/decks/new` import (paste or Archidekt link -> review/fix -> save),
-  `/decks/:id`, `/cards` search, `/me` profile, `/signup`, `/signin`. `RequireUser` shows the
-  first-run profile form.
+- Client routes: `/` decks (welcome screen when signed out, Phase 8), `/decks/new` import (paste or
+  Archidekt link -> review/fix -> save), `/decks/:id`, `/cards` search, `/me` profile, `/signup`,
+  `/signin`, `/start`, `/welcome`, `/friends`. `RequireUser` shows the first-run profile form.
 
 ## The game (Phase 3)
 
@@ -563,6 +565,73 @@ and open `/room/<code>` to play seat 1. Bots keep, play a land and pass on their
 Enter in that terminal to force-drop and rejoin Blair (reconnect drill). Works against
 https://cgwf.fly.dev too. The Vite proxy needs `ws: true` for `/api` (already set).
 
+## Onboarding and social (Phase 8)
+
+No model spend anywhere in this phase. Tables (migration 0008): `users.friend_code`, `friendships`
+(two rows per friendship, one per direction), `friend_requests`, `room_invites`, `notifications`,
+`library_submissions`. Server code under `server/src/social/`; routes in `server/src/routes/social.ts`;
+tests in `server/src/routes/social.test.ts` and `shared/src/onboarding.test.ts`.
+
+- **Welcome screen.** `/` renders `Landing` (`client/src/pages/WelcomePage.tsx`): signed-out visitors
+  get the welcome page (what CGwF is, how a game works, Fan Content notice, "Start playing" ->
+  `/start` = the name + avatar form, "I have an account" -> `/signin`); a stored token that turns out
+  dead also lands there. The decision is the pure `landingFor()` in `shared/src/onboarding.ts`.
+  `RequireUser` still shows the inline profile form on deep links (a shared room link keeps working).
+- **Tour.** `register()` sets `localStorage cgwf.tour = "pending"`; `Tour.tsx` on the decks page shows
+  three steps (`TOUR_STEPS`: import / join or host / personalize); Skip, Done or any step's button
+  writes "done" and it never returns on that device. Per device, like the token.
+- **Sign-up** (`SignUpForm` in `AccountPages.tsx`): email, password, confirm, a "why" box, step
+  ticks; a 409 "already in use" shows a notice with "Sign in instead" / "Use a different email"
+  rather than an error line. The profile page's account box links here. **Password reset is not
+  built**: it needs an email provider (see Phase 5 "Later upgrades"); the form says to keep the
+  password safe.
+- **Friend codes** (`social/codes.ts`): six characters from the join-code alphabet, assigned lazily
+  the first time `/api/friends` or `/api/me/friend-code` is called (no backfill), unique index on
+  `users.friend_code`. Shown on `/me` and `/friends`.
+- **Friends** (`SocialService`): `POST /api/friends/requests {code}` sends a request (a crossed
+  request the other way is accepted instead); accept / decline / cancel; `DELETE /api/friends/:userId`
+  removes both rows. `GET /api/friends` -> own code, friends with `online` and `table`, incoming and
+  outgoing requests. Agents (`users.is_agent`) can neither send nor receive. 200 friends max.
+- **Presence** (`social/presence.ts`): an in-memory last-seen map touched by `sessionFromToken` on
+  every authenticated request (REST and the WebSocket handshake); online = heard from within
+  `PRESENCE_ONLINE_MS` (2 min). The bell's 30 s poll is the heartbeat. "At a table" comes from
+  `RoomManager.tablesOf()`, which scans live rooms' open sockets (lobby or playing only). Nothing is
+  persisted; a restart just means everyone is offline until their next request.
+- **Invites.** `POST /api/rooms/:code/invites {userIds}` by any member of a room that has not ended,
+  friends only, one row per (room, invitee) (re-sending a pending invite is a no-op; a declined one is
+  replaced). The invitee gets a `room_invite` notification; `POST /api/invites/:id/accept` joins the
+  room and, in the lobby, seats them on the first free seat with no deck (they pick one there), then
+  returns the code; the client navigates to `/room/:code`. Invites **expire with the room**: nothing
+  is swept, `status` is computed as "expired" when `rooms.status = ended`, and `notificationsFor`
+  reports a dead invite as read with `payload.live = false` so the badge never sticks. The share link
+  is unchanged.
+- **Notifications** (the bell, `client/src/components/Bell.tsx`): `NotificationsProvider` polls
+  `GET /api/notifications` every 30 s while signed in and the tab is visible, and on tab wake. Kinds:
+  `friend_request` (Accept / Decline inline), `friend_accepted`, `room_invite` (Join / No thanks),
+  `submission_reviewed`. Closing the panel marks everything read (`POST /api/notifications/read`);
+  answering a request or invite marks its own notification read server-side (`markKind`). Not pushed.
+  **Browser push later:** add a `push_subscriptions` table (user_id, endpoint, p256dh, auth), a
+  `POST /api/me/push` route that stores `PushManager.subscribe()` output, VAPID keys as Fly secrets
+  (`web-push` is the boring library), and call `webpush.sendNotification` from `SocialService.notify`
+  behind an env flag; the service worker (vite-plugin-pwa `injectManifest` instead of `generateSW`)
+  handles `push` and `notificationclick`. Safari on iOS needs the app installed to the home screen.
+- **Agent deck queue** (`social/submissions.ts`): `POST /api/decks/:id/submit {note?}` freezes the
+  deck's main / commander / sideboard rows into `library_submissions.cards` (later edits do not
+  change what is reviewed); one pending submission per deck, an approved deck cannot be re-queued,
+  `SUBMISSIONS_PER_DAY` (3) per player, note 500 chars; `DELETE /api/submissions/:id` withdraws while
+  pending. Owner (`[requireUser, requireOwner]`): `GET /api/library/submissions` (pending first, with
+  the engine's suggested bracket and tags computed on the fly via `DeckAnalyzer.analyzeSync`, no
+  Spellbook request), `POST .../:id/approve` -> `LibraryService.create` from the frozen list
+  (`source: "user"`, `sourceKey: deck:<deckId>`, `createdBy` = submitter, name suffixed with the
+  submitter's name) + `agentEligible: true`, `POST .../:id/reject {reason}` (reason required, 300
+  chars). Both notify the submitter. `LibraryDeckSummary.createdBy/createdByName` credit the player
+  in the library list. UI: the deck page's "Agent deck queue" panel (submit with a note, status,
+  withdraw, the owner's reason), the queue box at the top of `/admin/library`.
+- Client routes added: `/welcome`, `/start`, `/friends`. Header: Friends link + bell for signed-in
+  players; "Start" instead of "Sign in" for visitors. `pages.css` had an unclosed
+  `@media (max-width: 600px)` block since Phase 6 that swallowed every later rule on wide screens;
+  fixed here.
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
@@ -576,4 +645,8 @@ https://cgwf.fly.dev too. The Vite proxy needs `ws: true` for `/api` (already se
 6. Deck analysis engine, Commander Bracket panel, MTGJSON precon import, owner deck library
    with primers. **(done)**
 7. Computer opponents driven by Claude Sonnet, owner-only, behind AGENTS_ENABLED with USD caps. **(done)**
-8. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority).
+8. Onboarding (welcome screen, tour, guided sign-up) and social (friend codes, requests, presence,
+   table invites, notification bell, agent deck queue). **(done)**
+9. Deck stats panel (pure computation, parallel session).
+10. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority),
+    browser push notifications (see Phase 8), password reset once there is an email provider.

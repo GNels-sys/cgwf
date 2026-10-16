@@ -17,6 +17,15 @@ const { presence } = await import("../social/presence.js");
 const { SUBMISSIONS_PER_DAY } = await import("../social/submissions.js");
 const fixture = fileURLToPath(new URL("../scryfall/fixtures/cards.sample.json", import.meta.url));
 
+/** Poll until `pred` holds (sockets attach and detach a tick after the handshake). */
+async function until(pred: () => Promise<boolean>, timeoutMs = 3000): Promise<void> {
+  const start = Date.now();
+  while (!(await pred())) {
+    if (Date.now() - start > timeoutMs) throw new Error("timed out waiting for a condition");
+    await new Promise((r) => setTimeout(r, 20));
+  }
+}
+
 interface Person {
   token: string;
   id: string;
@@ -179,15 +188,15 @@ describe("Phase 8: friends, invites, notifications and the agent deck queue", ()
       ws.once("open", () => resolve());
       ws.once("error", reject);
     });
-    await new Promise((r) => setTimeout(r, 50));
-    const a2 = await friendsOf(alex);
-    expect(a2.friends.find((f) => f.userId === blair.id)?.table).toEqual({ code: created.room.code, status: "lobby" });
+    const tableOfBlair = async () => (await friendsOf(alex)).friends.find((f) => f.userId === blair.id)?.table ?? null;
+    await until(async () => (await tableOfBlair()) !== null);
+    expect(await tableOfBlair()).toEqual({ code: created.room.code, status: "lobby" });
     await new Promise<void>((resolve) => {
       ws.once("close", () => resolve());
       ws.close();
     });
-    await new Promise((r) => setTimeout(r, 50));
-    expect((await friendsOf(alex)).friends.find((f) => f.userId === blair.id)?.table).toBeNull();
+    await until(async () => (await tableOfBlair()) === null);
+    expect(await tableOfBlair()).toBeNull();
 
     // Remove Casey: gone from both lists.
     expect((await ctx.app.inject({ method: "DELETE", url: `/api/friends/${casey.id}`, headers: as(alex) })).statusCode).toBe(200);

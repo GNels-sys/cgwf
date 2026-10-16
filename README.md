@@ -28,7 +28,14 @@ Coast LLC. Card data and images courtesy of [Scryfall](https://scryfall.com).
   they pick library decks of the bracket you choose, play through the same table actions you
   use, announce attacks in the log, and stop when a spending cap is reached.
 - Start in ten seconds with just a name and an avatar; add an email and password later to use
-  your decks on other devices, see which devices are signed in and sign any of them out.
+  your decks on other devices, see which devices are signed in and sign any of them out. New
+  visitors get a welcome page and a short three-step tour.
+- Friends: every player has a six-character friend code (on the profile page). Add a friend by
+  code, accept or decline requests, see who is online and which table they are at.
+- Invite friends to your table from the lobby; they get a notification (the bell in the top bar)
+  with a Join button that seats them. The share link and code still work for everyone else.
+- Offer one of your decks to the agent deck queue; the owner approves it into the computer
+  opponents' library (credited to you) or sends it back with a short reason.
 
 ## Stack
 
@@ -95,7 +102,7 @@ runs the server creates an account, opens their profile, and enters that code on
 rate-limited and logged. Without the secret, claiming is disabled.
 
 Accounts have no email verification or password reset yet (there is no email provider), so
-keep your password somewhere safe.
+keep your password somewhere safe. Notifications are polled in the app (no browser push yet).
 
 Deck library: once you are the owner, open **Library** in the top bar and press "Import precons"
 (about 200 decks, five minutes, safe to run again), or from the machine:
@@ -112,7 +119,10 @@ redeploy.
    machine: `fly ssh console -C "node server/dist/cli.js agent-game --agents 1 --rounds 1"`. Optional caps: `AGENT_MAX_USD_PER_GAME`
    (default 6), `AGENT_MAX_USD_PER_DAY` (default 25).
 2. In **Library**, tick "Agent-eligible" on the decks you want bots to play (precons at Bracket 2
-   are a good start) and optionally press "Draft with Claude" to write each deck's primer.
+   are a good start) and optionally press "Draft with Claude" to write each deck's primer. Decks
+   that players submitted from their deck pages wait at the top of Library under "Agent deck queue":
+   Approve copies the list in (agent-eligible, bracket and tags from the engine, credited to the
+   player), Reject asks for a one-line reason the player will see.
 3. Open **Play**, create a table, sit down with your deck. The lobby shows "Computer opponents":
    pick the bracket and how many, press Add (re-roll until you like the decks), then Start.
 4. Bots take their turns on their own: a pulsing BOT chip means one is thinking. They announce
