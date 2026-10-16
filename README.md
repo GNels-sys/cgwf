@@ -106,8 +106,10 @@ redeploy.
 
 ## Playing against computer opponents (owner)
 
-1. Set the Fly secrets once: `ANTHROPIC_API_KEY` (your key) and `AGENTS_ENABLED=1`. Without the key
-   the agents play a scripted "dry run" that costs nothing. Optional caps: `AGENT_MAX_USD_PER_GAME`
+1. Set the Fly secrets once: `ANTHROPIC_API_KEY` (a key created inside a workspace in the Anthropic
+   Console, or an organisation key plus `ANTHROPIC_WORKSPACE_ID=wrkspc_...`) and `AGENTS_ENABLED=1`.
+   Without the key the agents play a scripted "dry run" that costs nothing. To check the key from the
+   machine: `fly ssh console -C "node server/dist/cli.js agent-game --agents 1 --rounds 1"`. Optional caps: `AGENT_MAX_USD_PER_GAME`
    (default 6), `AGENT_MAX_USD_PER_DAY` (default 25).
 2. In **Library**, tick "Agent-eligible" on the decks you want bots to play (precons at Bracket 2
    are a good start) and optionally press "Draft with Claude" to write each deck's primer.

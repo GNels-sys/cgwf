@@ -51,6 +51,7 @@ export function AgentsPanel({ code, onClose }: { code: string; onClose: () => vo
                   {d.costUsd ? ` · $${d.costUsd.toFixed(4)}` : ""} · {(d.latencyMs / 1000).toFixed(1)}s
                 </div>
                 {d.rationale && <div className="agent-rationale">{d.rationale}</div>}
+                {d.error && <div className="small warn agent-error">{d.error.slice(0, 300)}</div>}
                 {d.toolCalls.length > 0 && (
                   <div className="small muted agent-calls">
                     {d.toolCalls.map((c, i) => (

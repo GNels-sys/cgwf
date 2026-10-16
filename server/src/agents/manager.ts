@@ -366,6 +366,7 @@ export class AgentManager {
       latencyMs: d.latencyMs,
       inputTokens: d.inputTokens,
       outputTokens: d.outputTokens,
+      error: d.error,
       createdAt: d.createdAt,
     }));
     return { runs: runsOut, decisions, totalUsd: this.spendForRoom(room.id), maxUsdPerGame: config.agentMaxUsdPerGame };

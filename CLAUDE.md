@@ -451,6 +451,9 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
 
 "Agents" are Claude-driven seats. Everything lives in `server/src/agents/`; nothing here runs unless
 `AGENTS_ENABLED=1` (a Fly secret; off = every agent route answers 404 and the lobby control is hidden).
+`ANTHROPIC_API_KEY` must be a workspace-scoped key, or set `ANTHROPIC_WORKSPACE_ID` (wrkspc_...) as well:
+an organisation-level key without it is rejected with "must include the anthropic-workspace-id header"
+(found on the first prod smoke run, 2026-10-16). Model errors show in the Agent reasoning drawer.
 
 ### Non-negotiables, enforced in code
 

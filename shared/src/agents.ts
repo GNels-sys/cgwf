@@ -53,6 +53,8 @@ export interface AgentDecisionInfo {
   latencyMs: number;
   inputTokens: number;
   outputTokens: number;
+  /** API / timeout / refusal detail when the outcome is not ok. */
+  error: string | null;
   createdAt: string;
 }
 

@@ -34,8 +34,11 @@ export class AnthropicLlm implements Llm {
   constructor(
     readonly model: string,
     apiKey: string,
+    workspaceId = "",
   ) {
-    this.client = new Anthropic({ apiKey });
+    // An organisation-level key (not scoped to a workspace) is rejected unless the request names the
+    // workspace; the SDK has no option for it, so it rides as a default header.
+    this.client = new Anthropic({ apiKey, ...(workspaceId ? { defaultHeaders: { "anthropic-workspace-id": workspaceId } } : {}) });
   }
 
   async complete(req: LlmRequest): Promise<LlmResponse> {

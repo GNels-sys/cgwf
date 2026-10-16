@@ -81,7 +81,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   const library = new LibraryService(handle, analyzer);
   const precons = new PreconImporter(handle, index, library, app.log, opts.mtgjsonFetch);
 
-  const llm = opts.agentLlm !== undefined ? opts.agentLlm : config.anthropicApiKey ? new AnthropicLlm(config.agentModel, config.anthropicApiKey) : null;
+  const llm = opts.agentLlm !== undefined ? opts.agentLlm : config.anthropicApiKey ? new AnthropicLlm(config.agentModel, config.anthropicApiKey, config.anthropicWorkspaceId) : null;
   const agents = new AgentManager({ handle, library, analyzer, log: app.log, llm, enabled: opts.agentsEnabled });
 
   registerCardRoutes(app, { handle, index, ingestor });

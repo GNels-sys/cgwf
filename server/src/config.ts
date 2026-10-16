@@ -37,6 +37,8 @@ export const config = {
   /** Phase 7 computer opponents. Off unless AGENTS_ENABLED=1; the key comes from the environment only. */
   agentsEnabled: env("AGENTS_ENABLED", "0") === "1",
   anthropicApiKey: env("ANTHROPIC_API_KEY", ""),
+  /** Needed when the key is not scoped to a workspace (the API then demands an anthropic-workspace-id header). */
+  anthropicWorkspaceId: env("ANTHROPIC_WORKSPACE_ID", ""),
   agentModel: env("AGENT_MODEL", "claude-sonnet-5-5"),
   agentMaxUsdPerGame: Number(env("AGENT_MAX_USD_PER_GAME", "6")),
   agentMaxUsdPerDay: Number(env("AGENT_MAX_USD_PER_DAY", "25")),
