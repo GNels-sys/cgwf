@@ -46,8 +46,9 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
 
   const sit = (seat: number) => sock.send({ t: "seat", seat, deckId: myMember?.deckId ?? null });
   const pickDeck = (deckId: string | null) => {
-    const seat = myMember?.seat ?? room.members.filter((m) => m.seat !== null).length;
-    sock.send({ t: "seat", seat: myMember?.seat ?? firstFreeSeat(room) ?? seat, deckId });
+    const seat = myMember?.seat ?? firstFreeSeat(room);
+    if (seat === null) return;
+    sock.send({ t: "seat", seat, deckId });
   };
 
   return (
