@@ -458,7 +458,9 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
 ## Computer opponents (Phase 7, owner only)
 
 "Agents" are Claude-driven seats. Everything lives in `server/src/agents/`; nothing here runs unless
-`AGENTS_ENABLED=1` (a Fly secret; off = every agent route answers 404 and the lobby control is hidden).
+`AGENTS_ENABLED=1` (a Fly secret; off = every agent route answers 404 and the lobby control is hidden),
+except on rules-engine tables, where the same box seats Forge-AI bots with no model involved (see
+"Rules engine tables").
 `ANTHROPIC_API_KEY` must be a workspace-scoped key, or set `ANTHROPIC_WORKSPACE_ID` (wrkspc_...) as well:
 an organisation-level key without it is rejected with "must include the anthropic-workspace-id header"
 (found on the first prod smoke run, 2026-10-16). Model errors show in the Agent reasoning drawer.
@@ -959,6 +961,12 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   `ENGINE_ABSENT_GRACE_MS` (3 min), then tells the engine `detachSeat`: Forge's AI plays that seat
   (a log line says so) until a socket is back (`attachSeat` + `resync`). Reloading the page
   re-sends the cached state and the open prompt at once.
+- **Bot seats (M4).** The Phase 7 "Computer opponents" box works on engine tables too, WITHOUT
+  `AGENTS_ENABLED` (owner-host only, as before): the bot users and their library-deck copies are
+  created the same way, but at game start the relay sends their seats as `kind: "ai"`, so Forge's
+  own AI plays them (no model call, no spend, no `agent_runs`); no Sonnet runner starts for an
+  engine room. On shared-cpu-2x a Forge AI turn takes ~25 s with four AI seats (README has the
+  one-command upgrade to performance-1x). Test: engine.test.ts "seats a Phase 7 bot user".
 - **Legality in the lobby.** `RoomMember.deckProblems` (engine rooms) lists why a seated deck
   cannot start an engine game; the lobby shows it under the seat and the host's Start button
   names the player to fix. Start refuses with the same reasons.
@@ -1003,7 +1011,7 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
 10b. Table hygiene stopgap: ownership guardrails, automatic untap/draw, combat events, automatic
     eliminations, win advisories; phase strip, attack / block / damage UI, full-card zoom. **(done)**
 11. Rules engine (Forge) tables, Stage 1: M1 engine control protocol + relay + CI **(done)**,
-    M2 engine games playable end to end in the app **(done)**, M3 four seats / stops UI / resync /
-    legality messages / docs, M4 Forge AI bot seats (if time). See `docs/FORGE-ENGINE.md`.
+    M2 engine games playable end to end in the app **(done)**, M3 four seats / saved stops /
+    resync / legality messages / docs **(done)**, M4 Forge AI bot seats **(done)**. See `docs/FORGE-ENGINE.md`.
 12. Ideas: per-event view deltas if bandwidth matters, browser push notifications (see Phase 8),
     password reset once there is an email provider.

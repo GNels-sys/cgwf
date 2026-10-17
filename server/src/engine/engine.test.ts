@@ -352,6 +352,32 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(saved.settings.engineStops.respond).toBe(false);
   });
 
+  it("seats a Phase 7 bot user as a Forge AI seat in createGame", async () => {
+    const { users, decks, deckCards, roomMembers } = await import("../db/schema.js");
+    const res = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(alex.token), payload: { engine: true } });
+    const code2 = (res.json() as { room: { code: string } }).room.code;
+    const room = ctx.roomsManager.get(code2)!;
+    // a computer-opponent user with a legal deck, seated the way AgentManager.addAgents would seat it
+    const now = new Date().toISOString();
+    ctx.handle.db.insert(users).values({ id: "bot-user-1", displayName: "Krenko bot", avatar: "owl", color: "ruby", createdAt: now, lastSeenAt: now, isAgent: true } as never).run();
+    ctx.handle.db.insert(decks).values({ id: "bot-deck-1", userId: "bot-user-1", name: "Bot forests", format: "commander", createdAt: now, updatedAt: now } as never).run();
+    ctx.handle.db.insert(deckCards).values([{ deckId: "bot-deck-1", cardId: ATRAXA, quantity: 1, board: "commander", position: 0 }, { deckId: "bot-deck-1", cardId: FOREST, quantity: 99, board: "main", position: 1 }] as never).run();
+    ctx.handle.db.insert(roomMembers).values({ roomId: room.id, userId: "bot-user-1", role: "player", seat: 2, deckId: "bot-deck-1", joinedAt: now }).run();
+    const good = await makeDeck(alex.token, "Forests A2", legal);
+    const host = new Client("alex2", alex.token);
+    await host.connect(port, code2);
+    host.send({ t: "seat", seat: 0, deckId: good });
+    await host.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.members.some((m) => m.deckId === good));
+    const m = host.mark();
+    host.send({ t: "start" });
+    const created = await engine.waitFor((f) => f.type === "createGame" && (f.gameId as string) === room.id);
+    const seats = created.seats as Array<{ seat: number; kind: string; name: string }>;
+    expect(seats.find((s) => s.seat === 2)).toMatchObject({ kind: "ai", name: "Krenko bot" });
+    expect(seats.find((s) => s.seat === 0)?.kind).toBe("human");
+    await host.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "playing", m);
+    await host.close();
+  });
+
   it("ends the table when the engine reports game over, and survives a spectator joining late", async () => {
     const gameId = ctx.roomsManager.get(code)!.id;
     await ctx.app.inject({ method: "POST", url: `/api/rooms/${code}/join`, headers: auth(casey.token) });

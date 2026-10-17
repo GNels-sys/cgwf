@@ -46,9 +46,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: Deps): void {
   });
 
   app.post<{ Params: { code: string }; Body: Partial<AddAgentsRequest> | null }>("/api/rooms/:code/agents", { preHandler: owner }, async (req, reply): Promise<AddAgentsResponse | void> => {
-    if (!gate(reply)) return;
     const room = findRoom(req.params.code);
     if (!room) return reply.code(404).send({ error: "no room with that code" });
+    if (!room.isEngine && !gate(reply)) return; // engine tables use Forge's AI: no flag needed
     const bracket = Number(req.body?.bracket ?? 2);
     if (!isBracket(bracket)) return reply.code(400).send({ error: "bracket must be 1-5" });
     try {
@@ -60,9 +60,9 @@ export function registerAgentRoutes(app: FastifyInstance, deps: Deps): void {
   });
 
   app.delete<{ Params: { code: string } }>("/api/rooms/:code/agents", { preHandler: owner }, async (req, reply) => {
-    if (!gate(reply)) return;
     const room = findRoom(req.params.code);
     if (!room) return reply.code(404).send({ error: "no room with that code" });
+    if (!room.isEngine && !gate(reply)) return;
     if (room.refreshRow().hostUserId !== req.user!.id) return reply.code(403).send({ error: "only the host can remove agents" });
     try {
       return { removed: agents.removeAgents(room) };

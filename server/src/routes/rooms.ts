@@ -85,7 +85,7 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
     }
 
     const conn = room.attach(socket, user.id);
-    agents?.ensureRunning(room);
+    if (!room.isEngine) agents?.ensureRunning(room); // engine tables: Forge plays bot seats, no Sonnet runner
     const fail = (message: string, cid?: string) => room.send(conn, cid ? { t: "error", message, cid } : { t: "error", message });
 
     socket.on("message", (data) => {
