@@ -156,7 +156,8 @@ export class AgentManager {
 
   /** Replace the lobby's agents with `count` fresh picks of the given bracket. */
   async addAgents(room: LiveRoom, hostId: string, opts: { count: number; bracket: Bracket }): Promise<{ agents: AgentPick[]; eligible: number }> {
-    if (!this.enabled) throw new RoomError("agents are switched off");
+    // Engine tables: the bot seats are played by Forge's AI (no model, no spend), so the AGENTS_ENABLED flag does not apply.
+    if (!this.enabled && !room.isEngine) throw new RoomError("agents are switched off");
     const row = room.refreshRow();
     if (row.status !== "lobby") throw new RoomError("agents can only be added in the lobby");
     if (row.hostUserId !== hostId) throw new RoomError("only the host can add agents");

@@ -288,6 +288,11 @@ function AgentsControl({ room }: { room: RoomInfo }) {
   const [picks, setPicks] = useState<AgentPick[] | null>(null);
 
   useEffect(() => {
+    if (room.engine) {
+      // Engine tables: Forge's own AI plays the bot seats, no model and no flag needed.
+      setEnabled(true);
+      return;
+    }
     api.agents
       .status()
       .then((s) => {
@@ -295,7 +300,7 @@ function AgentsControl({ room }: { room: RoomInfo }) {
         if (s.dryRun) setNote("No API key on the server: agents play a scripted dry run.");
       })
       .catch(() => setEnabled(false));
-  }, []);
+  }, [room.engine]);
 
   if (enabled === false) return null;
 
@@ -327,6 +332,7 @@ function AgentsControl({ room }: { room: RoomInfo }) {
   return (
     <section className="notice agents-control">
       <strong>Computer opponents</strong>
+      {room.engine && <p className="muted small">On a rules-engine table the bots are played by the engine&apos;s own AI: no model, no spend, instant decisions. They pick decks from the library like the Sonnet agents do.</p>}
       <div className="agents-form">
         <label>
           Bracket{" "}

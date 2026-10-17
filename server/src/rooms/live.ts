@@ -135,6 +135,7 @@ export class LiveRoom {
       },
       broadcastRoom: () => this.broadcastRoom(),
       userName: (userId) => this.handle.db.select({ name: users.displayName }).from(users).where(eq(users.id, userId)).get()?.name ?? "Player",
+      agentIds: () => new Set(this.agentMemberIds()),
     };
   }
 

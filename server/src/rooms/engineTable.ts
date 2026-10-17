@@ -49,6 +49,8 @@ export interface RoomPort {
   saveEngineState(json: string): void;
   broadcastRoom(): void;
   userName(userId: string): string;
+  /** Phase 7 computer-opponent users seated here (on engine tables they become Forge AI seats). */
+  agentIds(): Set<string>;
 }
 
 interface PersistedState {
@@ -124,13 +126,14 @@ export class EngineTable {
     const seatsReq: Array<{ seat: number; kind: "human" | "ai"; name: string; deck: unknown }> = [];
     const problems: string[] = [];
     const infos: Array<{ seat: number; userId: string; name: string }> = [];
+    const bots = this.room.agentIds();
     for (const m of seated) {
       const name = this.room.userName(m.userId);
       if (!m.deckId) throw new EngineRoomError(`${name} has not picked a deck`);
       const d = deckForEngine(this.room.handle, m.userId, m.deckId);
       if (!d) throw new EngineRoomError(`${name}'s deck was not found`);
       if (d.problems.length) problems.push(`${name} (${d.deck.name}): ${d.problems.join(" ")}`);
-      seatsReq.push({ seat: m.seat as number, kind: "human", name, deck: d.deck });
+      seatsReq.push({ seat: m.seat as number, kind: bots.has(m.userId) ? "ai" : "human", name, deck: d.deck });
       infos.push({ seat: m.seat as number, userId: m.userId, name });
     }
     if (problems.length) throw new EngineRoomError(`The rules engine needs legal Commander decks. ${problems.join(" | ")}`);
