@@ -958,7 +958,7 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   the open prompt, classic actions/events are hidden, life is read-only, concede goes through
   `{t:"concede"}`; `PhaseStrip` shows "Waiting for X" and disables step buttons.
 - **Run it locally.** Engine: see `engine/README.md` (JDK 21 + Maven portable zips in
-  `C:\Openclaw	ools`, Forge clone at `C:\Openclaworge`); `java -jar engine/target/cgwf-engine.jar
+  `C:/Openclaw/tools`, Forge clone at `C:/Openclaw/forge`); `java -jar engine/target/cgwf-engine.jar
   serve --assets C:/Openclaw/forge/forge-gui --port 8084` with `ENGINE_TOKEN=testtoken`. Server:
   `.env` with `ENGINE_URL=ws://localhost:8084` and `ENGINE_TOKEN=testtoken`. A second human for
   solo testing: `node scripts/engine-bot.mjs http://localhost:8093 <code> Blair 1` (registers a
