@@ -81,8 +81,8 @@ function connectBot(p, seat) {
         kept = true;
         setTimeout(() => ws.send(JSON.stringify({ t: "event", event: { type: "HandKept", payload: { player: p.userId } } })), 400);
       }
-      // When it becomes this bot's turn, play a land from hand (if any), then pass.
-      if (v.phase === "playing" && v.activePlayer === p.userId && v.step === "untap" && acted < v.turn) {
+      // When it becomes this bot's turn (the table has untapped and will draw), play a land from hand (if any), then pass.
+      if (v.phase === "playing" && v.activePlayer === p.userId && acted < v.turn) {
         acted = v.turn;
         setTimeout(() => {
           const land = me.hand.cards.find((c) => /Land/.test(msg.printings?.[c.printingId]?.typeLine ?? catalogue[c.printingId]?.typeLine ?? ""));

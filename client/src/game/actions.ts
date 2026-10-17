@@ -3,6 +3,7 @@ import {
   SECTIONS,
   SECTION_LABELS,
   hasBackFace,
+  isOut,
   parseAnthem,
   parseAttachmentEffect,
   type ClientMessage,
@@ -63,7 +64,7 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
   };
   if (!me) return [{ label: "Zoom", run: () => ctx.zoom(card) }];
 
-  const opponents = view.turnOrder.filter((id) => id !== me && !view.players[id]!.conceded);
+  const opponents = view.turnOrder.filter((id) => id !== me && !isOut(view.players[id]!));
   const printing = printingOf(card, ctx.printings);
   const twoFaced = printing ? hasBackFace(printing.layout) || printing.faces.length >= 2 : false;
   const name = nameOf(card, ctx.printings);
@@ -83,6 +84,12 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
     case "battlefield": {
       const holderPlayer = view.players[holder];
       const derived = holderPlayer ? deriveFor(holderPlayer, ctx.printings).cards.get(card.iid) : undefined;
+      if (!controlMine) {
+        // Someone else's permanent: the server refuses everything but an explicit take-control (and copies).
+        out.push({ label: "Take control", hint: `moves it to your battlefield, logged`, run: () => act({ type: "ControlTaken", payload: { iid: card.iid } }) });
+        out.push({ label: "Create token copy", hint: "under your control", run: () => act({ type: "CardCopied", payload: { iid: card.iid, player: me } }) });
+        break;
+      }
       out.push({ label: card.tapped ? "Untap" : "Tap", run: () => act({ type: "CardTapped", payload: { iid: card.iid, tapped: !card.tapped } }) });
       for (const kind of CARD_COUNTER_KINDS.slice(0, 3)) {
         const have = card.counters[kind] ?? 0;
@@ -220,14 +227,15 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
             onPick: (row) => act({ type: "CardMoved", payload: { iid: card.iid, to: { kind: "battlefield", owner: holder, row: row as Row, faceDown: card.faceDown } } }),
           }),
       });
-      if (opponents.length > 0 || holder !== me) {
+      if (opponents.length > 0) {
         out.push({
           label: "Give control to...",
+          hint: "logged as giving control",
           run: () =>
             dialog({
               kind: "pick",
               title: "New controller",
-              options: view.turnOrder.filter((id) => id !== holder && !view.players[id]!.conceded).map((id) => ({ value: id, label: id === me ? "Me" : view.players[id]!.name })),
+              options: opponents.map((id) => ({ value: id, label: view.players[id]!.name })),
               onPick: (owner) => act({ type: "CardMoved", payload: { iid: card.iid, to: { kind: "battlefield", owner, row: zone.row ?? "other", faceDown: card.faceDown } } }),
             }),
         });
@@ -244,6 +252,11 @@ export function cardActions(ctx: Ctx, card: ViewCard): Action[] {
     }
     case "graveyard":
     case "exile": {
+      if (!controlMine) {
+        // Another player's graveyard or exile: reanimating / stealing it is an explicit, logged take-control.
+        out.push({ label: "Take control", hint: "puts it onto your battlefield, logged", run: () => act({ type: "ControlTaken", payload: { iid: card.iid } }) });
+        break;
+      }
       if (card.faceDown && mine) out.push({ label: "Turn face up", run: () => act({ type: "CardTurned", payload: { iid: card.iid, faceDown: false } }) });
       move("To battlefield", { kind: "battlefield", owner: me });
       if (mine) move("To hand", { kind: "hand", owner: me });

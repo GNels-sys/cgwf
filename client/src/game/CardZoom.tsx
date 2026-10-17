@@ -12,6 +12,11 @@ import { imageFace, nameOf, printingOf, type Printings } from "./model";
  * battlefield it also shows the derived P/T, keywords, attachments and every
  * granted effect, so "why is this a 6/4?" has an answer.
  */
+/** Phones get the 488 px image (plenty for a card that fits the screen); larger screens the 672 px one. */
+function bigScreen(): boolean {
+  return typeof window !== "undefined" && Math.min(window.innerWidth, window.innerHeight) > 700;
+}
+
 export function CardZoom({
   card,
   printings,
@@ -50,7 +55,7 @@ export function CardZoom({
       <div className="zoom" onClick={(e) => e.stopPropagation()}>
         <div className="zoom-image">
           {printing ? (
-            <CardImage id={printing.id} name={printing.name} size="normal" face={face} loading="eager" />
+            <CardImage id={printing.id} name={printing.name} size={bigScreen() ? "large" : "normal"} face={face} loading="eager" />
           ) : (
             <div className={`tile-back zoom-custom ${card.custom ? "is-custom" : (sleeve?.className ?? "sleeve-classic")}`} style={card.custom ? undefined : sleeve?.style}>
               <strong>{card.custom?.name ?? "Face-down card"}</strong>

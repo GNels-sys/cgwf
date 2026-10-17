@@ -215,8 +215,11 @@ bounded edit distance.
 - `/play` create/join/recent, `/room/:code` = `Lobby` (seats, own-deck picker, share link, host
   start) or `Table` once playing. `socket.ts` reconnects with backoff and on tab wake.
 - Table: opponents across the top (tap -> `OpponentPanel`, same `Battlefield` layout as mine),
-  my battlefield (`Battlefield.tsx`: sections, stacked attachments, anthem badge), hand drawer,
-  zone buttons, life widget, mana pill, triggers panel. Tap a card -> `ActionSheet`
+  the phase strip (`PhaseStrip.tsx`: turn + active player, every step as a dot with the current
+  one lit and labelled, Next step / Pass turn always reachable, Attack on my turn, the combat and
+  win prompts, and the combat picking bar as its child), my battlefield (`Battlefield.tsx`:
+  sections, stacked attachments, anthem badge, combat marks), hand drawer, zone buttons, life
+  widget, mana pill, triggers panel. Tap a card -> `ActionSheet`
   (`actions.ts` builds the list per zone); press-and-hold -> `CardZoom`. `@dnd-kit` drag onto
   rows/zone buttons is the secondary path. Menu: log (tap a line to revert), dice, tokens
   (Scryfall token search or custom text token), undo, untap all, concede, leave.
@@ -875,6 +878,23 @@ them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.
   `WinAdvisoryDismissed {iid}`. Thassa's Oracle, Lab Man, Approach etc. are not read: opponents
   concede as before.
 - Agents: the `attack` tool now emits one `AttackersDeclared`; the runner no longer draws by hand.
+- **Client** (`client/src/game/`): `PhaseStrip.tsx` owns the turn controls and prompts ("Harper
+  attacks you with Krenko - Block... / No blocks", "Attacking Blair... Assign damage / Change
+  attackers", "Win condition met: ... Claim the win / Not yet", "You are out of the game").
+  `CombatBar.tsx` is the picking mode inside the strip: attack = pick a target chip (players and
+  their planeswalkers/battles, avatar colours), tap my untapped creatures (`Table.tapCard`
+  intercepts taps while a mode is open; each tile shows a `mark` like "-> Blair"), Declare ->
+  `AttackersDeclared`; block = pick one of the attackers aimed at me, tap my untapped creatures,
+  Declare -> `BlockersDeclared` (empty = no blocks). Everyone sees the marks of the declared
+  attack. `DamageSheet.tsx` lists `proposeDamage(combatContextFromView(view, printings))` per
+  source with editable amounts (plus a 0 row to the player for blocked attackers), previews
+  lethal creatures, and sends `CombatDamageDealt` (`{}` when untouched so the log says default).
+  `actions.ts` offers only Take control (`ControlTaken`), token copy and Zoom on permanents and
+  graveyard/exile cards I do not control. Opponent chips, the life widget and the menu show
+  `eliminated` as OUT. `CardZoom` fits the WHOLE card: `.zoom` is a grid, the image width is
+  `min(100vw - 48px, (100dvh - 90px) * 63/88, 440px)` beside the text in landscape and
+  `min(100vw - 48px, 56dvh * 63/88)` above a scrolling text pane in portrait (`game.css`).
+  `scripts/bots.mjs` bots act whenever they are the active player (a turn now opens on upkeep).
 
 ## Phases
 
@@ -898,7 +918,6 @@ them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.
     site's service API (cache + breaker), availability / shopping / stores routes. **(server done;
     UI waits for the design refresh)**
 10b. Table hygiene stopgap: ownership guardrails, automatic untap/draw, combat events, automatic
-    eliminations, win advisories. **(shared + server done; the phase strip, attack/block/damage UI
-    and the full-card zoom wait for the design refresh)**
+    eliminations, win advisories; phase strip, attack / block / damage UI, full-card zoom. **(done)**
 11. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority),
     browser push notifications (see Phase 8), password reset once there is an email provider.

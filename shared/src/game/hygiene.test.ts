@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CardPrinting } from "../cards.js";
-import { proposeCombatDamage } from "./combat.js";
+import { combatContextFromView, proposeCombatDamage, proposeDamage } from "./combat.js";
 import { applyEvent, replay } from "./reducer.js";
 import { SYSTEM_ACTOR, type EventInput, type GameEvent, type GameState, type GameStartedPayload } from "./types.js";
 import { viewFor } from "./view.js";
@@ -382,6 +382,11 @@ describe("combat as events", () => {
       { source: hawk, target: { kind: "card", iid: pw }, amount: 2 },
       { source: bBear, target: { kind: "card", iid: wurm }, amount: 2 },
     ]);
+    // The client computes the same default from its view (what the damage sheet shows), for any seat.
+    for (const viewer of [A, B, C]) {
+      const { view, printings } = viewFor(g.state!, viewer);
+      expect(proposeDamage(combatContextFromView(view, Object.fromEntries(printings)))).toEqual(proposal);
+    }
     // Only the attacking player applies damage.
     expect(() => g.push(B, { type: "CombatDamageDealt", payload: {} })).toThrow(/attacking player/);
     let s = g.push(A, { type: "CombatDamageDealt", payload: {} });

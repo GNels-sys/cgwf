@@ -24,9 +24,12 @@ interface Props {
   compact?: boolean;
   /** Sleeve (card back) for face-down cards, by owner. */
   sleeveOf?: ((ownerId: string) => SleeveStyle) | undefined;
+  /** Combat mode: selected cards (accent ring) and their marks (target / blocked attacker). */
+  marks?: ReadonlyMap<string, { label: string; color?: string | undefined }> | undefined;
+  selected?: ReadonlySet<string> | undefined;
 }
 
-function SectionView({ section, player, printings, derived, onTap, onHold, draggable, droppable, highlighted, onAnthems, sleeveOf, wide }: Props & { section: Section; wide: boolean }) {
+function SectionView({ section, player, printings, derived, onTap, onHold, draggable, droppable, highlighted, onAnthems, sleeveOf, marks, selected, wide }: Props & { section: Section; wide: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `row:${section}`, disabled: !droppable });
   const all = battlefieldCards(player);
   const stacks = stacksOf(player.battlefield[section], all);
@@ -44,7 +47,7 @@ function SectionView({ section, player, printings, derived, onTap, onHold, dragg
       <div className="bf-cards">
         {stacks.map(({ host, attachments }) => (
           <div key={host.iid} className={`stack${attachments.length ? " has-attachments" : ""}`} style={{ "--n": attachments.length } as React.CSSProperties}>
-            <CardTile card={host} printings={printings} onTap={onTap} onHold={onHold} draggable={draggable} derived={derived.cards.get(host.iid)} highlight={highlighted?.has(host.iid)} sleeve={sleeveOf?.(host.owner)} />
+            <CardTile card={host} printings={printings} onTap={onTap} onHold={onHold} draggable={draggable} derived={derived.cards.get(host.iid)} highlight={highlighted?.has(host.iid)} sleeve={sleeveOf?.(host.owner)} mark={marks?.get(host.iid)} selected={selected?.has(host.iid) ?? false} />
             {attachments.map((a, i) => (
               <div key={a.iid} className="stack-attachment" style={{ "--i": i + 1 } as React.CSSProperties}>
                 <CardTile card={a} printings={printings} onTap={onTap} onHold={onHold} draggable={draggable} attached derived={derived.cards.get(a.iid)} highlight={highlighted?.has(a.iid)} sleeve={sleeveOf?.(a.owner)} />

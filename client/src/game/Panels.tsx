@@ -86,7 +86,7 @@ export function OpponentPanel({
   const derived = deriveFor(player, printings);
   const mat = useMat(member?.look);
   return (
-    <Panel title={player.name} subtitle={`${player.life} life${player.conceded ? " - conceded" : active ? " - active player" : ""}`} onClose={onClose} wide className="opponent-panel">
+    <Panel title={player.name} subtitle={`${player.life} life${player.conceded ? " - conceded" : player.eliminated ? ` - out of the game (${player.eliminated})` : active ? " - active player" : ""}`} onClose={onClose} wide className="opponent-panel">
       <div className="opp-stats">
         <span>Hand {player.hand.count}</span>
         <span>Library {player.library.count}</span>
@@ -196,7 +196,7 @@ export function MenuPanel({ room, view, me, status, onClose, actions }: { room: 
               {m.isAgent ? <span className="bot-chip">{m.thinking ? "thinking…" : "BOT"}</span> : null}
             </span>
             <span className="muted small">
-              {m.role === "player" ? (view.players[m.userId]?.conceded ? "conceded" : `seat ${(m.seat ?? 0) + 1}`) : "watching"}
+              {m.role === "player" ? (view.players[m.userId]?.conceded ? "conceded" : view.players[m.userId]?.eliminated ? `out (${view.players[m.userId]!.eliminated})` : `seat ${(m.seat ?? 0) + 1}`) : "watching"}
               {m.online ? "" : " - offline"}
             </span>
           </li>
