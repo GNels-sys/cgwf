@@ -231,6 +231,7 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(seats[0]!.deck.main[0]!.count).toBe(99);
     const room = await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "playing", m);
     expect(room.room.status).toBe("playing");
+    expect(ctx.roomsManager.get(code)!.engineTable!.seatInfos().map((s) => s.playerId)).toEqual([100, 101]);
   });
 
   it("renders each seat its own frame only, and never another seat's hand", async () => {
@@ -256,8 +257,9 @@ describe("engine tables (relay to the rules engine)", () => {
     engine.send({ ...base, seat: 1, viewer: 101, players: players(101) });
     engine.send({ ...base, seat: -1, viewer: null, players: players(-1) });
 
-    const va = (await alex.stateSince(ma)).view;
-    const vb = (await blair.stateSince(mb)).view;
+    const full = (f: ServerMessage): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.viewer !== null && Object.keys(f.view.players).length === 2;
+    const va = (await alex.waitFor(full, ma)).view;
+    const vb = (await blair.waitFor(full, mb)).view;
     const alexId = va.viewer!;
     const blairId = vb.viewer!;
     expect(va.players[alexId]!.hand.cards.length).toBe(2);
@@ -312,7 +314,7 @@ describe("engine tables (relay to the rules engine)", () => {
       candidates: [card(14, "Atraxa, Grand Unifier", "Battlefield", 100, { power: 7, toughness: 7, index: 0, canAttack: [{ kind: "player", id: 101, name: "Blair" }] })],
       defenders: [{ kind: "player", id: 101, name: "Blair", life: 40 }],
     });
-    const s = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.kind === "attackers", ma)).view;
+    const s = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.kind === "attackers" && Object.keys(f.view.players).length === 2, ma)).view;
     const prompt = s.engine!.prompt!;
     expect(prompt.kind).toBe("attackers");
     if (prompt.kind !== "attackers") throw new Error("unreachable");

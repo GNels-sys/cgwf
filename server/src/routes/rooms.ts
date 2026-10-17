@@ -143,6 +143,9 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
             if (!msg.stops || typeof msg.stops !== "object") return fail("bad stops");
             room.engineStops(user.id, msg.stops);
             break;
+          case "concede":
+            room.concede(user.id);
+            break;
           case "leave":
             room.leave(user.id);
             room.broadcastRoom();

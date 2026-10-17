@@ -1,4 +1,4 @@
-import { AVATAR_COLORS, STEPS, STEP_LABELS, isOut, type EventInput, type PlayerView, type RoomMember, type Step, type ViewCard } from "@cgwf/shared";
+import { AVATAR_COLORS, STEPS, STEP_LABELS, isOut, type EngineInfo, type EventInput, type PlayerView, type RoomMember, type Step, type ViewCard } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
 import { findCard, nameOf, type Printings } from "./model";
 
@@ -41,6 +41,8 @@ export interface PhaseStripProps {
   busy: boolean;
   /** The combat picking bar, rendered inside the strip (never over the battlefield). */
   children?: React.ReactNode;
+  /** Rules-engine table: the engine drives steps and combat; the strip only shows them (and who it waits on). */
+  engine?: EngineInfo | null | undefined;
 }
 
 function creatureLabel(view: PlayerView, printings: Printings, iid: string): string {
@@ -48,7 +50,8 @@ function creatureLabel(view: PlayerView, printings: Printings, iid: string): str
   return c ? nameOf(c, printings) : "a creature";
 }
 
-export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onAttack, onBlock, onAssignDamage, onZoom, onConfirmWin, busy, children }: PhaseStripProps) {
+export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onAttack, onBlock, onAssignDamage, onZoom, onConfirmWin, busy, children, engine = null }: PhaseStripProps) {
+  const engineMode = engine !== null;
   const active = view.players[view.activePlayer];
   const member = members.find((m) => m.userId === view.activePlayer);
   const isMyTurn = me !== null && me === view.activePlayer;
@@ -59,7 +62,20 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
 
   // ---- what the strip asks of me right now
   let prompt: React.ReactNode = null;
-  if (playing && mePlayer?.eliminated) {
+  if (engineMode && playing) {
+    if (mePlayer?.eliminated) {
+      prompt = <span className="phase-note is-warn">You are out of the game.</span>;
+    } else if (!engine.prompt) {
+      const waiting = engine.waitingOn.map((id) => view.players[id]?.name ?? "?");
+      const stackTop = view.stack[0];
+      prompt = (
+        <span className="phase-note engine-wait">
+          {waiting.length ? `Waiting for ${waiting.join(", ")}.` : "The engine is working..."}
+          {stackTop ? ` On the stack: ${stackTop.description}` : ""}
+        </span>
+      );
+    }
+  } else if (playing && mePlayer?.eliminated) {
     prompt = (
       <span className="phase-note is-warn">
         You are out of the game ({mePlayer.eliminated}). Rewind from the log if that was a mistake.
@@ -176,7 +192,7 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
               <li key={step}>
                 <button
                   className={`phase-step${i === current ? " is-current" : i < current ? " is-past" : ""}`}
-                  disabled={!canAct || i === current}
+                  disabled={engineMode || !canAct || i === current}
                   onClick={() => dispatch({ type: "StepSet", payload: { step } })}
                   aria-current={i === current ? "step" : undefined}
                   aria-label={`${STEP_LABELS[step]}${i === current ? ", current step" : ""}`}
@@ -189,7 +205,7 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
             ))}
           </ol>
         )}
-        {playing && (
+        {playing && !engineMode && (
           <div className="phase-actions">
             {canAttack && (
               <button className="btn btn-small btn-attack" onClick={onAttack}>
@@ -207,7 +223,7 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
       </div>
       {children}
       {prompt && !busy && <div className="phase-prompt">{prompt}</div>}
-      {playing && !prompt && isMyTurn && view.drewForTurn && current <= STEPS.indexOf("main1") && <div className="phase-prompt phase-prompt-quiet muted small">Untapped and drew for the turn.</div>}
+      {playing && !engineMode && !prompt && isMyTurn && view.drewForTurn && current <= STEPS.indexOf("main1") && <div className="phase-prompt phase-prompt-quiet muted small">Untapped and drew for the turn.</div>}
       {playing && !prompt && view.turnOrder.some((id) => isOut(view.players[id]!) && !view.players[id]!.conceded) && (
         <div className="phase-prompt phase-prompt-quiet muted small">
           Out: {view.turnOrder.filter((id) => view.players[id]!.eliminated && !view.players[id]!.conceded).map((id) => `${view.players[id]!.name} (${view.players[id]!.eliminated})`).join(", ")}

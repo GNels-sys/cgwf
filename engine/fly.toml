@@ -22,6 +22,11 @@ primary_region = "lax"
 # shared-cpu-2x an AI-only game ran ~7x slower than on the dev box, performance-1x within 1.6x
 # (README "Measurements"). Stage 1 plays humans only, so the cheap size stays; when bots are used:
 #   fly machine update <id> -a cgwf-engine --vm-size performance-1x --vm-memory 2048 --yes
+# No public service means Fly never auto-starts the machine; "always" keeps it up after crashes
+# and host maintenance. Start it by hand after the very first deploy: fly machine start <id>.
+[[restart]]
+  policy = "always"
+
 [[vm]]
   size = "shared-cpu-2x"
   memory = "2gb"

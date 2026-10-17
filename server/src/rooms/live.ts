@@ -334,6 +334,18 @@ export class LiveRoom {
     }
   }
 
+  /** Concede from the menu: engine tables tell the engine, classic tables append the event. */
+  concede(userId: string): void {
+    if (this.status !== "playing") throw new RoomError("no game in progress");
+    if (this.engineTable) {
+      this.engineTable.concede(userId);
+      return;
+    }
+    this.ensureLoaded();
+    if (!this.state?.players[userId]) throw new RoomError("spectators cannot concede");
+    this.append(userId, { type: "PlayerConceded", payload: { player: userId } });
+  }
+
   engineStops(userId: string, stops: EngineStops): void {
     if (!this.engineTable) throw new RoomError("this table is not run by the rules engine");
     try {

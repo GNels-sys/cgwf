@@ -2239,3 +2239,19 @@
   .zoom-image .card-image,
   .zoom-custom { width: calc((100dvh - 48px) * 63 / 88); }
 }
+
+/* ---- rules engine (Stage 1) ---- */
+.engine-badge { margin: 8px 0 0; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev); font-size: 0.9rem; line-height: 1.45; }
+.engine-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.engine-bar-head { display: flex; flex-direction: column; min-width: 0; flex: 1 1 220px; line-height: 1.25; }
+.engine-bar-head strong { font: 500 1.05rem var(--font-display); }
+.engine-bar-head .small { font-size: 0.74rem; }
+.engine-bar-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.engine-bar-actions .btn { min-height: 40px; }
+.engine-wait { font-size: 0.85rem; }
+.engine-options { display: flex; flex-direction: column; gap: 6px; max-height: 50dvh; overflow: auto; }
+.engine-option { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elev); color: var(--fg); text-align: left; }
+.engine-option.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.engine-option small { color: var(--fg-muted); }
+.engine-option .tile { flex: 0 0 auto; }
+.tile.is-sick .tile-inner::after { content: "zz"; position: absolute; top: 4px; left: 4px; font-size: 0.6rem; padding: 0 4px; border-radius: 6px; background: #0008; color: #fff; }

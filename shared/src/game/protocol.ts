@@ -67,6 +67,8 @@ export type ClientMessage =
   | { t: "engine"; answer: EngineAnswer; cid?: string }
   /** Engine tables: change this seat's auto-pass stops. */
   | { t: "stops"; stops: EngineStops }
+  /** Concede (any table); on engine tables the engine records it at the seat's next decision. */
+  | { t: "concede" }
   | { t: "ping" };
 
 // server -> client

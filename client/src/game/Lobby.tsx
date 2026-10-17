@@ -70,6 +70,11 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
       <p className="muted small">
         Friends join with the code or the link. <a href="/settings">Personalize</a> your playmat and sleeves while you wait. {sock.status !== "open" && <span className="warn">({sock.status})</span>}
       </p>
+      {room.engine && (
+        <p className="engine-badge">
+          <strong>Rules engine (beta).</strong> This table enforces the rules: the engine untaps, draws, pays mana, runs combat and the stack. Everyone needs a legal Commander deck (100 cards, singleton, inside the commander&apos;s colours); the host&apos;s Start button says what is wrong otherwise.
+        </p>
+      )}
 
       <ul className="seat-list">
         {Array.from({ length: MAX_SEATS }, (_, seat) => {

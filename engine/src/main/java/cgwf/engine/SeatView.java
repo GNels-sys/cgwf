@@ -109,7 +109,11 @@ public final class SeatView {
 
     private static JsonArray cards(Iterable<Card> cards, Player viewer) {
         JsonArray a = new JsonArray();
-        for (Card c : cards) a.add(card(c, viewer));
+        for (Card c : cards) {
+            // Forge keeps bookkeeping "effect" cards (e.g. the Commander Effect) in the command zone; they are not cards a player sees.
+            if (c.isImmutable() && !c.isEmblem()) continue;
+            a.add(card(c, viewer));
+        }
         return a;
     }
 
