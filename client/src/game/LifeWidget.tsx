@@ -60,7 +60,7 @@ export function LifeWidget({ player, mine, onDelta, onBig, onCounters }: { playe
   const poison = player.counters.poison ?? 0;
   const cmd = totalCommanderDamage(player);
   return (
-    <div className={`life${mine ? " is-mine" : ""}${player.conceded ? " is-out" : ""}`}>
+    <div className={`life${mine ? " is-mine" : ""}${player.conceded || player.eliminated ? " is-out" : ""}`}>
       <button className="life-btn" onClick={() => onDelta(-1)} aria-label="Lose 1 life">
         &minus;
       </button>

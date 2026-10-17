@@ -21,6 +21,8 @@ interface Props {
   highlight?: boolean | undefined;
   /** The owner's sleeve, drawn when the card is hidden. */
   sleeve?: SleeveStyle | undefined;
+  /** Combat mark: who this creature attacks / which attacker it blocks (label in the defender's colour). */
+  mark?: { label: string; color?: string | undefined } | undefined;
 }
 
 const HOLD_MS = 450;
@@ -34,7 +36,7 @@ const FLIP_MS = 320;
  * Light animations: fade in on arrival, a flip when a face changes; all off
  * under prefers-reduced-motion (see game.css).
  */
-export function CardTile({ card, printings, onTap, onHold, draggable = false, selected = false, attached = false, dim = false, derived, highlight = false, sleeve }: Props) {
+export function CardTile({ card, printings, onTap, onHold, draggable = false, selected = false, attached = false, dim = false, derived, highlight = false, sleeve, mark }: Props) {
   const printing = printingOf(card, printings);
   const name = nameOf(card, printings);
   const hidden = card.faceDown || (!card.printingId && !card.custom);
@@ -105,6 +107,7 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
     card.faceDown ? "face down" : null,
     chevrons.length ? chevrons.join(", ") : null,
     badges.length ? badges.map(([k, v]) => `${v} ${k}`).join(", ") : null,
+    mark ? mark.label : null,
   ]
     .filter(Boolean)
     .join(", ");
@@ -112,6 +115,7 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
   return (
     <div
       ref={setNodeRef}
+      data-card-id={card.iid}
       className={`tile${card.tapped ? " is-tapped" : ""}${selected ? " is-selected" : ""}${attached ? " is-attached" : ""}${card.isToken ? " is-token" : ""}${card.isCommander ? " is-commander" : ""}${highlight ? " is-triggered" : ""}${flipping ? " is-flipping" : ""}`}
       style={style}
       {...listeners}
@@ -171,6 +175,11 @@ export function CardTile({ card, printings, onTap, onHold, draggable = false, se
         </span>
       )}
       {card.isCommander && <span className="tile-mark" title="Commander">C</span>}
+      {mark && (
+        <span className="tile-combat-mark" style={mark.color ? { background: mark.color } : undefined} title={mark.label}>
+          {mark.label}
+        </span>
+      )}
     </div>
   );
 }

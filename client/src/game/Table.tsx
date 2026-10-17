@@ -1,7 +1,8 @@
+import { useTableMotion } from "./useTableMotion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { STEP_LABELS, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
+import { isOut, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
 import { useSettings } from "../settings";
 import { anthemActions, cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
@@ -9,10 +10,13 @@ import { setAmbient, stopAmbient } from "./ambient";
 import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
 import { CardZoom } from "./CardZoom";
+import { CombatBar, attackTargets, colorOf, targetKey, type AttackTarget, type CombatMode } from "./CombatBar";
+import { DamageSheet } from "./DamageSheet";
+import { PhaseStrip } from "./PhaseStrip";
 import { LifeTicks, LifeWidget, useLifeTicks } from "./LifeWidget";
 import { useMat, useSleeves, type Looks } from "./look";
 import { ManaBank, ManaSummary } from "./Mana";
-import { battlefieldCards, deriveFor, nameOf, seatOrderFrom, type Printings } from "./model";
+import { battlefieldCards, deriveFor, findCard as findCardIn, nameOf, seatOrderFrom, type Printings } from "./model";
 import { CardList, LogPanel, MenuPanel, OpponentPanel, Panel } from "./Panels";
 import { SettingsPanel } from "./SettingsPanel";
 import { ActionSheet, DialogView, type Action, type Dialog } from "./Sheets";
@@ -42,7 +46,7 @@ interface CardsPanel {
 function DropRow({ id, className, children }: { id: string; className: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} className={`${className}${isOver ? " is-over" : ""}`}>
+    <div ref={setNodeRef} data-zone={id.replace("zone:", "")} className={`${className}${isOver ? " is-over" : ""}`}>
       {children}
     </div>
   );
@@ -51,7 +55,7 @@ function DropRow({ id, className, children }: { id: string; className: string; c
 function DropButton({ id, className, style, onClick, label, children }: { id: string; className?: string; style?: React.CSSProperties | undefined; onClick: () => void; label: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <button ref={setNodeRef} className={`zone-btn${className ? ` ${className}` : ""}${isOver ? " is-over" : ""}`} style={style} onClick={onClick} aria-label={label}>
+    <button ref={setNodeRef} data-zone={id.replace("zone:", "")} className={`zone-btn${className ? ` ${className}` : ""}${isOver ? " is-over" : ""}`} style={style} onClick={onClick} aria-label={label}>
       {children}
     </button>
   );
@@ -62,14 +66,16 @@ function OpponentChip({ p, member, active, side, size, onClick }: { p: ViewPlaye
   const field = battlefieldCards(p).length;
   return (
     <button
-      className={`opp-chip is-${size}${active ? " is-active" : ""}${p.conceded ? " is-out" : ""}${member && !member.online ? " is-offline" : ""}${side ? " is-side" : ""}${member?.isAgent ? " is-agent" : ""}${member?.thinking ? " is-thinking" : ""}`}
+      className={`opp-chip is-${size}${active ? " is-active" : ""}${isOut(p) ? " is-out" : ""}${member && !member.online ? " is-offline" : ""}${side ? " is-side" : ""}${member?.isAgent ? " is-agent" : ""}${member?.thinking ? " is-thinking" : ""}`}
       onClick={onClick}
-      aria-label={`${p.name}, ${p.life} life, ${p.hand.count} in hand, ${p.library.count} in library, ${field} on the battlefield${active ? ", active player" : ""}${p.conceded ? ", conceded" : ""}. Open their battlefield`}
+      data-player-id={p.id}
+      aria-label={`${p.name}, ${p.life} life, ${p.hand.count} in hand, ${p.library.count} in library, ${field} on the battlefield${active ? ", active player" : ""}${p.conceded ? ", conceded" : p.eliminated ? `, out (${p.eliminated})` : ""}. Open their battlefield`}
     >
       {member && <Avatar avatar={member.avatar} color={member.color} size={size === "small" ? 22 : size === "large" ? 34 : 26} />}
       <span className="opp-name">
         {p.name}
         {member?.isAgent && <span className="bot-chip">{member.thinking ? "…" : "BOT"}</span>}
+        {p.eliminated && !p.conceded && <span className="out-chip">OUT</span>}
       </span>
       <span className="opp-life">
         {p.life}
@@ -87,6 +93,8 @@ function OpponentChip({ p, member, active, side, size, onClick }: { p: ViewPlaye
 }
 
 export function Table({ room, view, printings, sock }: { room: RoomInfo; view: PlayerView; printings: Printings; sock: RoomSocket }) {
+  const tableRef = useRef<HTMLDivElement>(null);
+  useTableMotion(tableRef, view, sock.status === "open");
   const navigate = useNavigate();
   const { settings } = useSettings();
   const me = view.viewer;
@@ -104,6 +112,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAgents, setShowAgents] = useState(false);
+  const [mode, setMode] = useState<CombatMode | null>(null);
+  const [showDamage, setShowDamage] = useState(false);
   const { user } = useUser();
   const hasAgents = room.members.some((m) => m.isAgent);
   const [dismissedEnd, setDismissedEnd] = useState(false);
@@ -152,7 +162,30 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     [view, printings, me, sock.dispatch, sock.send, setDialog, showCards, openLibraryWhenKnown, closeSheet],
   );
 
-  const tapCard = useCallback((card: ViewCard) => setSheet({ kind: "card", card }), []);
+  const tapCard = useCallback(
+    (card: ViewCard) => {
+      // Combat picking: tapping one of my battlefield cards assigns it instead of opening the sheet.
+      if (mode && me && card.zone.kind === "battlefield" && card.zone.owner === me) {
+        if (mode.kind === "attack") {
+          const next = { ...mode.targets };
+          if (next[card.iid] && targetKey(next[card.iid]!) === targetKey(mode.current)) delete next[card.iid];
+          else if (card.tapped) return;
+          else next[card.iid] = mode.current;
+          setMode({ ...mode, targets: next });
+        } else {
+          if (!mode.current) return;
+          const next = { ...mode.blocks };
+          if (next[card.iid] === mode.current) delete next[card.iid];
+          else if (card.tapped) return;
+          else next[card.iid] = mode.current;
+          setMode({ ...mode, blocks: next });
+        }
+        return;
+      }
+      setSheet({ kind: "card", card });
+    },
+    [mode, me],
+  );
   const holdCard = useCallback((card: ViewCard) => setZoom(card), []);
 
   // Keep panels in sync with the live view (a card list opened from a zone follows that zone).
@@ -193,11 +226,74 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     const d = deriveFor(holder, printings);
     return { derived: d.cards.get(zoom.iid), attachments: battlefieldCards(holder).filter((c) => c.attachedTo === zoom.iid) };
   }, [zoom, view, printings]);
-  const active = view.players[view.activePlayer];
   const isMyTurn = me === view.activePlayer;
   const ended = view.phase === "ended";
   const canAct = Boolean(mePlayer && !mePlayer.conceded && !ended);
   const isHost = me !== null && room.hostId === me;
+
+  // ---- combat picking (attackers / blockers) --------------------------------
+  const startAttack = () => {
+    if (!me) return;
+    const first = attackTargets(view, printings, me)[0];
+    if (!first) return;
+    const targets: Record<string, AttackTarget> = {};
+    // Re-declaring: start from the attack already on the table.
+    if (view.combat && view.combat.attacker === me && !view.combat.damageDealt) for (const a of view.combat.attackers) targets[a.iid] = { player: a.player, planeswalker: a.planeswalker };
+    setMode({ kind: "attack", targets, current: first.target });
+  };
+  const startBlock = () => {
+    if (!me || !view.combat) return;
+    const mine = view.combat.attackers.filter((a) => a.player === me);
+    const blocks: Record<string, string> = {};
+    for (const b of view.combat.blockers) if (b.player === me) blocks[b.iid] = b.attacker;
+    setMode({ kind: "block", blocks, current: mine[0]?.iid ?? null });
+  };
+  const declare = () => {
+    if (!mode || !me) return;
+    if (mode.kind === "attack") {
+      const attacks = Object.entries(mode.targets).map(([iid, t]) => ({ iid, player: t.player, planeswalker: t.planeswalker }));
+      if (attacks.length) sock.dispatch({ type: "AttackersDeclared", payload: { attacks } });
+    } else {
+      sock.dispatch({ type: "BlockersDeclared", payload: { player: me, blocks: Object.entries(mode.blocks).map(([iid, attacker]) => ({ iid, attacker })) } });
+    }
+    setMode(null);
+  };
+  // Combat picking ends with the combat it belongs to (damage dealt, turn passed, game over).
+  useEffect(() => {
+    if (!mode) return;
+    if (!canAct || view.phase !== "playing") setMode(null);
+    else if (mode.kind === "block" && (!view.combat || view.combat.damageDealt || !view.combat.attackers.some((a) => a.player === me))) setMode(null);
+    else if (mode.kind === "attack" && view.activePlayer !== me) setMode(null);
+  }, [mode, canAct, view.phase, view.combat, view.activePlayer, me]);
+  useEffect(() => {
+    if (showDamage && (!view.combat || view.combat.damageDealt || view.combat.attacker !== me)) setShowDamage(false);
+  }, [showDamage, view.combat, me]);
+  const combatMarks = useMemo(() => {
+    const marks = new Map<string, { label: string; color?: string | undefined }>();
+    const short = (iid: string) => {
+      const c = findCardIn(view, iid);
+      return c ? nameOf(c, printings).split(",")[0]! : "?";
+    };
+    if (mode?.kind === "attack") {
+      for (const [iid, t] of Object.entries(mode.targets)) marks.set(iid, { label: `→ ${t.planeswalker ? short(t.planeswalker) : (view.players[t.player]?.name ?? "?")}`, color: colorOf(room.members, t.player) });
+    } else if (mode?.kind === "block") {
+      for (const [iid, attacker] of Object.entries(mode.blocks)) marks.set(iid, { label: `blocks ${short(attacker)}`, color: view.combat ? colorOf(room.members, view.combat.attacker) : undefined });
+    } else if (view.combat && !view.combat.damageDealt) {
+      // Everyone sees who attacks whom and who blocks what, on the tiles themselves.
+      for (const a of view.combat.attackers) marks.set(a.iid, { label: `→ ${a.planeswalker ? short(a.planeswalker) : (view.players[a.player]?.name ?? "?")}`, color: colorOf(room.members, a.player) });
+      for (const b of view.combat.blockers) marks.set(b.iid, { label: `blocks ${short(b.attacker)}`, color: colorOf(room.members, view.combat.attacker) });
+    }
+    return marks;
+  }, [mode, view, printings, room.members]);
+  const combatSelected = useMemo(() => new Set(mode ? Object.keys(mode.kind === "attack" ? mode.targets : mode.blocks) : []), [mode]);
+  const confirmWin = (iid: string, name: string, condition: string) =>
+    setDialog({
+      kind: "confirm",
+      title: `Claim the win with ${name}?`,
+      body: `${condition}. The game ends and the log records the condition. If an opponent has a response, let them act first.`,
+      confirmLabel: "I win",
+      onConfirm: () => sock.dispatch({ type: "WinClaimed", payload: { iid } }),
+    });
 
   // ---- layout from settings ---------------------------------------------
   const layout = settings.layout;
@@ -288,28 +384,11 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className={tableClass} style={tableStyle}>
+      <div ref={tableRef} className={tableClass} style={tableStyle}>
         {/* ---- top: opponents + turn tracker ---- */}
         <div className="table-top">
           <div className="opp-strip">{topOpponents.map((p) => renderChip(p, false))}</div>
           <div className="turn-bar">
-            {view.phase === "mulligan" ? (
-              <span className="turn-label">Mulligans</span>
-            ) : ended ? (
-              <span className="turn-label">{view.winner ? `${view.players[view.winner]?.name} wins` : "Game over"}</span>
-            ) : (
-              <>
-                <span className="turn-label">
-                  <strong>T{view.turn}</strong> {active?.name ?? ""} &middot; {STEP_LABELS[view.step]}
-                </span>
-                <button className="btn btn-small" disabled={!canAct} onClick={() => sock.dispatch({ type: "StepAdvanced", payload: {} })}>
-                  Next step
-                </button>
-                <button className={`btn btn-small${isMyTurn ? " btn-primary" : ""}`} disabled={!canAct} onClick={() => sock.dispatch({ type: "TurnAdvanced", payload: {} })}>
-                  Pass turn
-                </button>
-              </>
-            )}
             {mePlayer && <ManaBank player={mePlayer} dispatch={sock.dispatch} disabled={!canAct} />}
             <button className="btn btn-small menu-btn" onClick={() => setShowMenu(true)} aria-label="Menu">
               &#8942;
@@ -317,11 +396,41 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           </div>
         </div>
 
+        <PhaseStrip
+          view={view}
+          printings={printings}
+          members={room.members}
+          me={me}
+          canAct={canAct}
+          dispatch={sock.dispatch}
+          onAttack={startAttack}
+          onBlock={startBlock}
+          onAssignDamage={() => setShowDamage(true)}
+          onZoom={holdCard}
+          onConfirmWin={confirmWin}
+          busy={mode !== null}
+        >
+          {mode && me && (
+            <CombatBar
+              mode={mode}
+              view={view}
+              printings={printings}
+              members={room.members}
+              me={me}
+              onPickTarget={(t) => mode.kind === "attack" && setMode({ ...mode, current: t })}
+              onPickAttacker={(iid) => mode.kind === "block" && setMode({ ...mode, current: iid })}
+              onDeclare={declare}
+              onCancel={() => setMode(null)}
+              onZoom={holdCard}
+            />
+          )}
+        </PhaseStrip>
+
         {around && sideLeft && <div className="table-side is-left">{renderChip(sideLeft, true)}</div>}
         {around && sideRight && <div className="table-side is-right">{renderChip(sideRight, true)}</div>}
 
         {/* ---- middle: my battlefield on my playmat ---- */}
-        <div className={`table-mid mat ${myMat.className}`} style={myMat.style}>
+        <div className={`table-mid mat ${myMat.className}${mode ? " is-picking" : ""}`} style={myMat.style}>
           {mePlayer && myDerived ? (
             <Battlefield
               player={mePlayer}
@@ -334,6 +443,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               highlighted={highlighted}
               onAnthems={() => setSheet({ kind: "anthems", player: mePlayer })}
               sleeveOf={sleeveOf}
+              marks={combatMarks}
+              selected={combatSelected}
             />
           ) : (
             <div className="spectating">
@@ -477,6 +588,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       )}
 
       {sheetView}
+      {showDamage && <DamageSheet view={view} printings={printings} dispatch={sock.dispatch} onClose={() => setShowDamage(false)} />}
       {dialogState && <DialogView key={dialogState.key} dialog={dialogState.d} onClose={() => setDialog(null)} />}
       {zoom && <CardZoom card={zoom} printings={printings} view={view} sleeve={sleeveOf(zoom.owner)} derived={zoomExtras.derived} attachments={zoomExtras.attachments} onClose={() => setZoom(null)} />}
       {liveCardsPanel && (

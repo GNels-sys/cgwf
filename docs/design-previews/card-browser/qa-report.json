@@ -1,0 +1,170 @@
+[
+  {
+    "size": "portrait",
+    "ui": "dark",
+    "distinctCards": 7,
+    "order": true,
+    "keyboard": true,
+    "boundaries": true,
+    "faceReset": true,
+    "errorRecovery": true,
+    "staleRequests": true,
+    "searchUnchanged": true,
+    "geometry": {
+      "width": 317,
+      "scrollWidth": 317,
+      "buttons": [
+        {
+          "width": 50.578125,
+          "height": 44
+        },
+        {
+          "width": 50.578125,
+          "height": 44
+        }
+      ]
+    },
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "size": "portrait",
+    "ui": "light",
+    "distinctCards": 7,
+    "order": true,
+    "keyboard": true,
+    "boundaries": true,
+    "faceReset": true,
+    "errorRecovery": true,
+    "staleRequests": true,
+    "searchUnchanged": true,
+    "geometry": {
+      "width": 317,
+      "scrollWidth": 317,
+      "buttons": [
+        {
+          "width": 50.578125,
+          "height": 44
+        },
+        {
+          "width": 50.578125,
+          "height": 44
+        }
+      ]
+    },
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "size": "landscape",
+    "ui": "dark",
+    "distinctCards": 7,
+    "order": true,
+    "keyboard": true,
+    "boundaries": true,
+    "faceReset": true,
+    "errorRecovery": true,
+    "staleRequests": true,
+    "searchUnchanged": true,
+    "geometry": {
+      "width": 754,
+      "scrollWidth": 754,
+      "buttons": [
+        {
+          "width": 50.578125,
+          "height": 44
+        },
+        {
+          "width": 50.578125,
+          "height": 44
+        }
+      ]
+    },
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "size": "landscape",
+    "ui": "light",
+    "distinctCards": 7,
+    "order": true,
+    "keyboard": true,
+    "boundaries": true,
+    "faceReset": true,
+    "errorRecovery": true,
+    "staleRequests": true,
+    "searchUnchanged": true,
+    "geometry": {
+      "width": 754,
+      "scrollWidth": 754,
+      "buttons": [
+        {
+          "width": 50.578125,
+          "height": 44
+        },
+        {
+          "width": 50.578125,
+          "height": 44
+        }
+      ]
+    },
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "size": "desktop",
+    "ui": "dark",
+    "distinctCards": 7,
+    "order": true,
+    "keyboard": true,
+    "boundaries": true,
+    "faceReset": true,
+    "errorRecovery": true,
+    "staleRequests": true,
+    "searchUnchanged": true,
+    "geometry": {
+      "width": 926,
+      "scrollWidth": 926,
+      "buttons": [
+        {
+          "width": 50.578125,
+          "height": 44
+        },
+        {
+          "width": 50.578125,
+          "height": 44
+        }
+      ]
+    },
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "size": "desktop",
+    "ui": "light",
+    "distinctCards": 7,
+    "order": true,
+    "keyboard": true,
+    "boundaries": true,
+    "faceReset": true,
+    "errorRecovery": true,
+    "staleRequests": true,
+    "searchUnchanged": true,
+    "geometry": {
+      "width": 926,
+      "scrollWidth": 926,
+      "buttons": [
+        {
+          "width": 50.578125,
+          "height": 44
+        },
+        {
+          "width": 50.578125,
+          "height": 44
+        }
+      ]
+    },
+    "overflow": false,
+    "errors": []
+  }
+]

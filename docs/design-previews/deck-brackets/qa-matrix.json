@@ -1,0 +1,302 @@
+[
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "bracket-filters-and-sorts",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "portrait",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      },
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "forest"
+      },
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "bracket-filters-and-sorts",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "portrait",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      },
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "forest"
+      },
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "bracket-filters-and-sorts",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "landscape",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      },
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "forest"
+      },
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "bracket-filters-and-sorts",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "landscape",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      },
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "forest"
+      },
+      {
+        "height": 628.125,
+        "width": 244,
+        "frame": 287.734375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "bracket-filters-and-sorts",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "desktop",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 586.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      },
+      {
+        "height": 586.765625,
+        "width": 214.40625,
+        "frame": 246.40625,
+        "realm": "forest"
+      },
+      {
+        "height": 586.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "bracket-filters-and-sorts",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "desktop",
+    "ui": "light",
+    "geometry": [
+      {
+        "height": 586.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      },
+      {
+        "height": 586.765625,
+        "width": 214.40625,
+        "frame": 246.40625,
+        "realm": "forest"
+      },
+      {
+        "height": 586.765625,
+        "width": 214.390625,
+        "frame": 246.375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(255, 248, 229, 0.79), rgb(243, 239, 228)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  }
+]

@@ -2,6 +2,8 @@ import type { CardPrinting } from "../cards.js";
 import { nextId, nextInt, seedFromString, shuffle, type RngState } from "./rng.js";
 import { defaultSection } from "./sections.js";
 import { detectTriggers } from "./triggers.js";
+import { derivedCard, derivedFor, hasKeyword, isPlaneswalkerOrBattle, lethalCards, proposeCombatDamage, typeLineOf } from "./combat.js";
+import { detectWinConditions } from "./wincons.js";
 import {
   EMPTY_MANA,
   HAND_SIZE,
@@ -10,9 +12,13 @@ import {
   STEPS,
   STEP_LABELS,
   SYSTEM_ACTOR,
+  isOut,
   type Battlefield,
   type CardInstance,
+  type CombatState,
   type CustomToken,
+  type DamageAssignment,
+  type EliminationCause,
   type GameEvent,
   type GameState,
   type ManaColor,
@@ -78,7 +84,27 @@ function clone(s: GameState): GameState {
       },
     };
   }
-  return { ...s, cards, players, turnOrder: s.turnOrder.slice(), stack: s.stack.slice(), log: s.log.slice(), pendingTriggers: s.pendingTriggers.slice() };
+  const combat: CombatState | null = s.combat
+    ? {
+        ...s.combat,
+        attackers: s.combat.attackers.map((a) => ({ ...a })),
+        blockers: s.combat.blockers.map((b) => ({ ...b })),
+        blockersDeclared: s.combat.blockersDeclared.slice(),
+        tappedByAttack: s.combat.tappedByAttack.slice(),
+      }
+    : null;
+  return {
+    ...s,
+    cards,
+    players,
+    turnOrder: s.turnOrder.slice(),
+    stack: s.stack.slice(),
+    log: s.log.slice(),
+    pendingTriggers: s.pendingTriggers.slice(),
+    combat,
+    winAdvisories: s.winAdvisories.slice(),
+    dismissedWins: s.dismissedWins.slice(),
+  };
 }
 
 function emptyBattlefield(from?: Battlefield): Battlefield {
@@ -109,6 +135,22 @@ function requireActor(ev: GameEvent, id: PlayerId, what: string): void {
 
 function requirePlaying(state: GameState): void {
   if (state.phase === "ended") fail("the game is over");
+}
+
+/**
+ * Ownership guardrail: a card on the battlefield belongs to its controller
+ * (zone.owner); a card in a graveyard, exile or command zone to that zone's
+ * owner. Only they (or the table itself) may tap, move, flip, counter or attach it.
+ */
+function requireController(ev: GameEvent, c: CardInstance): void {
+  if (isActor(ev, c.zone.owner)) return;
+  if (c.zone.kind === "battlefield") fail("only the controller of that permanent may do that");
+  if (c.zone.kind === "hand" || c.zone.kind === "library") fail("only the owner of that hand or library may do that");
+  fail("only the owner of that card may do that");
+}
+
+function stepIndex(step: Step): number {
+  return STEPS.indexOf(step);
 }
 
 function cardName(c: CardInstance): string {
@@ -297,7 +339,7 @@ function nextActivePlayer(state: GameState): PlayerId {
   const start = order.indexOf(state.activePlayer);
   for (let k = 1; k <= order.length; k++) {
     const id = order[(start + k) % order.length] as PlayerId;
-    if (!player(state, id).conceded) return id;
+    if (!isOut(player(state, id))) return id;
   }
   return state.activePlayer;
 }
@@ -323,11 +365,49 @@ function addReveal(c: CardInstance, who: PlayerId): void {
 }
 
 function checkEnded(state: GameState, ev: GameEvent): void {
-  const alive = state.turnOrder.filter((id) => !player(state, id).conceded);
+  if (state.phase === "ended") return;
+  const alive = state.turnOrder.filter((id) => !isOut(player(state, id)));
   if (alive.length <= 1 && state.turnOrder.length >= 2) {
     state.phase = "ended";
     state.winner = alive[0] ?? null;
     log(state, ev, state.winner ? `${player(state, state.winner).name} won the game` : "The game is over");
+  }
+}
+
+/**
+ * Automatic eliminations: 0 life, 10 poison, 21 damage from one commander. Derived
+ * from the totals after every event, so a revert (or a corrected life total) brings
+ * the player straight back; the log says so either way.
+ */
+function checkEliminations(state: GameState, ev: GameEvent): void {
+  if (state.phase !== "playing") return;
+  for (const id of state.turnOrder) {
+    const p = player(state, id);
+    if (p.conceded) continue;
+    let cause: EliminationCause | null = null;
+    let detail = "";
+    if (p.life <= 0) {
+      cause = "life";
+      detail = `${p.life} life`;
+    } else if ((p.counters.poison ?? 0) >= 10) {
+      cause = "poison";
+      detail = `${p.counters.poison} poison`;
+    } else {
+      const hit = Object.entries(p.commanderDamage).find(([, n]) => n >= 21);
+      if (hit) {
+        cause = "commander damage";
+        const cmd = state.cards[hit[0]];
+        detail = `${hit[1]} damage from ${cmd ? cardName(cmd) : "a commander"}`;
+      }
+    }
+    if (cause && !p.eliminated) {
+      p.eliminated = cause;
+      log(state, ev, `${p.name} is out of the game: ${detail} (revert if that was a mistake)`);
+      if (state.activePlayer === p.id) state.activePlayer = nextActivePlayer(state);
+    } else if (!cause && p.eliminated) {
+      p.eliminated = null;
+      log(state, ev, `${p.name} is back in the game`);
+    }
   }
 }
 
@@ -336,8 +416,119 @@ function maybeFinishMulligans(state: GameState, ev: GameEvent): void {
   if (!state.turnOrder.every((id) => player(state, id).kept || player(state, id).conceded)) return;
   state.phase = "playing";
   state.turn = 1;
-  state.step = "untap";
+  state.step = "upkeep";
+  state.drewForTurn = false;
   log(state, ev, `Everyone kept. Turn 1: ${player(state, state.activePlayer).name} goes first`);
+}
+
+/** The next player's turn begins: untap everything they control (logged), land on upkeep so its triggers surface. */
+function beginTurn(state: GameState, ev: GameEvent): void {
+  resolvePendingCombat(state, ev);
+  state.activePlayer = nextActivePlayer(state);
+  state.turn++;
+  state.step = "upkeep";
+  state.drewForTurn = false;
+  state.combat = null;
+  state.pendingTriggers = [];
+  const p = player(state, state.activePlayer);
+  log(state, ev, `Turn ${state.turn}: ${p.name}'s turn`);
+  const n = untapAll(state, p);
+  if (n) log(state, ev, `${p.name}'s permanents untapped (${n})`);
+  emptyMana(state, ev, "new turn");
+}
+
+/**
+ * What happens automatically when the step changes: the turn's draw once the
+ * draw step is reached or passed, and combat damage once the damage step is
+ * reached or passed with attackers declared and damage not yet dealt.
+ */
+function afterStepChange(state: GameState, ev: GameEvent): void {
+  if (state.phase !== "playing") return;
+  const i = stepIndex(state.step);
+  if (!state.drewForTurn && i >= stepIndex("draw")) {
+    state.drewForTurn = true;
+    const p = player(state, state.activePlayer);
+    const n = draw(state, p, 1);
+    log(state, ev, n ? `${p.name} drew for the turn` : `${p.name} could not draw for the turn (library empty)`);
+  }
+  if (i >= stepIndex("damage")) resolvePendingCombat(state, ev);
+  if (state.combat && state.combat.damageDealt && i >= stepIndex("endCombat")) state.combat = null;
+}
+
+/** Attackers were declared but damage was never assigned: apply the default proposal. */
+function resolvePendingCombat(state: GameState, ev: GameEvent): void {
+  const combat = state.combat;
+  if (!combat || combat.damageDealt || combat.attackers.length === 0) return;
+  applyCombatDamage(state, ev, proposeCombatDamage(state), true);
+}
+
+function targetLabel(state: GameState, t: DamageAssignment["target"]): string {
+  if (t.kind === "player") return player(state, t.player).name;
+  const c = state.cards[t.iid];
+  return c ? describe(c, false) : "a card";
+}
+
+function applyCombatDamage(state: GameState, ev: GameEvent, assignments: DamageAssignment[], automatic: boolean): void {
+  const combat = state.combat;
+  if (!combat) return;
+  const attacker = player(state, combat.attacker);
+  const lines: string[] = [];
+  for (const a of assignments) {
+    if (a.amount <= 0) continue;
+    const src = state.cards[a.source];
+    if (!src || src.zone.kind !== "battlefield") continue;
+    const stats = derivedCard(state, src);
+    const srcName = describe(src, false);
+    if (a.target.kind === "player") {
+      const victim = player(state, a.target.player);
+      const infect = hasKeyword(stats, "infect");
+      if (infect) {
+        victim.counters.poison = (victim.counters.poison ?? 0) + a.amount;
+        lines.push(`${srcName} gave ${victim.name} ${a.amount} poison (now ${victim.counters.poison})`);
+      } else {
+        victim.life -= a.amount;
+        lines.push(`${srcName} dealt ${a.amount} to ${victim.name} (now ${victim.life})`);
+      }
+      const toxicN = hasKeyword(stats, "toxic") ? Number(textOf(src).match(/\btoxic (\d+)/i)?.[1] ?? 1) || 1 : 0;
+      if (toxicN) {
+        victim.counters.poison = (victim.counters.poison ?? 0) + toxicN;
+        lines.push(`${victim.name} got ${toxicN} poison from toxic (now ${victim.counters.poison})`);
+      }
+      if (src.isCommander) {
+        victim.commanderDamage[src.iid] = (victim.commanderDamage[src.iid] ?? 0) + a.amount;
+        lines.push(`${victim.name} has taken ${victim.commanderDamage[src.iid]} from ${srcName} in total`);
+      }
+    } else {
+      const target = state.cards[a.target.iid];
+      if (!target || target.zone.kind !== "battlefield") continue;
+      const tName = describe(target, false);
+      if (isPlaneswalkerOrBattle(target)) {
+        const kind = /\bbattle\b/.test(typeLineOf(target)) ? "defense" : "loyalty";
+        const next = Math.max(0, (target.counters[kind] ?? 0) - a.amount);
+        if (next === 0) delete target.counters[kind];
+        else target.counters[kind] = next;
+        lines.push(`${srcName} dealt ${a.amount} to ${tName} (${kind} now ${next})`);
+      } else {
+        lines.push(`${srcName} dealt ${a.amount} to ${tName}`);
+      }
+    }
+    if (hasKeyword(stats, "lifelink")) {
+      const controller = player(state, src.zone.owner);
+      controller.life += a.amount;
+      lines.push(`${controller.name} gained ${a.amount} from lifelink (now ${controller.life})`);
+    }
+  }
+  combat.damageDealt = true;
+  if (stepIndex(state.step) < stepIndex("damage")) state.step = "damage";
+  log(state, ev, `${attacker.name}'s combat damage${automatic ? " (default assignment)" : ""}: ${lines.length ? lines.join("; ") : "none"}`);
+  const lethal = lethalCards(state, assignments).map((iid) => describe(card(state, iid), false));
+  if (lethal.length) log(state, ev, `Lethal damage on ${lethal.join(", ")}: move them to the graveyard unless something saves them`);
+}
+
+function textOf(c: CardInstance): string {
+  const p = c.printing;
+  const face = p ? (p.faces[c.face] ?? p.faces[0]) : undefined;
+  return c.custom?.text ?? face?.oracleText ?? p?.oracleText ?? "";
 }
 
 // ---------------------------------------------------------------- start
@@ -362,6 +553,10 @@ function start(ev: Extract<GameEvent, { type: "GameStarted" }>, seed: string): G
     seq: 0,
     winner: null,
     pendingTriggers: [],
+    drewForTurn: false,
+    combat: null,
+    winAdvisories: [],
+    dismissedWins: [],
   };
 
   for (const p of sorted) {
@@ -377,6 +572,7 @@ function start(ev: Extract<GameEvent, { type: "GameStarted" }>, seed: string): G
       kept: false,
       toBottom: 0,
       conceded: false,
+      eliminated: null,
       zones: { library: [], hand: [], graveyard: [], exile: [], command: [], battlefield: emptyBattlefield() },
       mana: { ...EMPTY_MANA },
       keepMana: false,
@@ -420,6 +616,8 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
   }
   if (!prev) fail("the game has not started");
   if (ev.type === "Revert") fail("Revert is handled by replay()");
+  // Spectators (anyone not seated in this game) act on nothing.
+  if (ev.actor !== SYSTEM_ACTOR && !prev.players[ev.actor]) fail("spectators cannot act");
   const state = clone(prev);
   state.seq = ev.seq;
   const actorName = ev.actor === SYSTEM_ACTOR ? "The table" : (state.players[ev.actor]?.name ?? "Someone");
@@ -464,8 +662,8 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const c = card(state, ev.payload.iid);
       const to = ev.payload.to;
       const dest = player(state, to.owner);
-      // Hidden zones belong to their owner: nobody else may touch cards in them or put cards into them.
-      if (c.zone.kind === "hand" || c.zone.kind === "library") requireActor(ev, c.zone.owner, "the owner of that hand or library");
+      // Only the controller (battlefield) or owner (any other zone) moves a card; nobody puts cards into another player's hand or library.
+      requireController(ev, c);
       if (to.kind === "hand" || to.kind === "library") requireActor(ev, to.owner, "the owner of that hand or library");
       const publicBefore = isPublic(c);
       const fromKind = c.zone.kind;
@@ -480,13 +678,30 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (!alive) log(state, ev, `${actorName} removed the ${name} token`);
       else if (to.kind === "library") log(state, ev, `${actorName} put ${name} on the ${to.position === "bottom" ? "bottom" : "top"} of ${toLabel}`);
       else if (fromKind === "hand" && to.kind === "battlefield") log(state, ev, `${actorName} played ${name}${to.faceDown ? " face down" : ""}`);
+      else if (fromKind === "battlefield" && to.kind === "battlefield" && fromOwner !== to.owner) log(state, ev, `${actorName} gave control of ${name} to ${dest.name}`);
       else log(state, ev, `${actorName} moved ${name} from ${fromLabel} to ${toLabel}${to.faceDown ? " face down" : ""}`);
+      break;
+    }
+    case "ControlTaken": {
+      requirePlaying(state);
+      const c = card(state, ev.payload.iid);
+      if (ev.actor === SYSTEM_ACTOR) fail("a player must take control");
+      if (c.zone.kind === "hand" || c.zone.kind === "library" || c.zone.kind === "command") fail("that card is not on the table");
+      if (c.zone.owner === ev.actor) fail("you already control that card");
+      const from = player(state, c.zone.owner);
+      const fromKind = c.zone.kind;
+      const publicBefore = isPublic(c);
+      const row = ev.payload.row ?? defaultRow(c.printing, c.custom, c.face);
+      moveCard(state, c, { kind: "battlefield", owner: ev.actor, row, faceDown: c.faceDown });
+      const name = describe(card(state, c.iid), publicBefore);
+      log(state, ev, `${actorName} took control of ${name} from ${from.name}${fromKind === "battlefield" ? "" : `'s ${fromKind}`}`);
       break;
     }
     case "CardTapped": {
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
       if (c.zone.kind !== "battlefield") fail("only permanents tap");
+      requireController(ev, c);
       c.tapped = ev.payload.tapped;
       log(state, ev, `${actorName} ${c.tapped ? "tapped" : "untapped"} ${describe(c, false)}`);
       break;
@@ -494,14 +709,15 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "UntapAll": {
       requirePlaying(state);
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
       const n = untapAll(state, p);
-      log(state, ev, `${actorName} untapped ${n === 1 ? "1 permanent" : `${n} permanents`}${p.id === ev.actor ? "" : ` of ${p.name}'s`}`);
+      log(state, ev, `${actorName} untapped ${n === 1 ? "1 permanent" : `${n} permanents`}`);
       break;
     }
     case "CardFlipped": {
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
-      if (c.zone.kind === "hand" || c.zone.kind === "library") requireActor(ev, c.zone.owner, "the owner");
+      requireController(ev, c);
       if (!c.printing || c.printing.faces.length < 2) fail("that card has only one face");
       c.face = c.face === 0 ? 1 : 0;
       log(state, ev, `${actorName} transformed ${describe(c, false)}`);
@@ -511,6 +727,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
       if (c.zone.kind !== "battlefield" && c.zone.kind !== "exile") fail("only cards on the battlefield or in exile turn face down");
+      requireController(ev, c);
       const publicBefore = isPublic(c);
       c.faceDown = ev.payload.faceDown;
       if (!c.faceDown) c.revealedTo = null;
@@ -529,6 +746,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
       if (c.zone.kind !== "battlefield") fail("counters go on permanents");
+      requireController(ev, c);
       const kind = ev.payload.kind.trim().slice(0, 24);
       if (!kind) fail("counter needs a name");
       const delta = Math.trunc(ev.payload.delta);
@@ -568,6 +786,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const p = player(state, ev.payload.player);
       const cmd = card(state, ev.payload.commanderIid);
       if (!cmd.isCommander) fail("not a commander");
+      if (!isActor(ev, p.id) && ev.actor !== cmd.owner) fail("only that player or the commander's owner may record commander damage");
       const next = Math.max(0, (p.commanderDamage[cmd.iid] ?? 0) + Math.trunc(ev.payload.delta));
       p.commanderDamage[cmd.iid] = next;
       log(state, ev, `${p.name} has taken ${next} damage from ${cardName(cmd)} in total`);
@@ -661,6 +880,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       const src = card(state, ev.payload.iid);
       if (src.zone.kind !== "battlefield") fail("only permanents can be copied");
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "the player receiving the copy");
       const row = src.zone.row ?? "other";
       const c = newInstance(state, p.id, src.printing, src.custom, { kind: "battlefield", owner: p.id, row });
       c.isToken = true;
@@ -673,6 +893,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
       if (c.zone.kind !== "battlefield") fail("only permanents attach");
+      requireController(ev, c);
       if (ev.payload.to) {
         const host = card(state, ev.payload.to);
         if (host.zone.kind !== "battlefield") fail("the host must be on the battlefield");
@@ -698,6 +919,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
       if (!c.attachedTo) fail("that card is not attached");
+      requireController(ev, c);
       c.effect = ev.payload.effect ? cleanEffect(ev.payload.effect) : null;
       log(state, ev, `${actorName} set ${describe(c, false)} to grant ${c.effect ? effectText(c.effect) : "nothing"}`);
       break;
@@ -706,6 +928,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
       if (c.zone.kind !== "battlefield") fail("only permanents take modifiers");
+      requireController(ev, c);
       const m = ev.payload.modifier;
       c.modifier = m ? { power: Math.trunc(m.power) || 0, toughness: Math.trunc(m.toughness) || 0, keywords: cleanKeywords(m.keywords), removedKeywords: cleanKeywords(m.removedKeywords) } : null;
       log(state, ev, `${actorName} adjusted ${describe(c, false)}: ${c.modifier ? effectText(c.modifier, c.modifier.removedKeywords) : "cleared"}`);
@@ -714,6 +937,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "AnthemDismissed": {
       requirePlaying(state);
       const c = card(state, ev.payload.iid);
+      requireController(ev, c);
       c.anthemDismissed = Boolean(ev.payload.dismissed);
       log(state, ev, `${actorName} ${c.anthemDismissed ? "hid" : "restored"} the anthem from ${describe(c, false)}`);
       break;
@@ -721,6 +945,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "ManualAnthemAdded": {
       requirePlaying(state);
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
       const id = uniqueId(state, "a");
       const anthem = { id, power: Math.trunc(ev.payload.power) || 0, toughness: Math.trunc(ev.payload.toughness) || 0, keywords: cleanKeywords(ev.payload.keywords), note: String(ev.payload.note ?? "").slice(0, 60) };
       p.manualAnthems.push(anthem);
@@ -730,6 +955,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "ManualAnthemRemoved": {
       requirePlaying(state);
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
       const i = p.manualAnthems.findIndex((a) => a.id === ev.payload.id);
       if (i < 0) fail("no such anthem");
       const [gone] = p.manualAnthems.splice(i, 1);
@@ -739,12 +965,14 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "TriggerResolved": {
       const i = state.pendingTriggers.findIndex((t) => t.id === ev.payload.id);
       if (i < 0) fail("that trigger is gone");
+      requireActor(ev, state.pendingTriggers[i]!.controller, "the controller of that trigger");
       const [t] = state.pendingTriggers.splice(i, 1);
       log(state, ev, `${actorName} resolved ${t!.name}'s ${t!.kind.toLowerCase()} trigger`);
       break;
     }
     case "TriggersDismissed": {
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
       const before = state.pendingTriggers.length;
       state.pendingTriggers = state.pendingTriggers.filter((t) => t.controller !== p.id);
       if (before !== state.pendingTriggers.length) log(state, ev, `${p.name} dismissed ${before - state.pendingTriggers.length} trigger${before - state.pendingTriggers.length === 1 ? "" : "s"}`);
@@ -753,6 +981,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "ManaChanged": {
       requirePlaying(state);
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
       const color = ev.payload.color;
       if (!MANA_COLORS.includes(color)) fail("bad mana colour");
       const delta = Math.trunc(ev.payload.delta);
@@ -765,6 +994,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "ManaConverted": {
       requirePlaying(state);
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
       const to = ev.payload.to;
       if (!MANA_COLORS.includes(to)) fail("bad mana colour");
       const total = MANA_COLORS.reduce((n, c) => n + p.mana[c], 0);
@@ -775,6 +1005,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "ManaEmptied": {
       requirePlaying(state);
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
       p.mana = { ...EMPTY_MANA };
       log(state, ev, `${p.name}'s mana emptied`);
       break;
@@ -782,6 +1013,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "KeepManaToggled": {
       requirePlaying(state);
       const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
       p.keepMana = Boolean(ev.payload.keep);
       log(state, ev, `${p.name} ${p.keepMana ? "now keeps" : "no longer keeps"} mana between steps`);
       break;
@@ -789,14 +1021,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "TurnAdvanced": {
       requirePlaying(state);
       if (state.phase !== "playing") fail("the game has not started");
-      state.activePlayer = nextActivePlayer(state);
-      state.turn++;
-      state.step = "untap";
-      state.pendingTriggers = [];
-      const p = player(state, state.activePlayer);
-      const n = untapAll(state, p);
-      log(state, ev, `Turn ${state.turn}: ${p.name}'s turn${n ? ` (untapped ${n})` : ""}`);
-      emptyMana(state, ev, "new turn");
+      beginTurn(state, ev);
       break;
     }
     case "StepAdvanced": {
@@ -804,24 +1029,157 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       if (state.phase !== "playing") fail("the game has not started");
       const i = STEPS.indexOf(state.step);
       if (i >= STEPS.length - 1) {
-        state.activePlayer = nextActivePlayer(state);
-        state.turn++;
-        state.step = "untap";
-        const p = player(state, state.activePlayer);
-        const n = untapAll(state, p);
-        log(state, ev, `Turn ${state.turn}: ${p.name}'s turn${n ? ` (untapped ${n})` : ""}`);
+        beginTurn(state, ev);
       } else {
         state.step = STEPS[i + 1] as Step;
         log(state, ev, `${actorName} moved to ${STEP_LABELS[state.step]}`);
+        emptyMana(state, ev, "step change");
+        afterStepChange(state, ev);
       }
-      emptyMana(state, ev, "step change");
       break;
     }
     case "StepSet": {
       requirePlaying(state);
+      if (state.phase !== "playing") fail("the game has not started");
       state.step = ev.payload.step;
       log(state, ev, `${actorName} jumped to ${STEP_LABELS[state.step]}`);
       emptyMana(state, ev, "step change");
+      afterStepChange(state, ev);
+      break;
+    }
+    case "AttackersDeclared": {
+      requirePlaying(state);
+      if (state.phase !== "playing") fail("the game has not started");
+      requireActor(ev, state.activePlayer, "the active player");
+      const me = player(state, state.activePlayer);
+      const attacks = Array.isArray(ev.payload.attacks) ? ev.payload.attacks.slice(0, 40) : [];
+      if (attacks.length === 0) fail("pick at least one attacker");
+      // Re-declaring replaces this combat: untap what the earlier declaration tapped.
+      if (state.combat && !state.combat.damageDealt) {
+        for (const iid of state.combat.tappedByAttack) {
+          const c = state.cards[iid];
+          if (c && c.zone.kind === "battlefield") c.tapped = false;
+        }
+      }
+      const combat: CombatState = { attacker: me.id, attackers: [], blockers: [], blockersDeclared: [], tappedByAttack: [], damageDealt: false };
+      const derived = derivedFor(state, me.id);
+      const seen = new Set<string>();
+      for (const a of attacks) {
+        if (!a || typeof a.iid !== "string" || seen.has(a.iid)) continue;
+        seen.add(a.iid);
+        const c = card(state, a.iid);
+        if (c.zone.kind !== "battlefield" || c.zone.owner !== me.id) fail("you can only attack with permanents you control");
+        if (c.tapped) fail(`${describe(c, false)} is tapped and cannot attack`);
+        const defender = player(state, a.player);
+        if (defender.id === me.id) fail("you cannot attack yourself");
+        if (isOut(defender)) fail(`${defender.name} is out of the game`);
+        let planeswalker: string | null = null;
+        if (a.planeswalker) {
+          const pw = card(state, a.planeswalker);
+          if (pw.zone.kind !== "battlefield" || pw.zone.owner !== defender.id) fail("that planeswalker is not on the defender's battlefield");
+          planeswalker = pw.iid;
+        }
+        combat.attackers.push({ iid: c.iid, player: defender.id, planeswalker });
+        if (!hasKeyword(derived.get(c.iid), "vigilance")) {
+          c.tapped = true;
+          combat.tappedByAttack.push(c.iid);
+        }
+      }
+      if (combat.attackers.length === 0) fail("pick at least one attacker");
+      state.combat = combat;
+      if (stepIndex(state.step) < stepIndex("attackers")) state.step = "attackers";
+      const groups = new Map<string, string[]>();
+      for (const a of combat.attackers) {
+        const key = a.planeswalker ? `${player(state, a.player).name}'s ${describe(card(state, a.planeswalker), false)}` : player(state, a.player).name;
+        const list = groups.get(key) ?? [];
+        list.push(describe(card(state, a.iid), false));
+        groups.set(key, list);
+      }
+      const vigilant = combat.attackers.filter((a) => !combat.tappedByAttack.includes(a.iid)).map((a) => describe(card(state, a.iid), false));
+      log(state, ev, `${me.name} attacks ${[...groups].map(([who, names]) => `${who} with ${names.join(", ")}`).join("; ")}${vigilant.length ? ` (vigilance: ${vigilant.join(", ")})` : ""}`);
+      break;
+    }
+    case "BlockersDeclared": {
+      requirePlaying(state);
+      const combat = state.combat;
+      if (!combat || combat.damageDealt) fail("there is no attack to block");
+      const p = player(state, ev.payload.player);
+      requireActor(ev, p.id, "that player");
+      if (!combat.attackers.some((a) => a.player === p.id)) fail(`${p.name} is not being attacked`);
+      const blocks = Array.isArray(ev.payload.blocks) ? ev.payload.blocks.slice(0, 40) : [];
+      const next = combat.blockers.filter((b) => b.player !== p.id);
+      const used = new Set<string>();
+      const pairs: string[] = [];
+      for (const b of blocks) {
+        if (!b || typeof b.iid !== "string" || typeof b.attacker !== "string") continue;
+        const blocker = card(state, b.iid);
+        if (blocker.zone.kind !== "battlefield" || blocker.zone.owner !== p.id) fail("you can only block with creatures you control");
+        if (blocker.tapped) fail(`${describe(blocker, false)} is tapped and cannot block`);
+        if (used.has(blocker.iid)) fail(`${describe(blocker, false)} cannot block two attackers`);
+        used.add(blocker.iid);
+        const attacker = combat.attackers.find((a) => a.iid === b.attacker);
+        if (!attacker) fail("that creature is not attacking");
+        if (attacker.player !== p.id) fail(`${describe(card(state, attacker.iid), false)} is not attacking you`);
+        next.push({ iid: blocker.iid, attacker: attacker.iid, player: p.id });
+        pairs.push(`${describe(card(state, attacker.iid), false)} with ${describe(blocker, false)}`);
+      }
+      combat.blockers = next;
+      if (!combat.blockersDeclared.includes(p.id)) combat.blockersDeclared.push(p.id);
+      if (stepIndex(state.step) < stepIndex("blockers")) state.step = "blockers";
+      log(state, ev, pairs.length ? `${p.name} blocks ${pairs.join(", ")}` : `${p.name} declares no blocks`);
+      break;
+    }
+    case "CombatDamageDealt": {
+      requirePlaying(state);
+      const combat = state.combat;
+      if (!combat || combat.attackers.length === 0) fail("no attackers were declared");
+      if (combat.damageDealt) fail("combat damage was already dealt");
+      requireActor(ev, combat.attacker, "the attacking player");
+      let assignments: DamageAssignment[];
+      if (Array.isArray(ev.payload.assignments)) {
+        assignments = [];
+        for (const raw of ev.payload.assignments.slice(0, 200)) {
+          if (!raw || typeof raw.source !== "string" || !raw.target) continue;
+          const amount = Math.max(0, Math.min(999, Math.trunc(Number(raw.amount) || 0)));
+          const asAttacker = combat.attackers.find((a) => a.iid === raw.source);
+          const asBlocker = combat.blockers.find((b) => b.iid === raw.source);
+          if (!asAttacker && !asBlocker) fail("damage can only come from attackers and blockers");
+          const t = raw.target;
+          if (asAttacker) {
+            const legal =
+              (t.kind === "player" && t.player === asAttacker.player) ||
+              (t.kind === "card" && (t.iid === asAttacker.planeswalker || combat.blockers.some((b) => b.attacker === asAttacker.iid && b.iid === t.iid)));
+            if (!legal) fail(`${describe(card(state, asAttacker.iid), false)} can only damage what it attacks or what blocks it`);
+            assignments.push({ source: raw.source, target: t.kind === "player" ? { kind: "player", player: t.player } : { kind: "card", iid: t.iid }, amount });
+          } else if (asBlocker) {
+            if (t.kind !== "card" || t.iid !== asBlocker.attacker) fail(`${describe(card(state, asBlocker.iid), false)} can only damage the attacker it blocks`);
+            assignments.push({ source: raw.source, target: { kind: "card", iid: t.iid }, amount });
+          }
+        }
+      } else {
+        assignments = proposeCombatDamage(state);
+      }
+      applyCombatDamage(state, ev, assignments, !Array.isArray(ev.payload.assignments));
+      break;
+    }
+    case "WinClaimed": {
+      requirePlaying(state);
+      const adv = state.winAdvisories.find((w) => w.iid === ev.payload.iid);
+      if (!adv) fail("no win condition is showing for that card");
+      requireActor(ev, adv.controller, "that card's controller");
+      const p = player(state, adv.controller);
+      state.phase = "ended";
+      state.winner = p.id;
+      state.winAdvisories = [];
+      log(state, ev, `${p.name} won the game with ${adv.name} (${adv.condition})`);
+      break;
+    }
+    case "WinAdvisoryDismissed": {
+      requirePlaying(state);
+      const c = card(state, ev.payload.iid);
+      requireController(ev, c);
+      if (!state.dismissedWins.includes(c.iid)) state.dismissedWins.push(c.iid);
+      log(state, ev, `${actorName} dismissed the win prompt from ${describe(c, false)}`);
       break;
     }
     case "DiceRolled": {
@@ -844,7 +1202,7 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     }
     case "RandomOpponent": {
       const p = player(state, ev.payload.player);
-      const others = state.turnOrder.filter((id) => id !== p.id && !player(state, id).conceded);
+      const others = state.turnOrder.filter((id) => id !== p.id && !isOut(player(state, id)));
       if (!others.length) fail("no opponents left");
       const [i, rng] = nextInt(state.rng, others.length);
       state.rng = rng;
@@ -862,7 +1220,6 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
         state.activePlayer = nextActivePlayer(state);
       }
       maybeFinishMulligans(state, ev);
-      checkEnded(state, ev);
       break;
     }
     case "NoteAdded": {
@@ -878,6 +1235,11 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       fail(`unknown event ${(never as { type: string }).type}`);
     }
   }
+  // Automatic eliminations (0 life, 10 poison, 21 commander damage), then "last player standing" ends the game.
+  checkEliminations(state, ev);
+  checkEnded(state, ev);
+  // Advisory "you win the game" prompts (the controller confirms with WinClaimed).
+  state.winAdvisories = detectWinConditions(state);
   // Advisory triggers for whatever just happened (deterministic, so every replay agrees).
   const found = detectTriggers(state, ev);
   if (found.length) {

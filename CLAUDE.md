@@ -129,13 +129,16 @@ bounded edit distance.
   StepAdvanced, StepSet, DiceRolled, CoinFlipped, RandomOpponent, PlayerConceded, Revert, plus
   the bookkeeping events AttachmentEffectSet, CardModifierSet, AnthemDismissed,
   ManualAnthemAdded/Removed, TriggerResolved, TriggersDismissed, ManaChanged, ManaConverted,
-  ManaEmptied, KeepManaToggled. `Attached` carries the confirmed `effect` {power, toughness,
-  keywords}. Clients send `{type, payload}`; the server stamps `seq` (1-based, contiguous),
-  `actor`, `ts`.
+  ManaEmptied, KeepManaToggled, and the table-hygiene events ControlTaken, AttackersDeclared,
+  BlockersDeclared, CombatDamageDealt, WinClaimed, WinAdvisoryDismissed (see "Table hygiene").
+  `Attached` carries the confirmed `effect` {power, toughness, keywords}. Clients send `{type,
+  payload}`; the server stamps `seq` (1-based, contiguous), `actor`, `ts`. `GameState` also
+  carries `drewForTurn`, `combat`, `winAdvisories`, `dismissedWins`; players carry `eliminated`.
 - `reducer.ts`: `applyEvent(state, event, seed)` is pure and throws `GameError` for illegal
-  actions (nobody touches another player's hand or library; only the host starts). `replay(events,
-  seed)` rebuilds state; a `Revert {toSeq}` replays the prefix up to `toSeq` and later events
-  continue from there. Log lines name a card only when its identity is public.
+  actions (nobody touches another player's hand or library; only the controller of a permanent
+  acts on it; spectators act on nothing; only the host starts). `replay(events, seed)` rebuilds
+  state; a `Revert {toSeq}` replays the prefix up to `toSeq` and later events continue from there.
+  Log lines name a card only when its identity is public.
 - `rng.ts`: mulberry32 seeded from the room's secret seed (FNV-1a). Shuffles, dice, coins, random
   opponent and instance ids all come from the stream, so replays agree. The seed never leaves the
   server.
@@ -212,14 +215,17 @@ bounded edit distance.
 - `/play` create/join/recent, `/room/:code` = `Lobby` (seats, own-deck picker, share link, host
   start) or `Table` once playing. `socket.ts` reconnects with backoff and on tab wake.
 - Table: opponents across the top (tap -> `OpponentPanel`, same `Battlefield` layout as mine),
-  my battlefield (`Battlefield.tsx`: sections, stacked attachments, anthem badge), hand drawer,
-  zone buttons, life widget, mana pill, triggers panel. Tap a card -> `ActionSheet`
+  the phase strip (`PhaseStrip.tsx`: turn + active player, every step as a dot with the current
+  one lit and labelled, Next step / Pass turn always reachable, Attack on my turn, the combat and
+  win prompts, and the combat picking bar as its child), my battlefield (`Battlefield.tsx`:
+  sections, stacked attachments, anthem badge, combat marks), hand drawer, zone buttons, life
+  widget, mana pill, triggers panel. Tap a card -> `ActionSheet`
   (`actions.ts` builds the list per zone); press-and-hold -> `CardZoom`. `@dnd-kit` drag onto
   rows/zone buttons is the secondary path. Menu: log (tap a line to revert), dice, tokens
   (Scryfall token search or custom text token), undo, untap all, concede, leave.
 - Mulligan overlay handles London mulligans; `toBottom` in the state drives the "put N on the
   bottom" step. Pass turn untaps the new active player's permanents automatically (re-tap what
-  should stay tapped).
+  should stay tapped) and the reducer draws for the turn once the draw step is reached or passed.
 - Hidden cards draw the owner's sleeve (a CSS preset or their upload), never the official card back.
 - Table-to-table navigation (rematch) reuses `useRoomSocket` with a new code; the hook ignores
   events from a socket it has already replaced (`wsRef.current !== ws`).
@@ -489,7 +495,7 @@ an organisation-level key without it is rejected with "must include the anthropi
   `record()` writes `agent_decisions` (tokens, cost, latency, outcome, rationale, tool calls).
 - `runner.ts` (`AgentRunner`): per state change it decides whether to act. Mulligans are a RULE,
   not a model call (keep with 2-5 lands in seven, one mulligan at most; bottoms the priciest
-  spells). On its turn it draws (not on the game's first turn) and sets `main1`, then loops: one
+  spells). On its turn it jumps to `main1` (the reducer untapped and draws for it), then loops: one
   model call -> execute every `tool_use` in order (`tools.ts` `mapToolCall` validates against the
   view, `room.submit` validates with the reducer; errors go back as `tool_result is_error`) ->
   feed results + a compact re-render -> until `pass_turn`, `concede`, the call limit (then it
@@ -500,8 +506,8 @@ an organisation-level key without it is rejected with "must include the anthropi
 - `tools.ts`: the vocabulary, one tool per event: play_land, cast_permanent, cast_spell (reveals,
   moves to graveyard), tap_cards, move_card, attach, change_counters, change_life, player_counter,
   commander_damage, create_token (custom tokens), draw_cards, shuffle_library, search_library
-  (result lists the library), adjust_mana, set_step (main1 | combat | main2 | end), attack (taps
-  attackers + `NoteAdded`; applies damage only when the defender is another agent), resolve_trigger,
+  (result lists the library), adjust_mana, set_step (main1 | combat | main2 | end), attack (one
+  `AttackersDeclared` against a player; the reducer taps, logs and later applies damage), resolve_trigger,
   dismiss_triggers, flip_card, untap_all, say (`NoteAdded`), pass_turn, concede. Player references
   accept "me" or a display name. **Adding an action:** add the event to shared types + reducer,
   a tool definition and a `case` in `mapToolCall`, a line in `server/data/agents/rules-primer.md`
@@ -548,8 +554,8 @@ Measured numbers from real games are in the Phase 7 hand-over note.
 
 ### What agents do badly (known)
 
-- They cannot block: a human attacking an agent resolves damage themselves (the attacker's
-  `attack` tool applies damage only between agents). They cannot respond on the stack.
+- They never declare blockers, so every attack on an agent is unblocked; the table applies the
+  damage when the attacker moves past combat (see "Table hygiene"). They cannot respond on the stack.
 - They apply spell effects by hand with the bookkeeping tools, so complicated cards are often
   under-applied; the primer tells them to say what they are doing.
 - Summoning sickness and mana are not enforced by the table; the primer and the dry run respect
@@ -806,9 +812,98 @@ snapshot to confirm with the store.
   timeout, breaker open / probe / recover, stale fallback, dedupe, chunking),
   `singles/shopping.test.ts` (hand-worked fixture deck), `routes/singles.test.ts` (routes against
   the fixture deck with a fake Singles site, including an outage and an unconfigured server).
-- **UI** (deferred until the design refresh merges): purchase-link buttons and an "Available in
-  Las Vegas" panel on the card detail, a deck shopping panel (per-store coverage, best single
-  store), a Stores page, and the "updated X ago, from local store data" note everywhere.
+- **UI** (`client/src/components/LocalStores.tsx`, wording helpers in `storeText.ts` with a test,
+  styles at the end of `pages.css`, `client/src/pages/StoresPage.tsx`, `api.singles.*`):
+  `AvailabilityPanel` ("Available in Las Vegas", signed-in only, hidden when the server is
+  unconfigured; stores cheapest first, six listings per store then a "see them all" search link,
+  "unavailable right now" when the breaker is open) and `PurchaseLinks` (TCGplayer / Cardmarket /
+  Cardhoarder buttons, "Links go to those stores (via Scryfall). CGwF sells nothing.") sit at the
+  bottom of `CardDetail`; `ShoppingPanel` ("Shop locally": three summary tiles, per-store coverage
+  bars with the best single store marked, the missing list, an expandable per-card table that
+  stacks on phones) sits under the Bracket/Stats row on deck and library deck pages and re-runs on
+  the deck version; `/stores` lists the stores (nav link for signed-in players). Every panel ends
+  with `SourceNote`: "Updated X ago, from local store data. Stock is a snapshot; confirm with the
+  store before visiting." Every link is `target=_blank rel=noopener noreferrer`.
+
+## Table hygiene (stopgap before the rules engine, 2026-10-17)
+
+Real games showed players tapping and moving each other's permanents, browsing libraries, forgetting
+untap/draw, and having no attack flow. The gameplay core will be replaced by the Forge rules engine
+in a separate project; until then these guardrails live in the reducer (so the server enforces
+them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.test.ts`.
+
+- **Ownership.** A permanent belongs to its controller (`zone.owner`); only they tap, untap, move,
+  flip, turn face down, counter, attach, modify or copy it (`requireController`). Cards in a
+  graveyard, exile or command zone belong to that zone's owner. Mana pools, manual anthems and
+  triggers are per player. Life and poison stay open to any seated player (logged "(by X)");
+  commander damage is recorded by the victim or the commander's owner. Spectators (anyone not in
+  `state.players`) are refused by the reducer, not only by the room. Two explicit exceptions:
+  the controller moving a permanent onto another player's battlefield (`CardMoved`, logged "gave
+  control of X to Y") and `ControlTaken {iid, row?}`, the ONLY way to move a card you do not
+  control: it pulls a permanent (or a card in someone's graveyard/exile, for reanimation) onto the
+  actor's battlefield, logged "Blair took control of X from Alex['s graveyard]".
+- **Libraries.** Browsing is only ever `LibraryLooked` / `LibrarySearched` / `LibraryRevealed` by
+  the owner, each logged; the view never lists another player's library or hand cards, and a
+  shuffle forgets. `CardRevealed`, `CardTurned` face up and `CardFlipped` are owner/controller only,
+  so nobody can expose another player's hidden card.
+- **Turn automation.** `TurnAdvanced` (or `StepAdvanced` past cleanup) untaps the new active
+  player's permanents ("Alex's permanents untapped (3)") and opens the turn on **upkeep**, so
+  upkeep triggers surface at once; the game also starts on upkeep. The turn's draw happens once the
+  step reaches or passes `draw` (`drewForTurn` guards against a second one; jumping straight to
+  main1 draws too), logged "Alex drew for the turn" / "could not draw (library empty)". Everyone
+  draws on turn one (Commander). A card that says to skip the draw: put it back on top by hand.
+- **Combat as events.** `AttackersDeclared {attacks: [{iid, player, planeswalker?}]}` by the active
+  player: attackers must be untapped permanents they control, defenders alive opponents (or one of
+  their planeswalkers/battles); attackers tap unless their derived keywords include vigilance;
+  re-declaring replaces the attack and untaps what the first declaration tapped; step -> attackers.
+  `BlockersDeclared {player, blocks: [{iid, attacker}]}` by each defender (untapped creatures they
+  control, one attacker each, only attackers aimed at them; empty = "declares no blocks"; replaces
+  that player's earlier blocks); step -> blockers. `CombatDamageDealt {assignments?}` by the
+  attacker applies damage; without `assignments` the default from `combat.ts`
+  `proposeCombatDamage` is used: unblocked -> defender (or the planeswalker), blocked -> lethal to
+  each blocker in order (1 with deathtouch), the rest to the last blocker or, with trample, to the
+  defender; blockers deal their power to the attacker they block. Custom assignments may only move
+  damage between what a creature attacks and what blocks it. Applying: life (or poison with
+  infect, plus toxic), commander damage when the source is a commander, lifelink, planeswalker
+  loyalty / battle defense counters; creature damage is logged ("Lethal damage on X, Y: move them
+  to the graveyard unless something saves them") and the players move the dead. **Passing the
+  step past blockers, jumping to main2/end, or passing the turn with attackers declared applies
+  the default damage automatically** (logged "(default assignment)"); undo/revert to redo it.
+  Not modelled: first strike, damage prevention, protection, menace/evasion checks, damage marked
+  across events. `state.combat` is cleared once the step passes end of combat or the turn ends.
+- **Eliminations.** After every event `checkEliminations` marks `player.eliminated` ("life" at
+  <= 0, "poison" at >= 10, "commander damage" at >= 21 from one commander), logged "Blair is out
+  of the game: 0 life (revert if that was a mistake)"; the flag is derived, so a corrected life
+  total or a revert brings the player back ("back in the game"). `isOut(p)` (conceded or
+  eliminated) is what turn order, attacks, random opponent and "last player standing" use;
+  `checkEnded` runs after every event. Because an automatic ending can be a typo, `LiveRoom.undo`
+  and `revert` are allowed while the room status is `ended` too (the replay sets it back to playing).
+- **Win advisories.** `wincons.ts` reads "you win the game" permanents for the static patterns
+  "~ has N or more <kind> counters" / "there are N or more ... counters on ~", "you have N or more
+  life" / "exactly N life", "you control N or more <type>s", "you control a creature with power N
+  or greater", "N or more [<type>] cards (are) in your graveyard", Barren Glory. Met conditions
+  become `state.winAdvisories` (in the view for everyone); the controller confirms with
+  `WinClaimed {iid}` (ends the game, logged with the condition) or hides it with
+  `WinAdvisoryDismissed {iid}`. Thassa's Oracle, Lab Man, Approach etc. are not read: opponents
+  concede as before.
+- Agents: the `attack` tool now emits one `AttackersDeclared`; the runner no longer draws by hand.
+- **Client** (`client/src/game/`): `PhaseStrip.tsx` owns the turn controls and prompts ("Harper
+  attacks you with Krenko - Block... / No blocks", "Attacking Blair... Assign damage / Change
+  attackers", "Win condition met: ... Claim the win / Not yet", "You are out of the game").
+  `CombatBar.tsx` is the picking mode inside the strip: attack = pick a target chip (players and
+  their planeswalkers/battles, avatar colours), tap my untapped creatures (`Table.tapCard`
+  intercepts taps while a mode is open; each tile shows a `mark` like "-> Blair"), Declare ->
+  `AttackersDeclared`; block = pick one of the attackers aimed at me, tap my untapped creatures,
+  Declare -> `BlockersDeclared` (empty = no blocks). Everyone sees the marks of the declared
+  attack. `DamageSheet.tsx` lists `proposeDamage(combatContextFromView(view, printings))` per
+  source with editable amounts (plus a 0 row to the player for blocked attackers), previews
+  lethal creatures, and sends `CombatDamageDealt` (`{}` when untouched so the log says default).
+  `actions.ts` offers only Take control (`ControlTaken`), token copy and Zoom on permanents and
+  graveyard/exile cards I do not control. Opponent chips, the life widget and the menu show
+  `eliminated` as OUT. `CardZoom` fits the WHOLE card: `.zoom` is a grid, the image width is
+  `min(100vw - 48px, (100dvh - 90px) * 63/88, 440px)` beside the text in landscape and
+  `min(100vw - 48px, 56dvh * 63/88)` above a scrolling text pane in portrait (`game.css`).
+  `scripts/bots.mjs` bots act whenever they are the active player (a turn now opens on upkeep).
 
 ## Phases
 
@@ -829,7 +924,9 @@ snapshot to confirm with the store.
    functional counts), pure computation with an in-memory cache. **(done)**
 9b. Owner-only Admin overview at `/admin` (who is on the platform, who is active). **(done)**
 10. Local stores bridge: Scryfall purchase links in `cards`, read-only client for the Singles
-    site's service API (cache + breaker), availability / shopping / stores routes. **(server done;
-    UI waits for the design refresh)**
+    site's service API (cache + breaker), availability / shopping / stores routes, card-detail
+    availability + purchase links, deck shopping panel, Stores page. **(done)**
+10b. Table hygiene stopgap: ownership guardrails, automatic untap/draw, combat events, automatic
+    eliminations, win advisories; phase strip, attack / block / damage UI, full-card zoom. **(done)**
 11. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority),
     browser push notifications (see Phase 8), password reset once there is an email provider.

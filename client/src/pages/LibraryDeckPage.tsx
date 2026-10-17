@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type ArchetypeTag, type Bracket, type LibraryDeckDetail } from "@cgwf/shared";
 import { api } from "../api";
 import { AnalysisBody } from "../components/BracketPanel";
+import { ShoppingPanel } from "../components/LocalStores";
 import { RequireUser } from "../components/RequireUser";
 import { StatsPanel } from "../components/StatsPanel";
 import { isOwner, useUser } from "../user";
@@ -22,6 +23,7 @@ function Editor({ id }: { id: string }) {
   const [draftNote, setDraftNote] = useState<string | null>(null);
 
   const loadStats = useCallback(() => api.library.stats(id), [id]);
+  const loadShopping = useCallback(() => api.singles.libraryShopping(id), [id]);
 
   const apply = (d: LibraryDeckDetail) => {
     setDeck(d);
@@ -104,23 +106,26 @@ function Editor({ id }: { id: string }) {
   const a = deck.analysis;
   return (
     <>
-      <div className="row-between">
-        <h1>{deck.name}</h1>
-        <div className="actions">
-          <button className="btn btn-small" disabled={busy !== null} onClick={() => void reanalyze()}>
-            {busy === "analyze" ? "Analysing..." : "Re-analyse"}
-          </button>
-          <button className="btn btn-small btn-danger" onClick={() => void remove()}>
-            Remove
-          </button>
+      <header className="detail-heading">
+        <p className="eyebrow">Library workshop</p>
+        <div className="row-between">
+          <h1>{deck.name}</h1>
+          <div className="actions">
+            <button className="btn btn-small" disabled={busy !== null} onClick={() => void reanalyze()}>
+              {busy === "analyze" ? "Analysing..." : "Re-analyse"}
+            </button>
+            <button className="btn btn-small btn-danger" onClick={() => void remove()}>
+              Remove
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
       <p className="muted small">
         {deck.commanders.join(" / ") || "no commander"} · {deck.cardCount} cards · {deck.source === "precon" ? `precon${deck.setCode ? ` (${deck.setCode.toUpperCase()}` : ""}${deck.releaseDate ? `, ${deck.releaseDate})` : ")"}` : "from a player's deck"}
         {a ? ` · engine says floor ${a.floor}, suggested ${a.suggested}` : ""}
       </p>
 
-      <section className="library-edit">
+      <section className="library-edit surface">
         <label className="field">
           <span>Name</span>
           <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
@@ -181,6 +186,8 @@ function Editor({ id }: { id: string }) {
         <StatsPanel load={loadStats} version={deck.updatedAt} />
       </div>
 
+      <ShoppingPanel load={loadShopping} version={deck.updatedAt} />
+
       <section className="deck-group">
         <h3>Cards</h3>
         <ul className="library-cards">
@@ -200,7 +207,7 @@ export function LibraryDeckPage() {
   const { id } = useParams();
   const { user } = useUser();
   return (
-    <main className="page">
+    <main className="page library-deck-page">
       <p>
         <Link to="/admin/library" className="muted small">
           &larr; Library

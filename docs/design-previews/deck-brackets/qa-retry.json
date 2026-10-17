@@ -1,0 +1,59 @@
+[
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "bracket-filters-and-sorts",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "deck-sizes-and-scene",
+    "size": "portrait",
+    "ui": "dark",
+    "geometry": [
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      },
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "forest"
+      },
+      {
+        "height": 568.921875,
+        "width": 165.5,
+        "frame": 200.4375,
+        "realm": "moon"
+      }
+    ],
+    "selected": "forest",
+    "detailScene": {
+      "realm": "forest",
+      "image": "linear-gradient(rgba(16, 32, 27, 0.72), rgb(16, 25, 24)), url(\"http://localhost:5173/art/realms.jpg\")",
+      "position": "50% 50%, 0% 50%"
+    },
+    "errors": []
+  },
+  {
+    "name": "partial-failure-and-retry",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  }
+]

@@ -12,25 +12,31 @@ export function WelcomePage() {
   return (
     <main className="page welcome-page">
       <section className="hero">
-        <h1>CGwF</h1>
-        <p className="hero-tagline">Card Games with Friends</p>
-        <p className="hero-lead">
-          A free, synced virtual card table for playing Commander with your friends over the internet. Real card images, hidden hands and
-          libraries, every action in a shared log. You enforce the rules, like at a kitchen table.
-        </p>
-        <div className="hero-actions">
-          <Link to="/start" className="btn btn-primary btn-big">
-            Start playing
-          </Link>
-          <Link to="/signin" className="btn btn-big">
-            I have an account
-          </Link>
+        <div className="hero-copy">
+          <p className="eyebrow">CGwF · Card Games with Friends</p>
+          <h1>Your next great<br />game night awaits.</h1>
+          <p className="hero-tagline">Four friends. Endless possibilities.</p>
+          <p className="hero-lead">
+            A free, synced virtual card table for playing Commander with your friends over the internet. Real card images, hidden hands and
+            libraries, every action in a shared log. You enforce the rules, like at a kitchen table.
+          </p>
+          <div className="hero-actions">
+            <Link to="/start" className="btn btn-primary btn-big">
+              Start playing
+            </Link>
+            <Link to="/signin" className="btn btn-big">
+              I have an account
+            </Link>
+          </div>
+          <p className="muted small">Starting takes ten seconds: a name and an avatar, no password. Add an email later to use your decks on other devices.</p>
+          <div className="mana-spectrum" aria-hidden="true"><i /><i /><i /><i /><i /></div>
         </div>
-        <p className="muted small">Starting takes ten seconds: a name and an avatar, no password. Add an email later to use your decks on other devices.</p>
+        <span className="hero-caption" aria-hidden="true">A seat at the table. A world away.</span>
       </section>
 
       <section className="how-it-works">
-        <h2>How a game works</h2>
+        <p className="eyebrow">Gather your friends</p>
+        <h2>From decklist to game night.</h2>
         <ol className="steps">
           <li>
             <strong>Import a deck.</strong> Paste a decklist from Archidekt, Moxfield, MTGGoldfish, TappedOut or Arena. Every card gets its real

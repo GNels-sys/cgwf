@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Board, CardSummary, ResolveResponse, ResolvedLine } from "@cgwf/shared";
@@ -216,7 +217,7 @@ function ImportFlow() {
   return (
     <>
       {!result && (
-        <section className="import-input">
+        <section className="import-input surface">
           <label className="field">
             <span>Paste a decklist</span>
             <textarea
@@ -246,7 +247,7 @@ function ImportFlow() {
       )}
 
       {result && summary && (
-        <section className="import-review">
+        <section className="import-review surface">
           <label className="field">
             <span>Deck name</span>
             <input value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
@@ -307,8 +308,8 @@ function ImportFlow() {
 
 export function ImportPage() {
   return (
-    <main className="page narrow">
-      <h1>Import a deck</h1>
+    <main className="page narrow import-page">
+      <PageHeading title="Import a deck" eyebrow="Build your next game night">Bring a favorite list. Review the cards, then make it yours.</PageHeading>
       <RequireUser>
         <ImportFlow />
       </RequireUser>

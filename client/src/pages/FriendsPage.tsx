@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { normalizeFriendCode, type FriendsResponse } from "@cgwf/shared";
@@ -99,7 +100,7 @@ function FriendsView() {
 
   return (
     <>
-      <div className="notice">
+      <div className="notice friend-invite">
         <p>
           <strong>Your friend code</strong> <FriendCode code={data.code} />
         </p>
@@ -169,7 +170,7 @@ function FriendsView() {
 
       <h3>Friends {data.friends.length > 0 && <span className="muted">({data.friends.length})</span>}</h3>
       {data.friends.length === 0 ? (
-        <p className="muted">No friends yet. Swap codes with the people you play with.</p>
+        <div className="empty-state"><span className="empty-state-mark" aria-hidden="true">◇</span><h2>Good games start with good company.</h2><p className="muted">No friends yet. Swap codes with the people you play with.</p></div>
       ) : (
         <ul className="people-list">
           {data.friends.map((f) => (
@@ -219,8 +220,8 @@ function FriendsView() {
 
 export function FriendsPage() {
   return (
-    <main className="page narrow">
-      <h1>Friends</h1>
+    <main className="page narrow friends-page">
+      <PageHeading title="Friends" eyebrow="Your game-night circle">Swap codes, see who is around, and find your next table.</PageHeading>
       <RequireUser>
         <FriendsView />
       </RequireUser>

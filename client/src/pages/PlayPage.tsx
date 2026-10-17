@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { MyRoomsResponse } from "@cgwf/shared";
@@ -53,25 +54,35 @@ function PlayHome() {
 
   return (
     <>
-      <div className="play-actions">
-        <button className="btn btn-primary btn-big" onClick={() => void create()} disabled={busy}>
-          New table
-        </button>
-        <form className="inline-field" onSubmit={(e) => void join(e)}>
-          <input
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="Join code"
-            maxLength={8}
-            autoCapitalize="characters"
-            autoComplete="off"
-            spellCheck={false}
-            aria-label="Join code"
-          />
-          <button className="btn" type="submit" disabled={busy}>
-            Join
+      <div className="play-options">
+        <section className="surface play-create">
+          <p className="eyebrow">01 · Host a game</p>
+          <h2>A table for your friends.</h2>
+          <p className="muted">Choose your deck in the lobby, then share the table code.</p>
+          <button className="btn btn-primary btn-big" onClick={() => void create()} disabled={busy}>
+            New table
           </button>
-        </form>
+        </section>
+        <section className="surface play-join">
+          <p className="eyebrow">02 · Take your seat</p>
+          <h2>Have an invitation?</h2>
+          <p className="muted">Enter your friend's six-character table code.</p>
+          <form className="inline-field" onSubmit={(e) => void join(e)}>
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="Join code"
+              maxLength={8}
+              autoCapitalize="characters"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Join code"
+            />
+            <button className="btn" type="submit" disabled={busy}>
+              Join
+            </button>
+          </form>
+        </section>
       </div>
       {error && <p className="error">{error}</p>}
       <p className="muted small">
@@ -95,14 +106,15 @@ function PlayHome() {
           </ul>
         </>
       )}
+      {recent.length === 0 && <div className="empty-state compact-empty"><span className="empty-state-mark" aria-hidden="true">◇</span><h2>Your next game starts here.</h2><p className="muted">Recent tables will appear here, ready for you to rejoin.</p></div>}
     </>
   );
 }
 
 export function PlayPage() {
   return (
-    <main className="page narrow">
-      <h1>Play</h1>
+    <main className="page play-page">
+      <PageHeading title="Play" eyebrow="Gather around the table" illustrated>Open a table for your friends, or take your seat with a join code.</PageHeading>
       <RequireUser>
         <PlayHome />
       </RequireUser>

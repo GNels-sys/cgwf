@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ADMIN_USERS_LIMIT_MAX, type AdminStatsResponse, type AdminTotals, type AdminUserDetail, type AdminUserRow, type AdminUserSort, type AdminWeekPoint } from "@cgwf/shared";
@@ -429,7 +430,7 @@ export function AdminPage() {
   return (
     <main className="page admin-page">
       <RequireUser>
-        <h1>Admin</h1>
+        <PageHeading title="Admin" eyebrow="Behind the game nights">A clear view of your players, decks, and table activity.</PageHeading>
         {isOwner(user) ? <Overview /> : <p className="muted">Owner only.</p>}
       </RequireUser>
     </main>

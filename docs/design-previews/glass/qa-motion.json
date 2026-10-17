@@ -1,0 +1,170 @@
+[
+  {
+    "label": "landscape",
+    "ui": "dark",
+    "glass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "manaGlass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "sheetGlass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "draw": true,
+    "play": true,
+    "graveyard": true,
+    "exile": true,
+    "returnToHand": true,
+    "cleanup": true,
+    "reducedMotion": true,
+    "liveMotionToggle": true,
+    "undo": true,
+    "pointerEvents": "none",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "landscape",
+    "ui": "light",
+    "glass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "manaGlass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "sheetGlass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "draw": true,
+    "play": true,
+    "graveyard": true,
+    "exile": true,
+    "returnToHand": true,
+    "cleanup": true,
+    "reducedMotion": true,
+    "liveMotionToggle": true,
+    "undo": true,
+    "pointerEvents": "none",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "portrait",
+    "ui": "dark",
+    "glass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "manaGlass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "sheetGlass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "draw": true,
+    "play": true,
+    "graveyard": true,
+    "exile": true,
+    "returnToHand": true,
+    "cleanup": true,
+    "reducedMotion": true,
+    "liveMotionToggle": true,
+    "undo": true,
+    "pointerEvents": "none",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "portrait",
+    "ui": "light",
+    "glass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "manaGlass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "sheetGlass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "draw": true,
+    "play": true,
+    "graveyard": true,
+    "exile": true,
+    "returnToHand": true,
+    "cleanup": true,
+    "reducedMotion": true,
+    "liveMotionToggle": true,
+    "undo": true,
+    "pointerEvents": "none",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "desktop",
+    "ui": "dark",
+    "glass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "manaGlass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "sheetGlass": {
+      "background": "rgba(23, 39, 34, 0.7)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "draw": true,
+    "play": true,
+    "graveyard": true,
+    "exile": true,
+    "returnToHand": true,
+    "cleanup": true,
+    "reducedMotion": true,
+    "liveMotionToggle": true,
+    "undo": true,
+    "pointerEvents": "none",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "desktop",
+    "ui": "light",
+    "glass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "manaGlass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "sheetGlass": {
+      "background": "rgba(255, 253, 241, 0.78)",
+      "blur": "blur(18px) saturate(1.15)"
+    },
+    "draw": true,
+    "play": true,
+    "graveyard": true,
+    "exile": true,
+    "returnToHand": true,
+    "cleanup": true,
+    "reducedMotion": true,
+    "liveMotionToggle": true,
+    "undo": true,
+    "pointerEvents": "none",
+    "overflow": false,
+    "errors": []
+  }
+]

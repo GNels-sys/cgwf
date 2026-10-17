@@ -133,11 +133,69 @@ export interface PlayerState {
   /** Cards still to put on the bottom after keeping a mulliganed hand. */
   toBottom: number;
   conceded: boolean;
+  /** Set automatically at 0 life, 10 poison or 21 commander damage from one commander; cleared when the cause goes away (revert, corrected life). */
+  eliminated: EliminationCause | null;
   zones: PlayerZones;
   mana: ManaPool;
   /** Keep floating mana across steps (cards that carry mana over). */
   keepMana: boolean;
   manualAnthems: ManualAnthem[];
+}
+
+export type EliminationCause = "life" | "poison" | "commander damage";
+
+/** Conceded or eliminated: skipped for turns, never attacked, not counted as alive. */
+export function isOut(p: { conceded: boolean; eliminated: EliminationCause | null }): boolean {
+  return p.conceded || p.eliminated !== null;
+}
+
+// ---------------------------------------------------------------- combat
+
+export interface CombatAttacker {
+  iid: string;
+  /** Defending player. */
+  player: PlayerId;
+  /** Planeswalker or battle being attacked instead of the player (controlled by `player`). */
+  planeswalker: string | null;
+}
+
+export interface CombatBlocker {
+  iid: string;
+  /** The attacker this creature blocks. */
+  attacker: string;
+  /** The defending player who declared the block. */
+  player: PlayerId;
+}
+
+export interface CombatState {
+  /** The attacking (active) player. */
+  attacker: PlayerId;
+  attackers: CombatAttacker[];
+  blockers: CombatBlocker[];
+  /** Defenders who have declared their blocks (possibly none). */
+  blockersDeclared: PlayerId[];
+  /** Attackers the declaration tapped (untapped again when attackers are re-declared). */
+  tappedByAttack: string[];
+  damageDealt: boolean;
+}
+
+export type DamageTarget = { kind: "player"; player: PlayerId } | { kind: "card"; iid: string };
+
+/** One source (attacker or blocker) dealing `amount` combat damage to one target. */
+export interface DamageAssignment {
+  source: string;
+  target: DamageTarget;
+  amount: number;
+}
+
+/** "You win the game" card whose printed condition appears to be met; the controller confirms. */
+export interface WinAdvisory {
+  id: string;
+  iid: string;
+  controller: PlayerId;
+  name: string;
+  /** Human-readable condition, e.g. "20 or more charge counters (has 20)". */
+  condition: string;
 }
 
 export const STEPS = [
@@ -207,6 +265,14 @@ export interface GameState {
   seq: number;
   winner: PlayerId | null;
   pendingTriggers: PendingTrigger[];
+  /** The active player has taken this turn's draw (automatic when the draw step is reached or passed). */
+  drewForTurn: boolean;
+  /** The combat in progress this turn, if attackers were declared. */
+  combat: CombatState | null;
+  /** Recomputed after every event: "you win the game" cards whose condition looks met (minus dismissed ones). */
+  winAdvisories: WinAdvisory[];
+  /** Cards whose win prompt the controller dismissed. */
+  dismissedWins: string[];
 }
 
 // ---------------------------------------------------------------- events
@@ -287,6 +353,21 @@ export type EventPayloads = {
   PlayerConceded: { player: PlayerId };
   /** A short public note in the log ("Attacking Blair with Krenko for 6"). Agents announce intent with it. */
   NoteAdded: { player: PlayerId; text: string };
+  /**
+   * Take control of another player's permanent (or a card in their graveyard/exile): it moves to
+   * the actor's battlefield. The only way to move a card you do not control; always logged.
+   */
+  ControlTaken: { iid: string; row?: Row };
+  /** Active player declares attackers: each creature attacks a player or one of their planeswalkers/battles. Taps them unless they have vigilance. */
+  AttackersDeclared: { attacks: Array<{ iid: string; player: PlayerId; planeswalker?: string | null }> };
+  /** A defending player declares blocks (replaces their earlier declaration; an empty list = no blocks). */
+  BlockersDeclared: { player: PlayerId; blocks: Array<{ iid: string; attacker: string }> };
+  /** Apply combat damage. Without `assignments` the default proposal (combat.ts) is used. */
+  CombatDamageDealt: { assignments?: DamageAssignment[] };
+  /** Controller confirms a detected "you win the game" condition; the game ends. */
+  WinClaimed: { iid: string };
+  /** Controller hides the win prompt for that card. */
+  WinAdvisoryDismissed: { iid: string };
   /** Rewind the game to just after event `toSeq`. Applied by the replayer, not the reducer. */
   Revert: { toSeq: number; reason?: string };
 };
@@ -335,6 +416,12 @@ export const EVENT_TYPES = Object.keys({
   RandomOpponent: 0,
   PlayerConceded: 0,
   NoteAdded: 0,
+  ControlTaken: 0,
+  AttackersDeclared: 0,
+  BlockersDeclared: 0,
+  CombatDamageDealt: 0,
+  WinClaimed: 0,
+  WinAdvisoryDismissed: 0,
   Revert: 0,
 } satisfies Record<EventType, 0>) as EventType[];
 

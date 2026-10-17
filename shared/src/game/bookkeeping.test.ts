@@ -314,15 +314,14 @@ describe("reducer: triggers", () => {
     g.push(A, { type: "TriggersDismissed", payload: { player: A } });
     g.push(B, { type: "TriggersDismissed", payload: { player: B } });
     s = g.state!;
-    // Make A the active player at untap, then walk steps.
-    while (s.activePlayer !== A) s = g.push(A, { type: "TurnAdvanced", payload: {} });
-    s = g.push(A, { type: "StepAdvanced", payload: {} }); // upkeep
+    // Make A the active player: a new turn untaps and lands on upkeep, so upkeep triggers show at once.
+    do s = g.push(s.activePlayer, { type: "TurnAdvanced", payload: {} });
+    while (s.activePlayer !== A);
+    expect(s.step).toBe("upkeep");
     expect(s.pendingTriggers.map((t) => [t.name, t.kind])).toEqual([["Phyrexian Arena", "Upkeep"]]);
     s = g.push(A, { type: "StepAdvanced", payload: {} }); // draw
     expect(s.pendingTriggers.map((t) => t.name)).toEqual(["Phyrexian Arena", "Howling Mine"]);
-    s = g.push(A, { type: "TurnAdvanced", payload: {} }); // B's turn clears the list
-    expect(s.pendingTriggers).toEqual([]);
-    s = g.push(B, { type: "StepAdvanced", payload: {} }); // B upkeep: Arena is A's -> nothing
+    s = g.push(A, { type: "TurnAdvanced", payload: {} }); // B's turn clears the list; B's upkeep: Arena is A's -> nothing
     expect(s.pendingTriggers).toEqual([]);
     s = g.push(B, { type: "StepAdvanced", payload: {} }); // B draw: Howling Mine (each)
     expect(s.pendingTriggers.map((t) => t.name)).toEqual(["Howling Mine"]);
@@ -348,7 +347,7 @@ describe("reducer: mana bank", () => {
     expect(s.log.at(-1)!.text).toBe("Alex converted their mana to CCC");
     s = g.push(A, { type: "StepAdvanced", payload: {} });
     expect(s.players[A]!.mana.C).toBe(0);
-    expect(s.log.at(-1)!.text).toBe("Alex's mana emptied (step change)");
+    expect(s.log.map((l) => l.text)).toContain("Alex's mana emptied (step change)");
 
     s = g.push(A, { type: "KeepManaToggled", payload: { player: A, keep: true } });
     s = g.push(A, { type: "ManaChanged", payload: { player: A, color: "R", delta: 3 } });

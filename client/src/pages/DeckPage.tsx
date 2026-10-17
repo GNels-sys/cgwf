@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { deckScenery } from "../components/deckScenery";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { SUBMISSION_NOTE_MAX, type Board, type DeckCardEntry, type DeckDetail, type SubmissionInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { BracketPanel } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
+import { ShoppingPanel } from "../components/LocalStores";
 import { ManaCost } from "../components/ManaCost";
 import { RequireUser } from "../components/RequireUser";
 import { StatsPanel } from "../components/StatsPanel";
@@ -168,6 +170,7 @@ function DeckView({ id }: { id: string }) {
   }, [id]);
 
   const loadStats = useCallback(() => api.decks.stats(id), [id]);
+  const loadShopping = useCallback(() => api.singles.deckShopping(id), [id]);
 
   const sections = useMemo(() => {
     if (!deck) return null;
@@ -180,6 +183,15 @@ function DeckView({ id }: { id: string }) {
       maybeboard: by("maybeboard"),
     };
   }, [deck]);
+
+  // Follow the displayed section order, visiting each printing once rather than
+  // repeating basic lands or the same printing listed on multiple boards.
+  const browseIds = useMemo(() => sections ? [...new Set([
+    ...sections.commanders,
+    ...sections.main.flatMap((group) => group.entries),
+    ...sections.companion, ...sections.sideboard, ...sections.maybeboard,
+  ].map((entry) => entry.card.id))] : [], [sections]);
+  const browseIndex = open ? browseIds.indexOf(open) : -1;
 
   if (error) return <p className="error">{error}</p>;
   if (!deck || !sections) return <p className="muted">Loading deck...</p>;
@@ -207,46 +219,49 @@ function DeckView({ id }: { id: string }) {
 
   return (
     <>
-      <div className="row-between">
-        {renaming ? (
-          <form
-            className="inline-field"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void rename();
-            }}
-          >
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={60} autoFocus />
-            <button className="btn btn-small" type="submit">
-              Save
-            </button>
-            <button className="btn btn-small" type="button" onClick={() => setRenaming(false)}>
-              Cancel
-            </button>
-          </form>
-        ) : (
-          <h1>{deck.name}</h1>
-        )}
-        <div className="actions">
-          <button
-            className="btn btn-small"
-            onClick={() => {
-              setNewName(deck.name);
-              setRenaming(true);
-            }}
-          >
-            Rename
-          </button>
-          {isOwner(user) && (
-            <button className="btn btn-small" onClick={() => void addToLibrary()}>
-              Add to library
-            </button>
+      <header className="detail-heading">
+        <p className="eyebrow">Your deck workshop</p>
+        <div className="row-between">
+          {renaming ? (
+            <form
+              className="inline-field"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void rename();
+              }}
+            >
+              <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={60} autoFocus />
+              <button className="btn btn-small" type="submit">
+                Save
+              </button>
+              <button className="btn btn-small" type="button" onClick={() => setRenaming(false)}>
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <h1>{deck.name}</h1>
           )}
-          <button className="btn btn-small btn-danger" onClick={() => void remove()}>
-            Delete
-          </button>
+          <div className="actions">
+            <button
+              className="btn btn-small"
+              onClick={() => {
+                setNewName(deck.name);
+                setRenaming(true);
+              }}
+            >
+              Rename
+            </button>
+            {isOwner(user) && (
+              <button className="btn btn-small" onClick={() => void addToLibrary()}>
+                Add to library
+              </button>
+            )}
+            <button className="btn btn-small btn-danger" onClick={() => void remove()}>
+              Delete
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
       {libraryNote && <p className="small muted">{libraryNote}</p>}
       <p className="muted small">
         {deck.cardCount} cards &middot; Commander
@@ -286,6 +301,8 @@ function DeckView({ id }: { id: string }) {
         <StatsPanel load={loadStats} version={`${deck.updatedAt}:${deck.cards.length}`} />
       </div>
 
+      <ShoppingPanel load={loadShopping} version={`${deck.updatedAt}:${deck.cards.length}`} />
+
       <QueuePanel deck={deck} />
 
       <div className="deck-columns">
@@ -315,7 +332,12 @@ function DeckView({ id }: { id: string }) {
         )}
       </div>
 
-      {open && <CardDetail id={open} onClose={() => setOpen(null)} />}
+      {open && <CardDetail id={open} onClose={() => setOpen(null)} navigation={{
+        position: browseIndex + 1,
+        total: browseIds.length,
+        onPrevious: browseIndex > 0 ? () => setOpen(browseIds[browseIndex - 1]!) : null,
+        onNext: browseIndex >= 0 && browseIndex < browseIds.length - 1 ? () => setOpen(browseIds[browseIndex + 1]!) : null,
+      }} />}
     </>
   );
 }
@@ -323,7 +345,7 @@ function DeckView({ id }: { id: string }) {
 export function DeckPage() {
   const { id } = useParams();
   return (
-    <main className="page">
+    <main className="page deck-page" data-realm={deckScenery(id ?? "")}>
       <p>
         <Link to="/" className="muted small">
           &larr; All decks

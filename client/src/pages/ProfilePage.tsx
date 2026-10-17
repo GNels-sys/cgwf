@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PASSWORD_MIN, type SessionInfo } from "@cgwf/shared";
@@ -209,79 +210,84 @@ export function ProfilePage() {
   const { user, update, signOut } = useUser();
   const navigate = useNavigate();
   return (
-    <main className="page narrow">
-      <h1>Your profile</h1>
+    <main className="page narrow profile-page">
+      <PageHeading title="Your profile" eyebrow="Make yourself at home">Your name at the table, your friends, and your account.</PageHeading>
       <RequireUser>
         {user && (
           <>
-            <ProfileForm
-              initial={{ displayName: user.displayName, avatar: user.avatar, color: user.color }}
-              submitLabel="Save"
-              onSubmit={async (body) => {
-                await update(body);
-                navigate("/");
-              }}
-            />
-            <hr />
-            <FriendCodeLine />
-            <hr />
-            <p>
-              <Link to="/settings" className="btn">
-                Personalize your table
-              </Link>
-              <span className="muted small"> &nbsp; playmat, sleeves, theme, layout</span>
-            </p>
-            <hr />
-            <h2>Account</h2>
-            {user.email ? (
-              <>
-                <p>
-                  Signed in as <strong>{user.email}</strong>
-                </p>
-                <div className="actions">
-                  <ChangePassword />
-                </div>
-                <DeviceList />
-                <h3>Owner access</h3>
-                <OwnerClaim />
-              </>
-            ) : (
-              <>
-                <div className="notice">
+            <section className="surface profile-identity">
+              <h2>At the table</h2>
+              <ProfileForm
+                initial={{ displayName: user.displayName, avatar: user.avatar, color: user.color }}
+                submitLabel="Save"
+                onSubmit={async (body) => {
+                  await update(body);
+                  navigate("/");
+                }}
+              />
+            </section>
+            <section className="surface profile-connections">
+              <h2>Your circle</h2>
+              <FriendCodeLine />
+              <p>
+                <Link to="/settings" className="btn">
+                  Personalize your table
+                </Link>
+                <span className="muted small"> &nbsp; playmat, sleeves, theme, layout</span>
+              </p>
+            </section>
+            <section className="surface profile-account">
+              <h2>Account</h2>
+              {user.email ? (
+                <>
                   <p>
-                    <strong>Create an account to keep your decks safe and use them on other devices.</strong>
-                  </p>
-                  <p className="muted small">
-                    Right now only this device knows you: lose the phone or clear the browser and the decks are gone. An email and password
-                    keep everything (name, decks, playmats, friends) and let you sign in from your phone and your computer. It takes a minute.
+                    Signed in as <strong>{user.email}</strong>
                   </p>
                   <div className="actions">
-                    <Link to="/signup" className="btn btn-primary">
-                      Create an account
-                    </Link>
-                    <Link to="/signin" className="btn">
-                      I already have an account
-                    </Link>
+                    <ChangePassword />
                   </div>
-                </div>
-                <hr />
-                <p className="muted small">
-                  Signing out forgets this device. Your decks stay on the server but you will not be able to reach them again without an
-                  account, so only do this on a shared device you are leaving.
-                </p>
-                <button
-                  className="btn btn-danger"
-                  onClick={async () => {
-                    if (confirm("Forget this device? You will lose access to your decks.")) {
-                      await signOut();
-                      navigate("/");
-                    }
-                  }}
-                >
-                  Sign out on this device
-                </button>
-              </>
-            )}
+                  <DeviceList />
+                  <h3>Owner access</h3>
+                  <OwnerClaim />
+                </>
+              ) : (
+                <>
+                  <div className="notice">
+                    <p>
+                      <strong>Create an account to keep your decks safe and use them on other devices.</strong>
+                    </p>
+                    <p className="muted small">
+                      Right now only this device knows you: lose the phone or clear the browser and the decks are gone. An email and password
+                      keep everything (name, decks, playmats, friends) and let you sign in from your phone and your computer. It takes a minute.
+                    </p>
+                    <div className="actions">
+                      <Link to="/signup" className="btn btn-primary">
+                        Create an account
+                      </Link>
+                      <Link to="/signin" className="btn">
+                        I already have an account
+                      </Link>
+                    </div>
+                  </div>
+                  <hr />
+                  <p className="muted small">
+                    Signing out forgets this device. Your decks stay on the server but you will not be able to reach them again without an
+                    account, so only do this on a shared device you are leaving.
+                  </p>
+                  <button
+                    className="btn btn-danger"
+                    onClick={async () => {
+                      if (confirm("Forget this device? You will lose access to your decks.")) {
+                        await signOut();
+                        navigate("/");
+                      }
+                    }}
+                  >
+                    Sign out on this device
+                  </button>
+                </>
+              )}
+            </section>
           </>
         )}
       </RequireUser>

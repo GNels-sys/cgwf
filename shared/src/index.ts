@@ -14,6 +14,8 @@ export * from "./settings.js";
 export * from "./game/sections.js";
 export * from "./game/effects.js";
 export * from "./game/triggers.js";
+export * from "./game/combat.js";
+export * from "./game/wincons.js";
 export * from "./analysis.js";
 export * from "./agents.js";
 export * from "./social.js";

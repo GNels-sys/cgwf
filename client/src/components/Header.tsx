@@ -9,7 +9,7 @@ export function Header() {
   return (
     <header className="top-nav">
       <NavLink to="/" className="brand">
-        CGwF
+        <span className="brand-mark" aria-hidden="true">◇</span> CGwF
       </NavLink>
       <nav>
         <NavLink to="/" end>
@@ -18,6 +18,8 @@ export function Header() {
         <NavLink to="/cards">Cards</NavLink>
         <NavLink to="/play">Play</NavLink>
         {user && <NavLink to="/friends">Friends</NavLink>}
+        {user && <NavLink to="/stores">Stores</NavLink>}
+        {user && <NavLink to="/settings">Personalize</NavLink>}
         {owner && <NavLink to="/admin/library">Library</NavLink>}
         {owner && <NavLink to="/admin/agents">Agents</NavLink>}
         {owner && (
@@ -27,7 +29,7 @@ export function Header() {
         )}
       </nav>
       {user && <Bell />}
-      <NavLink to="/me" className="nav-user" aria-label="Your profile">
+      <NavLink to="/me" className={`nav-user${user ? "" : " is-start"}`} aria-label="Your profile">
         {user ? (
           <>
             <Avatar avatar={user.avatar} color={user.color} size={32} />

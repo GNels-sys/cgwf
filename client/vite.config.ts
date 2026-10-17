@@ -20,8 +20,8 @@ export default defineConfig({
         scope: "/",
         display: "standalone",
         orientation: "any",
-        background_color: "#121a16",
-        theme_color: "#121a16",
+        background_color: "#101918",
+        theme_color: "#101918",
         icons: [
           { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
           { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
@@ -32,7 +32,7 @@ export default defineConfig({
         // The app shell works offline; API and images are fetched live (images cache separately).
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [/^\/api\//, /^\/img\//],
-        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,jpg,woff2}"],
         runtimeCaching: [
           {
             urlPattern: /^\/img\//,

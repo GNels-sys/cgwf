@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { AgentGamesResponse } from "@cgwf/shared";
@@ -34,7 +35,7 @@ function Games() {
       </div>
       <h3>Recent agent games</h3>
       {data.games.length === 0 ? (
-        <p className="muted">None yet.</p>
+        <div className="empty-state"><span className="empty-state-mark" aria-hidden="true">◇</span><h2>A little company for your next game.</h2><p className="muted">None yet. Add computer opponents from a table lobby to begin.</p></div>
       ) : (
         <ul className="library-list">
           {data.games.map((g) => (
@@ -61,9 +62,9 @@ function Games() {
 export function AgentsPage() {
   const { user } = useUser();
   return (
-    <main className="page">
+    <main className="page agents-page">
       <RequireUser>
-        <h1>Computer opponents</h1>
+        <PageHeading title="Computer opponents" eyebrow="The other seats at the table">Review activity, recent games, and your play budget.</PageHeading>
         {isOwner(user) ? <Games /> : <p className="muted">Owner only.</p>}
       </RequireUser>
     </main>

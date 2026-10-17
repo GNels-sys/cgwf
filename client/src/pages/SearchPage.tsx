@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { useEffect, useRef, useState } from "react";
 import type { CardSummary, StatusResponse } from "@cgwf/shared";
 import { api } from "../api";
@@ -72,10 +73,7 @@ export function SearchPage() {
 
   return (
     <main className="page search-page">
-      <header className="page-header">
-        <h1>CGwF</h1>
-        <p className="tagline">Card Games with Friends</p>
-      </header>
+      <PageHeading title="Card collection" eyebrow="Discover your next possibility">Explore cards and tokens. Find a familiar favorite or your next great idea.</PageHeading>
 
       <div className="search-bar">
         <input
@@ -115,9 +113,9 @@ export function SearchPage() {
       {error && <p className="error">Search failed: {error}</p>}
 
       <section className={`results${busy ? " is-busy" : ""}`} aria-live="polite">
-        {results.length === 0 && debounced.length >= 2 && !busy && !error && <p className="muted">No cards match.</p>}
+        {results.length === 0 && debounced.length >= 2 && !busy && !error && <div className="empty-state"><span className="empty-state-mark" aria-hidden="true">◇</span><h2>No cards match.</h2><p className="muted">Try another name or change the token filter.</p></div>}
         {results.length === 0 && debounced.length < 2 && status && status.cardCount > 0 && (
-          <p className="muted">{status.cardCount.toLocaleString()} printings loaded. Type at least two letters.</p>
+          <div className="empty-state"><span className="empty-state-mark" aria-hidden="true">◇</span><h2>A little inspiration goes a long way.</h2><p className="muted">{status.cardCount.toLocaleString()} printings loaded. Type at least two letters.</p></div>
         )}
         <ul className="card-grid">
           {results.map((c) => (
