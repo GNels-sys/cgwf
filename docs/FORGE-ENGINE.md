@@ -200,7 +200,7 @@ CGwF sends `resync {gameId, seat}` -> engine answers `state` + the open `prompt`
 in order: (a) the engine process exposes `GET /health {activeGames}` and deploys are gated on
 zero active games (a tiny script, Stage 3); (b) `min_machines_running = 1` and
 `auto_stop_machines = "off"` whenever a game is live (Stage 1 keeps the machine always on; cost
-~$6/month for shared-cpu-2x 2 GB; Stage 3 can scale to zero when idle through the Fly Machines
+~$31/month for performance-1x 2 GB, ~$6-12 for shared-cpu-2x; Stage 3 can scale to zero when idle through the Fly Machines
 API from CGwF); (c) CGwF detects a dead game (engine says `unknown gameId` on resync) and shows
 "the table was lost; here is the log; rematch?" instead of hanging.
 
@@ -300,10 +300,17 @@ and the existing table), then the UI pickers, then bots and legality.
 - **Startup time.** Forge scans ~30k card scripts at boot (lazy parsing on). On this Windows
   box that took 147 s; on Linux it is expected to be well under a minute (measured on Fly, see
   README). Either way the engine must not scale to zero between games in Stage 1.
-- **Memory.** Measured peak heap for a four-player AI game is in the README; the service runs
-  one game at a time per machine in Stage 1 and a `maxGames` limit (default 4) returns
-  `error {busy}` beyond it. 2 GB is sized for that; if real games show more, 4 GB is a config
-  change.
+- **Memory.** Measured peak heap for a four-player AI game is 365-493 MB (RSS under 600 MB); the
+  service runs a handful of games per machine in Stage 1 and a `maxGames` limit (default 4)
+  returns `error {busy}` beyond it. 2 GB is sized for that; if real games show more, 4 GB is a
+  config change.
+- **CPU, the real constraint.** Forge's AI evaluates every candidate play at every priority pass.
+  On Fly's `shared-cpu-2x` an AI-only game ran 26.6 s/turn (one 6-minute turn) against 3.8 s/turn
+  on the dev box, and Forge's own per-decision timeout fired once (the AI passes when it does).
+  Human tables are mostly idle, but bot seats need real CPU: Stage 1 sizes the machine by CPU
+  (`performance-1x`, one dedicated vCPU, measured 6.0 s/turn on the same game, 5x faster than
+  shared-cpu-2x; `performance-2x` needs 4 GB on Fly) and keeps the AI's timeout. The classic-table Sonnet agents never had this problem because the humans did the
+  rules work.
 - **The AI-fallback seam.** The spike's human controller extends the AI controller and so
   reports `isAI() == true`. Forge branches on that flag in ~15 places (sideboarding, a loop cap,
   "RemAIDecks" filtering, Camouflage). Stage 1 switches to extending `PlayerController` directly

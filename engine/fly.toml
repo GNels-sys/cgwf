@@ -35,6 +35,9 @@ primary_region = "lax"
     timeout = "5s"
     grace_period = "60s"
 
+# Memory is plenty at 2 GB (a game peaks under 600 MB RSS). CPU is what Forge's AI needs: on
+# shared-cpu-2x an AI-only game ran ~7x slower than on the dev box, performance-1x within 1.6x
+# (README "Measurements"). Stage 1 picks the size; the spike leaves the cheap one here.
 [[vm]]
   size = "shared-cpu-2x"
   memory = "2gb"

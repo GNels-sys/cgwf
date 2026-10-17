@@ -121,7 +121,7 @@ Games = four Forge AIs, Bloomburrow Commander precons, 60-turn cap.
 | Startup to "ready" (card DB loaded), cold file cache | 147 s (first run; Windows + Defender reading 30k files) | 19.8 s (first boot of the machine) |
 | Startup to "ready", warm cache | 7.9-8.6 s | 4.0 s |
 | Heap after boot | ~110 MB | ~60 MB |
-| Game 1 (seed 1) | 50 turns, 188 s, **3.8 s/turn** avg, slowest turn 27 s, winner AI 3 | shared-cpu-2x: 58 turns, 1540 s, **26.6 s/turn**, slowest turn 358 s, winner AI 1; one AI decision hit Forge's own per-decision timeout and passed. performance-2x: FLY_PERF |
+| Game 1 (seed 1) | 50 turns, 188 s, **3.8 s/turn** avg, slowest turn 27 s, winner AI 3 | shared-cpu-2x: 58 turns, 1540 s, **26.6 s/turn**, slowest turn 358 s, winner AI 1; one AI decision hit Forge's own per-decision timeout and passed. performance-1x (1 dedicated vCPU, 2 GB): the same 50-turn game in 298 s, **6.0 s/turn**, slowest turn 42 s, peak heap 305 MB, RSS 502 MB |
 | Game 2 (seed 2) | 56 turns, 433 s, 7.7 s/turn, slowest turn 72 s, winner AI 2 (run while two other JVMs were busy on the box) | not run (game 1 took 26 min on the shared machine) |
 | Peak heap during a game | 365 MB (game 1), 493 MB (game 2) | 400 MB (game 1) |
 | Peak RSS of the JVM | n/a on Windows | 592 MB (game 1); the idle `serve` JVM sat at 165 MB RSS next to it, 734 MB used of 1968 in total |
@@ -136,9 +136,11 @@ is the constraint, not RAM:** Forge's AI evaluates every candidate play each pri
 Fly's `shared-cpu-2x` an AI-only game ran 7-8x slower than on the dev box (26.6 s/turn vs 3.8),
 with one 6-minute turn. Human tables are mostly idle (humans think far longer than the engine),
 but bot seats and the stack/combat resolution of a busy board need real CPU, so Stage 1 should
-size the machine by CPU: `performance-2x` (dedicated vCPUs; see the row above for the measured
-difference) with 2 GB, and keep the AI's per-decision timeout (Forge already enforces one and
-passes when it fires).
+size the machine by CPU: `performance-1x` (one dedicated vCPU, 2 GB) ran the same game 5x faster
+than `shared-cpu-2x` and within 1.6x of the dev box (6.0 vs 3.8 s/turn); `performance-2x` needs
+4 GB on Fly. Keep the AI's per-decision timeout (Forge already enforces one and passes when it
+fires). Cost note: performance-1x is ~$31/month if always on, shared-cpu-2x ~$6-12; with
+scale-to-zero both bill only while a table is open.
 
 ## Risks hit during the spike
 
