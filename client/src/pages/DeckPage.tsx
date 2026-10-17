@@ -6,6 +6,7 @@ import { api } from "../api";
 import { BracketPanel } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
+import { ShoppingPanel } from "../components/LocalStores";
 import { ManaCost } from "../components/ManaCost";
 import { RequireUser } from "../components/RequireUser";
 import { StatsPanel } from "../components/StatsPanel";
@@ -169,6 +170,7 @@ function DeckView({ id }: { id: string }) {
   }, [id]);
 
   const loadStats = useCallback(() => api.decks.stats(id), [id]);
+  const loadShopping = useCallback(() => api.singles.deckShopping(id), [id]);
 
   const sections = useMemo(() => {
     if (!deck) return null;
@@ -298,6 +300,8 @@ function DeckView({ id }: { id: string }) {
         <BracketPanel deckId={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} />
         <StatsPanel load={loadStats} version={`${deck.updatedAt}:${deck.cards.length}`} />
       </div>
+
+      <ShoppingPanel load={loadShopping} version={`${deck.updatedAt}:${deck.cards.length}`} />
 
       <QueuePanel deck={deck} />
 

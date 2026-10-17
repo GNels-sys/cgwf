@@ -5,6 +5,7 @@ import type {
   AdminUserDetail,
   AgentGamesResponse,
   AgentsStatus,
+  CardAvailabilityResponse,
   CardResponse,
   DraftPrimerResponse,
   RoomAgentsResponse,
@@ -32,9 +33,11 @@ import type {
   ResolveResponse,
   SearchResponse,
   SessionInfo,
+  ShoppingReport,
   SignInRequest,
   SignUpRequest,
   StatusResponse,
+  StoresResponse,
   TokenSearchResponse,
   UploadInfo,
   UploadKind,
@@ -202,6 +205,15 @@ export const api = {
     queue: () => request<{ submissions: SubmissionInfo[] }>("/api/library/submissions"),
     approve: (id: string) => request<{ submission: SubmissionInfo }>(`/api/library/submissions/${encodeURIComponent(id)}/approve`, { method: "POST", json: {} }),
     reject: (id: string, reason: string) => request<{ submission: SubmissionInfo }>(`/api/library/submissions/${encodeURIComponent(id)}/reject`, { json: { reason } }),
+  },
+
+  /** Phase 10 local stores bridge: read-only, signed-in; every link in an answer leaves CGwF. */
+  singles: {
+    availability: (cardId: string, signal?: AbortSignal) =>
+      request<CardAvailabilityResponse>(`/api/cards/${encodeURIComponent(cardId)}/availability`, { ...(signal ? { signal } : {}) }),
+    deckShopping: (deckId: string, signal?: AbortSignal) => request<ShoppingReport>(`/api/decks/${encodeURIComponent(deckId)}/shopping`, { ...(signal ? { signal } : {}) }),
+    libraryShopping: (id: string, signal?: AbortSignal) => request<ShoppingReport>(`/api/library/${encodeURIComponent(id)}/shopping`, { ...(signal ? { signal } : {}) }),
+    stores: (signal?: AbortSignal) => request<StoresResponse>("/api/stores", { ...(signal ? { signal } : {}) }),
   },
 
   tokens: (q: string, signal?: AbortSignal) => request<TokenSearchResponse>(`/api/tokens?q=${encodeURIComponent(q)}`, { ...(signal ? { signal } : {}) }),

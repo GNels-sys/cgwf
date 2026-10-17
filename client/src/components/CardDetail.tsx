@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { hasBackFace, type CardPrinting } from "@cgwf/shared";
 import { api } from "../api";
 import { CardImage } from "./CardImage";
+import { AvailabilityPanel, PurchaseLinks } from "./LocalStores";
 import { ManaCost, OracleText } from "./ManaCost";
 
 /** Full-screen card view: large image (both faces for two-faced cards) plus oracle text. */
@@ -126,6 +127,8 @@ export function CardDetail({ id, onClose, navigation }: { id: string; onClose: (
                   View on Scryfall
                 </a>
               </p>
+              <AvailabilityPanel cardId={card.id} />
+              <PurchaseLinks links={card.purchaseUris} />
             </div>
           </>
         )}

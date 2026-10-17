@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type ArchetypeTag, type Bracket, type LibraryDeckDetail } from "@cgwf/shared";
 import { api } from "../api";
 import { AnalysisBody } from "../components/BracketPanel";
+import { ShoppingPanel } from "../components/LocalStores";
 import { RequireUser } from "../components/RequireUser";
 import { StatsPanel } from "../components/StatsPanel";
 import { isOwner, useUser } from "../user";
@@ -22,6 +23,7 @@ function Editor({ id }: { id: string }) {
   const [draftNote, setDraftNote] = useState<string | null>(null);
 
   const loadStats = useCallback(() => api.library.stats(id), [id]);
+  const loadShopping = useCallback(() => api.singles.libraryShopping(id), [id]);
 
   const apply = (d: LibraryDeckDetail) => {
     setDeck(d);
@@ -183,6 +185,8 @@ function Editor({ id }: { id: string }) {
         )}
         <StatsPanel load={loadStats} version={deck.updatedAt} />
       </div>
+
+      <ShoppingPanel load={loadShopping} version={deck.updatedAt} />
 
       <section className="deck-group">
         <h3>Cards</h3>

@@ -809,9 +809,18 @@ snapshot to confirm with the store.
   timeout, breaker open / probe / recover, stale fallback, dedupe, chunking),
   `singles/shopping.test.ts` (hand-worked fixture deck), `routes/singles.test.ts` (routes against
   the fixture deck with a fake Singles site, including an outage and an unconfigured server).
-- **UI** (deferred until the design refresh merges): purchase-link buttons and an "Available in
-  Las Vegas" panel on the card detail, a deck shopping panel (per-store coverage, best single
-  store), a Stores page, and the "updated X ago, from local store data" note everywhere.
+- **UI** (`client/src/components/LocalStores.tsx`, wording helpers in `storeText.ts` with a test,
+  styles at the end of `pages.css`, `client/src/pages/StoresPage.tsx`, `api.singles.*`):
+  `AvailabilityPanel` ("Available in Las Vegas", signed-in only, hidden when the server is
+  unconfigured; stores cheapest first, six listings per store then a "see them all" search link,
+  "unavailable right now" when the breaker is open) and `PurchaseLinks` (TCGplayer / Cardmarket /
+  Cardhoarder buttons, "Links go to those stores (via Scryfall). CGwF sells nothing.") sit at the
+  bottom of `CardDetail`; `ShoppingPanel` ("Shop locally": three summary tiles, per-store coverage
+  bars with the best single store marked, the missing list, an expandable per-card table that
+  stacks on phones) sits under the Bracket/Stats row on deck and library deck pages and re-runs on
+  the deck version; `/stores` lists the stores (nav link for signed-in players). Every panel ends
+  with `SourceNote`: "Updated X ago, from local store data. Stock is a snapshot; confirm with the
+  store before visiting." Every link is `target=_blank rel=noopener noreferrer`.
 
 ## Table hygiene (stopgap before the rules engine, 2026-10-17)
 
@@ -895,8 +904,8 @@ them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.
    functional counts), pure computation with an in-memory cache. **(done)**
 9b. Owner-only Admin overview at `/admin` (who is on the platform, who is active). **(done)**
 10. Local stores bridge: Scryfall purchase links in `cards`, read-only client for the Singles
-    site's service API (cache + breaker), availability / shopping / stores routes. **(server done;
-    UI waits for the design refresh)**
+    site's service API (cache + breaker), availability / shopping / stores routes, card-detail
+    availability + purchase links, deck shopping panel, Stores page. **(done)**
 10b. Table hygiene stopgap: ownership guardrails, automatic untap/draw, combat events, automatic
     eliminations, win advisories. **(shared + server done; the phase strip, attack/block/damage UI
     and the full-card zoom wait for the design refresh)**
