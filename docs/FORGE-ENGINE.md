@@ -1,8 +1,10 @@
 # CGwF rules engine on Forge: design for Stages 1-4
 
-Status: Stage 0 spike done (branch `forge-engine`, 2026-10-17). This document is the plan for
-turning the spike into the real thing. The spike's code, measurements and go/no-go are in
-[`engine/README.md`](../engine/README.md).
+Status (2026-10-17): Stage 0 spike done; Stage 1 M1 (control protocol, relay, CI), M2 (engine
+tables playable in the app) and M3 (four seats, saved stops, lobby legality hints, absent-seat
+grace, resync) are merged and live; M4 (Forge AI bot seats) is next. This document is the plan;
+where the code differs from the plan the code wins and CLAUDE.md "Rules engine tables" describes
+it. The spike's measurements and go/no-go are in [`engine/README.md`](../engine/README.md).
 
 ## 0. The one-paragraph version
 

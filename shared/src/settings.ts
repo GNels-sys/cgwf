@@ -1,3 +1,4 @@
+import { DEFAULT_ENGINE_STOPS, ENGINE_PHASES, type EnginePhase, type EngineStops } from "./engine.js";
 /**
  * Per-user personalization. Saved on the server (user_settings) and applied
  * client-side: the server never renders anything, it only stores and validates.
@@ -40,6 +41,8 @@ export interface Look {
 }
 
 export interface UserSettings {
+  /** Rules-engine tables: where the engine pauses to offer this player priority (shared/engine.ts). */
+  engineStops: EngineStops;
   playmat: Texture;
   sleeve: Texture;
   theme: TableTheme;
@@ -58,6 +61,7 @@ export interface UserSettings {
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
+  engineStops: DEFAULT_ENGINE_STOPS,
   playmat: { kind: "preset", id: "felt-green" },
   sleeve: { kind: "preset", id: "classic" },
   theme: "wood",
@@ -94,6 +98,7 @@ export function sanitizeSettings(raw: unknown, base: UserSettings = DEFAULT_SETT
   const layout = (r.layout && typeof r.layout === "object" ? r.layout : {}) as Record<string, unknown>;
   const scale = typeof layout.cardScale === "number" && Number.isFinite(layout.cardScale) ? layout.cardScale : base.layout.cardScale;
   return {
+    engineStops: sanitizeStops(r.engineStops, base.engineStops),
     playmat: texture(r.playmat, PLAYMAT_PRESETS, base.playmat),
     sleeve: texture(r.sleeve, SLEEVE_PRESETS, base.sleeve),
     theme: oneOf(r.theme, TABLE_THEMES, base.theme),
@@ -108,6 +113,14 @@ export function sanitizeSettings(raw: unknown, base: UserSettings = DEFAULT_SETT
       compact: typeof layout.compact === "boolean" ? layout.compact : base.layout.compact,
     },
   };
+}
+
+function sanitizeStops(v: unknown, base: EngineStops): EngineStops {
+  if (!v || typeof v !== "object") return base;
+  const s = v as { myTurn?: unknown; theirTurn?: unknown; respond?: unknown };
+  const phases = (arr: unknown, fallback: EnginePhase[]): EnginePhase[] =>
+    Array.isArray(arr) ? [...new Set(arr.filter((p): p is EnginePhase => typeof p === "string" && (ENGINE_PHASES as readonly string[]).includes(p)))] : fallback;
+  return { myTurn: phases(s.myTurn, base.myTurn), theirTurn: phases(s.theirTurn, base.theirTurn), respond: typeof s.respond === "boolean" ? s.respond : base.respond };
 }
 
 /** The part of a player's settings everyone at the table may see. */

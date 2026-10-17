@@ -34,6 +34,7 @@ import type { EngineClient, EngineFrame } from "../engine/client.js";
 import { PrintingMapper } from "../engine/mapping.js";
 import type { NameIndex } from "../search/index.js";
 import { EngineRoomError, EngineTable, type RoomPort } from "./engineTable.js";
+import { deckForEngine } from "../engine/deck.js";
 import type { EngineAnswer, EngineStops } from "@cgwf/shared";
 
 /** What the rules-engine integration needs (null when no engine is configured). */
@@ -210,6 +211,7 @@ export class LiveRoom {
           look: lookOf(loadSettings(this.handle, m.userId)),
           isAgent: Boolean(u.isAgent),
           thinking: this.agentPresence.get(m.userId)?.thinking ?? false,
+          deckProblems: row.engine && m.deckId && m.role === "player" ? (deckForEngine(this.handle, m.userId, m.deckId)?.problems ?? []) : [],
         };
       })
       .filter((m): m is RoomMember => m !== null)

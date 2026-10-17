@@ -211,6 +211,10 @@ describe("engine tables (relay to the rules engine)", () => {
     alex.send({ t: "seat", seat: 0, deckId: badDeck });
     blair.send({ t: "seat", seat: 1, deckId: goodDeck });
     await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.members.filter((m) => m.deckId).length === 2);
+    // the lobby already shows why, per seat
+    const roomInfo = (await ctx.app.inject({ method: "GET", url: `/api/rooms/${code}`, headers: auth(alex.token) })).json() as { room: { members: Array<{ name: string; deckProblems: string[] }> } };
+    expect(roomInfo.room.members.find((x) => x.name === "Alex")!.deckProblems.join(" ")).toMatch(/cards including commander/);
+    expect(roomInfo.room.members.find((x) => x.name === "Blair")!.deckProblems).toEqual([]);
     const m = alex.mark();
     alex.send({ t: "start" });
     const err = await alex.errorSince(m);
@@ -226,6 +230,9 @@ describe("engine tables (relay to the rules engine)", () => {
     const m = alex.mark();
     alex.send({ t: "start" });
     const created = await engine.waitFor((f) => f.type === "createGame");
+    // remembered stops go to the engine right after the game is created
+    const stopsFrames = await engine.waitFor((f) => f.type === "setStops" && f.seat === 1);
+    expect((stopsFrames.stops as { respond: boolean }).respond).toBe(true);
     const seats = created.seats as Array<{ seat: number; kind: string; name: string; deck: { commanders: Array<{ name: string; setCode: string; number: string }>; main: Array<{ count: number }> } }>;
     expect(seats.map((s) => s.kind)).toEqual(["human", "human"]);
     expect(seats[0]!.deck.commanders[0]!.name).toBe("Atraxa, Praetors' Voice");
@@ -333,6 +340,16 @@ describe("engine tables (relay to the rules engine)", () => {
     const m2 = alex.mark();
     alex.send({ t: "event", event: { type: "LifeChanged", payload: { player: s.viewer, delta: -1 } } });
     expect(await alex.errorSince(m2)).toMatch(/rules engine runs this table/);
+
+    // stops: sent to the engine, reflected in the view, and remembered in the player's settings
+    const m3 = alex.mark();
+    alex.send({ t: "stops", stops: { myTurn: ["MAIN1"], theirTurn: [], respond: false } });
+    const setStops = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { respond: boolean }).respond === false);
+    expect(setStops.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: false });
+    const withStops = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.stops.respond === false, m3)).view;
+    expect(withStops.engine?.stops.myTurn).toEqual(["MAIN1"]);
+    const saved = (await ctx.app.inject({ method: "GET", url: "/api/me/settings", headers: auth(alex.token) })).json() as { settings: { engineStops: { respond: boolean } } };
+    expect(saved.settings.engineStops.respond).toBe(false);
   });
 
   it("ends the table when the engine reports game over, and survives a spectator joining late", async () => {

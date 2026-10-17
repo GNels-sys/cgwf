@@ -30,7 +30,8 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
   const myMember = room.members.find((m) => m.userId === me?.userId);
   const seated = room.members.filter((m) => m.role === "player" && m.seat !== null);
   const spectators = room.members.filter((m) => m.role !== "player");
-  const ready = seated.length >= 2 && seated.every((m) => m.deckId);
+  const illegal = room.engine ? seated.filter((m) => m.deckProblems.length > 0) : [];
+  const ready = seated.length >= 2 && seated.every((m) => m.deckId) && illegal.length === 0;
   const link = `${location.origin}/room/${room.code}`;
 
   const share = async () => {
@@ -93,6 +94,12 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
                     {!m.online && !m.isAgent && <span className="muted small"> &middot; offline</span>}
                     <br />
                     <span className="muted small">{m.deckName ? `${m.deckName}${m.commanders.length ? ` - ${m.commanders.join(" / ")}` : ""}` : "no deck yet"}</span>
+                    {m.deckProblems.length > 0 && (
+                      <>
+                        <br />
+                        <span className="warn small">Not legal for the rules engine: {m.deckProblems.join(" ")}</span>
+                      </>
+                    )}
                   </span>
                   {mine && (
                     <button className="btn btn-small" onClick={() => sock.send({ t: "unseat" })}>
@@ -150,7 +157,7 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
       <div className="sticky-actions">
         {isHost ? (
           <button className="btn btn-primary btn-big" disabled={!ready} onClick={() => sock.send({ t: "start" })}>
-            {ready ? "Start game" : seated.length < 2 ? "Need two players" : "Everyone needs a deck"}
+            {ready ? "Start game" : seated.length < 2 ? "Need two players" : illegal.length ? `${illegal.map((m) => m.name).join(", ")}: fix the deck first` : "Everyone needs a deck"}
           </button>
         ) : (
           <span className="muted">Waiting for {room.members.find((m) => m.userId === room.hostId)?.name ?? "the host"} to start...</span>

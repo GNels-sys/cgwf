@@ -29,6 +29,30 @@ spike: how to build it, what it proved, what it measured, and the go/no-go.
 | `spike/client.mjs` | Scripted human seat (Node, no deps) that plays a whole game through the bridge |
 | `Dockerfile`, `fly.toml` | Fly app `cgwf-engine` (lax, 2 GB), Forge cloned at a pinned tag during the image build |
 
+## Stage 1 (what changed after the spike)
+
+The spike's one-socket-one-table server became a **control socket** that the CGwF server
+holds open: `EngineServer` + `GameSession` serve many tables on one connection, every frame
+carries `gameId` (= the CGwF room id) and `seat` (table seat, -1 = spectator). Browsers never
+connect here. Handshake: `Authorization: Bearer <ENGINE_TOKEN>` (refused otherwise).
+
+| Direction | Frames |
+| --- | --- |
+| CGwF -> engine | `createGame {rid, gameId, seed, seats:[{seat, kind: human\|ai, name, deck}]}`, `answer {gameId, seat, promptId, ...}`, `setStops {gameId, seat, stops}`, `resync {gameId, seat}`, `attachSeat` / `detachSeat {gameId, seat}` (absent seat = the AI plays it), `concede {gameId, seat}`, `endGame {gameId}`, `health {rid}`, `ping` |
+| engine -> CGwF | `hello`, `gameCreated {rid, gameId, players:[{seat, playerId, deckName, resolved, missing}]}`, `cards {cards:[{cardId, owner, name, set, scryfallSet, number}]}` once at start (printing mapping), `state {seat, ...view}`, `prompt {seat, promptId, prompt, view, ...}`, `log {seq, turn, logType, text}`, `gameOver {winnerSeat, winner, endReason, turns}`, `error`, `health`, `pong` |
+
+Other Stage 1 engine changes: server-side Arena-style stops per seat (`BridgeSession.Stops`;
+defaults = my MAIN1 / after attackers / MAIN2 / end, opponents' end step, always when the top
+of the stack is someone else's; `passUntilTurn` in a priority answer passes the rest of a turn),
+cached per-seat frames for `resync`, Forge's bookkeeping effect cards hidden from the command
+zone, `CGWF_MAX_GAMES` (default 4), and the hidden-information audit now also checks the view
+attached to every prompt of a scripted human seat (`ScriptedSeat`). `spike/client.mjs` is now a
+fake CGwF server (useful without the app): `node engine/spike/client.mjs ws://localhost:8081 --token T`.
+
+Deployment: `fly.toml` has no public service and `restart = always`; the machine must be
+started once by hand after a deploy that finds it stopped (`fly machine start <id>`). Stage 1
+stays on `shared-cpu-2x` (humans only); for bot seats see the measurements below.
+
 ## Toolchain (exact versions used, 2026-10-17)
 
 Docker is not installed on the Windows dev box; the image builds remotely on Fly. Locally:
