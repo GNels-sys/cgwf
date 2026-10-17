@@ -80,7 +80,7 @@ describe("agent tools map one-to-one onto events", () => {
     if (bears) expect(mapToolCall("cast_spell", { iid: bears.iid, tap_lands: [] }, ctx).ok).toBe(false);
   });
 
-  it("resolves players by name or 'me' and applies attack damage only to computer defenders", () => {
+  it("resolves players by name or 'me'; attack becomes an AttackersDeclared event", () => {
     let s = setup();
     const hand = s.players[ME]!.zones.hand;
     const bears = hand.find((iid) => s.cards[iid]!.printing!.name === "Grizzly Bears") ?? hand.find((iid) => /Creature/.test(s.cards[iid]!.printing!.typeLine))!;
@@ -93,9 +93,9 @@ describe("agent tools map one-to-one onto events", () => {
     expect(mapToolCall("change_life", { player: "nobody", delta: 1 }, ctx).ok).toBe(false);
 
     const vsHuman = mapToolCall("attack", { attacker_iids: [bears], defender: "Blair", total_power: 2 }, ctx);
-    expect(vsHuman.ok && vsHuman.call.events.map((e) => e.type)).toEqual(["CardTapped", "NoteAdded"]);
+    expect(vsHuman.ok && vsHuman.call.events).toEqual([{ type: "AttackersDeclared", payload: { attacks: [{ iid: bears, player: OPP }] } }]);
     const vsBot = mapToolCall("attack", { attacker_iids: [bears], defender: "Giant bot", total_power: 2 }, ctx);
-    expect(vsBot.ok && vsBot.call.events.map((e) => e.type)).toEqual(["CardTapped", "NoteAdded", "LifeChanged"]);
+    expect(vsBot.ok && vsBot.call.events.map((e) => e.type)).toEqual(["AttackersDeclared"]);
     expect(mapToolCall("attack", { attacker_iids: [bears], defender: "me", total_power: 2 }, ctx).ok).toBe(false);
   });
 

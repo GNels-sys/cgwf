@@ -15,6 +15,7 @@
  * `import-precons` needs the running server (it is what the owner runs through
  * `fly ssh console` after a deploy); it polls progress until the import ends.
  */
+import { isOut } from "@cgwf/shared";
 import { buildApp } from "./app.js";
 import { config } from "./config.js";
 
@@ -92,7 +93,7 @@ async function agentGame(): Promise<void> {
   const final = room.currentState();
   if (final && final.phase !== "ended") {
     // End the table: the human and then each agent but the last concede.
-    const alive = final.turnOrder.filter((id) => !final.players[id]!.conceded);
+    const alive = final.turnOrder.filter((id) => !isOut(final.players[id]!));
     for (const id of alive.slice(0, -1)) {
       try {
         room.submit(id, { type: "PlayerConceded", payload: { player: id } });

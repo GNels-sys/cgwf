@@ -1,5 +1,5 @@
 import type { CardPrinting } from "../cards.js";
-import type { AttachmentEffect, CardInstance, CardModifier, CustomToken, GameState, LogEntry, ManaPool, ManualAnthem, PendingTrigger, PlayerId, Row, StackItem, Step, ZoneRef } from "./types.js";
+import type { AttachmentEffect, CardInstance, CardModifier, CombatState, CustomToken, EliminationCause, GameState, LogEntry, ManaPool, ManualAnthem, PendingTrigger, PlayerId, Row, StackItem, Step, WinAdvisory, ZoneRef } from "./types.js";
 
 /**
  * Per-player view of the game. This is the ONLY shape a client ever receives.
@@ -44,6 +44,7 @@ export interface ViewPlayer {
   kept: boolean;
   toBottom: number;
   conceded: boolean;
+  eliminated: EliminationCause | null;
   mana: ManaPool;
   keepMana: boolean;
   manualAnthems: ManualAnthem[];
@@ -69,6 +70,9 @@ export interface PlayerView {
   seq: number;
   winner: PlayerId | null;
   pendingTriggers: PendingTrigger[];
+  drewForTurn: boolean;
+  combat: CombatState | null;
+  winAdvisories: WinAdvisory[];
 }
 
 function identityVisible(c: CardInstance, viewer: PlayerId | null): boolean {
@@ -157,6 +161,7 @@ export function viewFor(state: GameState, viewer: PlayerId | null, logLimit = 20
       kept: p.kept,
       toBottom: p.toBottom,
       conceded: p.conceded,
+      eliminated: p.eliminated,
       mana: p.mana,
       keepMana: p.keepMana,
       manualAnthems: p.manualAnthems,
@@ -189,6 +194,9 @@ export function viewFor(state: GameState, viewer: PlayerId | null, logLimit = 20
     seq: state.seq,
     winner: state.winner,
     pendingTriggers: state.pendingTriggers,
+    drewForTurn: state.drewForTurn,
+    combat: state.combat,
+    winAdvisories: state.winAdvisories,
   };
   return { view, printings };
 }
