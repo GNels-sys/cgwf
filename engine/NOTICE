@@ -1,0 +1,19 @@
+CGwF rules engine (engine/)
+
+This module links against and runs the Forge rules engine
+(https://github.com/Card-Forge/forge), copyright the Forge authors, licensed
+under the GNU General Public License v3.0 or later. Because it links forge-game,
+this module is itself distributed under the GNU General Public License v3.0
+(see LICENSE). The pinned Forge release is recorded in pom.xml (forge.version)
+and Dockerfile (FORGE_TAG); Forge is fetched at build time and is not vendored.
+
+Card scripts, set data and format lists under forge-gui/res are Forge's and are
+copied into the container image unchanged.
+
+CGwF is unofficial Fan Content permitted under the Fan Content Policy. Not
+approved/endorsed by Wizards. Portions of the materials used are property of
+Wizards of the Coast. (c) Wizards of the Coast LLC. Card data and images courtesy
+of Scryfall.
+
+The TypeScript application in the rest of this repository (client/, server/,
+shared/) talks to this engine only over a network socket and keeps its own licence.

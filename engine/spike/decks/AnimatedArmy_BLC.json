@@ -1,0 +1,610 @@
+{
+  "name": "Animated Army",
+  "code": "BLC",
+  "commanders": [
+    {
+      "name": "Bello, Bard of the Brambles",
+      "setCode": "BLC",
+      "number": "1",
+      "scryfallId": "31e4b7a1-b377-49d2-a92e-4bcb0db35f16",
+      "count": 1
+    }
+  ],
+  "main": [
+    {
+      "name": "Wildsear, Scouring Maw",
+      "setCode": "BLC",
+      "number": "8",
+      "scryfallId": "48494ef9-5eb3-4b55-ad1d-b32bbed89ca5",
+      "count": 1
+    },
+    {
+      "name": "Domri, Anarch of Bolas",
+      "setCode": "BLC",
+      "number": "98",
+      "scryfallId": "c3aa2926-050c-460d-b26d-e44a39258dcc",
+      "count": 1
+    },
+    {
+      "name": "Etali, Primal Storm",
+      "setCode": "BLC",
+      "number": "196",
+      "scryfallId": "8dd1b0e5-b197-4e8a-a34f-e0b16a928fb0",
+      "count": 1
+    },
+    {
+      "name": "Prosperous Bandit",
+      "setCode": "BLC",
+      "number": "25",
+      "scryfallId": "6b3a7194-25e8-4639-a490-96e9cfce0f84",
+      "count": 1
+    },
+    {
+      "name": "Pyreswipe Hawk",
+      "setCode": "BLC",
+      "number": "26",
+      "scryfallId": "0cf88f89-9490-4477-b632-85c513e8c749",
+      "count": 1
+    },
+    {
+      "name": "Alchemist's Talent",
+      "setCode": "BLC",
+      "number": "22",
+      "scryfallId": "2fb8dace-c604-40fc-bbd4-5add5deb041a",
+      "count": 1
+    },
+    {
+      "name": "Berserkers' Onslaught",
+      "setCode": "BLC",
+      "number": "192",
+      "scryfallId": "83c64ec3-ad6d-45d8-a44a-fd557d1ad2bf",
+      "count": 1
+    },
+    {
+      "name": "Outpost Siege",
+      "setCode": "BLC",
+      "number": "199",
+      "scryfallId": "51f8c63e-8778-43c5-9093-f419442295cf",
+      "count": 1
+    },
+    {
+      "name": "Rain of Riches",
+      "setCode": "BLC",
+      "number": "200",
+      "scryfallId": "299f81b5-20eb-465b-bd36-2acd80a4f37c",
+      "count": 1
+    },
+    {
+      "name": "Chaos Warp",
+      "setCode": "BLC",
+      "number": "115",
+      "scryfallId": "7a050532-1e75-4212-acb0-ec740378af10",
+      "count": 1
+    },
+    {
+      "name": "Sunbird's Invocation",
+      "setCode": "BLC",
+      "number": "116",
+      "scryfallId": "1512eddf-7a24-4f0a-967f-85e51cc08907",
+      "count": 1
+    },
+    {
+      "name": "Gratuitous Violence",
+      "setCode": "BLC",
+      "number": "197",
+      "scryfallId": "bab5985d-636e-41e3-8138-3e108eef8221",
+      "count": 1
+    },
+    {
+      "name": "Warstorm Surge",
+      "setCode": "BLC",
+      "number": "117",
+      "scryfallId": "604a6feb-0586-479c-a7b9-60abe9a13eb1",
+      "count": 1
+    },
+    {
+      "name": "Starstorm",
+      "setCode": "BLC",
+      "number": "203",
+      "scryfallId": "a5f3ab82-2a24-4c6c-bdd9-f2bd5adca144",
+      "count": 1
+    },
+    {
+      "name": "Lotus Cobra",
+      "setCode": "BLC",
+      "number": "229",
+      "scryfallId": "3e9cc3c4-82e2-43ba-892d-91836e6ac6fc",
+      "count": 1
+    },
+    {
+      "name": "Evercoat Ursine",
+      "setCode": "BLC",
+      "number": "30",
+      "scryfallId": "b299d768-b171-47e5-b69d-82ce13917c43",
+      "count": 1
+    },
+    {
+      "name": "Brightcap Badger // Fungus Frolic",
+      "setCode": "BLC",
+      "number": "28",
+      "scryfallId": "0e843102-b8cc-4bc8-872e-79924197f4cc",
+      "count": 1
+    },
+    {
+      "name": "Trailtracker Scout",
+      "setCode": "BLC",
+      "number": "35",
+      "scryfallId": "36ee967a-3cac-4fff-b616-ec2557c676f2",
+      "count": 1
+    },
+    {
+      "name": "Thickest in the Thicket",
+      "setCode": "BLC",
+      "number": "34",
+      "scryfallId": "821f01e4-082e-424a-ae77-4053da893eb2",
+      "count": 1
+    },
+    {
+      "name": "Ghalta, Primal Hunger",
+      "setCode": "BLC",
+      "number": "220",
+      "scryfallId": "ef6a7dc0-35c2-4300-b0c5-28b04706291f",
+      "count": 1
+    },
+    {
+      "name": "Esika's Chariot",
+      "setCode": "BLC",
+      "number": "215",
+      "scryfallId": "1f2514c2-c0c7-44f3-ab9d-48b227f039db",
+      "count": 1
+    },
+    {
+      "name": "Unnatural Growth",
+      "setCode": "BLC",
+      "number": "245",
+      "scryfallId": "5a9d47cc-157b-4070-ae00-da1c5d7b94de",
+      "count": 1
+    },
+    {
+      "name": "Greater Good",
+      "setCode": "BLC",
+      "number": "223",
+      "scryfallId": "debe9258-209a-44cb-99e9-49affd02aa32",
+      "count": 1
+    },
+    {
+      "name": "Kodama of the East Tree",
+      "setCode": "BLC",
+      "number": "227",
+      "scryfallId": "2ee1d489-0980-444e-8b07-107be791b76e",
+      "count": 1
+    },
+    {
+      "name": "Grothama, All-Devouring",
+      "setCode": "BLC",
+      "number": "224",
+      "scryfallId": "08b5301b-9f3c-4fb2-a308-a47a16c08fc0",
+      "count": 1
+    },
+    {
+      "name": "Rampaging Baloths",
+      "setCode": "BLC",
+      "number": "233",
+      "scryfallId": "e738d6f6-2da1-4c53-b32f-65e8a1f806a2",
+      "count": 1
+    },
+    {
+      "name": "Bootleggers' Stash",
+      "setCode": "BLC",
+      "number": "207",
+      "scryfallId": "c10525b5-067c-4a30-a069-875f11f2ff19",
+      "count": 1
+    },
+    {
+      "name": "Primeval Bounty",
+      "setCode": "BLC",
+      "number": "232",
+      "scryfallId": "5e0577c4-fc62-4222-9e32-b48c58e47462",
+      "count": 1
+    },
+    {
+      "name": "Gilded Lotus",
+      "setCode": "BLC",
+      "number": "271",
+      "scryfallId": "725cb5db-d4b6-453b-9a10-4ab7d98e1023",
+      "count": 1
+    },
+    {
+      "name": "Spine of Ish Sah",
+      "setCode": "BLC",
+      "number": "285",
+      "scryfallId": "033b1ee0-494f-4881-8bdf-f9436d58fd66",
+      "count": 1
+    },
+    {
+      "name": "Temple of Abandon",
+      "setCode": "BLC",
+      "number": "338",
+      "scryfallId": "59866586-8a4c-464e-8273-2ec06f29d28e",
+      "count": 1
+    },
+    {
+      "name": "Karplusan Forest",
+      "setCode": "BLC",
+      "number": "314",
+      "scryfallId": "bf999ad0-ec64-4bbc-b0c3-fc0946cf65de",
+      "count": 1
+    },
+    {
+      "name": "Exotic Orchard",
+      "setCode": "BLC",
+      "number": "131",
+      "scryfallId": "e6d8d98d-29b2-4ca2-bbda-4db2e8f6ae0b",
+      "count": 1
+    },
+    {
+      "name": "Sheltered Thicket",
+      "setCode": "BLC",
+      "number": "330",
+      "scryfallId": "3bd9e0e1-91b7-4b20-bbd2-f2c8fd064565",
+      "count": 1
+    },
+    {
+      "name": "Game Trail",
+      "setCode": "BLC",
+      "number": "306",
+      "scryfallId": "e42e3260-33d7-4cee-8cac-61ed006abf3e",
+      "count": 1
+    },
+    {
+      "name": "Raging Ravine",
+      "setCode": "BLC",
+      "number": "324",
+      "scryfallId": "da09a99b-af20-4294-a4a6-cb000dae9d73",
+      "count": 1
+    },
+    {
+      "name": "Copperline Gorge",
+      "setCode": "BLC",
+      "number": "301",
+      "scryfallId": "c25daaa2-2a04-4fb0-8db3-6e564c26fadc",
+      "count": 1
+    },
+    {
+      "name": "Mossfire Valley",
+      "setCode": "BLC",
+      "number": "316",
+      "scryfallId": "ef16ac09-fb6c-41c6-bd81-5074dc30e866",
+      "count": 1
+    },
+    {
+      "name": "Cinder Glade",
+      "setCode": "BLC",
+      "number": "299",
+      "scryfallId": "2c75c411-b5a4-40ad-ad78-e49e37891024",
+      "count": 1
+    },
+    {
+      "name": "Rootbound Crag",
+      "setCode": "BLC",
+      "number": "326",
+      "scryfallId": "822bb322-1513-4288-befa-a7f27dd14253",
+      "count": 1
+    },
+    {
+      "name": "Mosswort Bridge",
+      "setCode": "BLC",
+      "number": "317",
+      "scryfallId": "28b0c20f-6727-462a-bdfe-457e487f11d3",
+      "count": 1
+    },
+    {
+      "name": "Blasphemous Act",
+      "setCode": "BLC",
+      "number": "114",
+      "scryfallId": "fb01696a-855c-45af-804c-d41acb6496e1",
+      "count": 1
+    },
+    {
+      "name": "Llanowar Loamspeaker",
+      "setCode": "BLC",
+      "number": "228",
+      "scryfallId": "0dba8ffb-b7b1-411e-90c5-070b7a888e3f",
+      "count": 1
+    },
+    {
+      "name": "Tendershoot Dryad",
+      "setCode": "BLC",
+      "number": "242",
+      "scryfallId": "3a60bdb4-53b3-46f2-b7a1-7954117b42a1",
+      "count": 1
+    },
+    {
+      "name": "Goreclaw, Terror of Qal Sisma",
+      "setCode": "BLC",
+      "number": "222",
+      "scryfallId": "de8a64e5-9986-4692-b173-43475f4b5005",
+      "count": 1
+    },
+    {
+      "name": "Path of Discovery",
+      "setCode": "BLC",
+      "number": "231",
+      "scryfallId": "5f0dad60-90c2-41e7-bf85-4cb1343b4a9d",
+      "count": 1
+    },
+    {
+      "name": "Decimate",
+      "setCode": "BLC",
+      "number": "251",
+      "scryfallId": "ed38da33-c230-4eec-b7c7-3b0c5cdf727a",
+      "count": 1
+    },
+    {
+      "name": "Rolling Hamsphere",
+      "setCode": "BLC",
+      "number": "39",
+      "scryfallId": "04d6e7f2-fb69-477c-b4f1-8a97485dbf32",
+      "count": 1
+    },
+    {
+      "name": "Teapot Slinger",
+      "setCode": "BLB",
+      "number": "157",
+      "scryfallId": "30506844-349f-4b68-8cc1-d028c1611cc7",
+      "count": 1
+    },
+    {
+      "name": "Explore",
+      "setCode": "BLC",
+      "number": "216",
+      "scryfallId": "18e5fdee-1ec4-44a2-b84c-35897f1d2912",
+      "count": 1
+    },
+    {
+      "name": "Farseek",
+      "setCode": "BLC",
+      "number": "119",
+      "scryfallId": "6c41b3c9-bbed-447d-a952-250bb7091a9e",
+      "count": 1
+    },
+    {
+      "name": "Cultivate",
+      "setCode": "BLC",
+      "number": "212",
+      "scryfallId": "2d378437-4fc1-4004-a49a-98d7bac36ef5",
+      "count": 1
+    },
+    {
+      "name": "Grumgully, the Generous",
+      "setCode": "BLC",
+      "number": "253",
+      "scryfallId": "d8d7ac51-450e-473e-93e1-3fa9b3b6e2d4",
+      "count": 1
+    },
+    {
+      "name": "Wandertale Mentor",
+      "setCode": "BLB",
+      "number": "240",
+      "scryfallId": "8c399a55-d02e-41ed-b827-8784b738c118",
+      "count": 1
+    },
+    {
+      "name": "Thought Vessel",
+      "setCode": "BLC",
+      "number": "289",
+      "scryfallId": "b7a24bfc-bae0-4b21-9054-68723a1adeae",
+      "count": 1
+    },
+    {
+      "name": "Arcane Signet",
+      "setCode": "BLC",
+      "number": "127",
+      "scryfallId": "28180667-cc1e-4f64-9a69-00425ef85ba0",
+      "count": 1
+    },
+    {
+      "name": "Wooded Ridgeline",
+      "setCode": "BLC",
+      "number": "353",
+      "scryfallId": "aabe97cd-b627-4620-8051-8f54a5d97328",
+      "count": 1
+    },
+    {
+      "name": "Big Score",
+      "setCode": "BLC",
+      "number": "193",
+      "scryfallId": "243b460e-e67a-40d7-a874-a61fdb011c5a",
+      "count": 1
+    },
+    {
+      "name": "Abrade",
+      "setCode": "BLC",
+      "number": "191",
+      "scryfallId": "c1466ae6-9dbc-4ead-844b-9b1ba7274baf",
+      "count": 1
+    },
+    {
+      "name": "Rampant Growth",
+      "setCode": "BLC",
+      "number": "234",
+      "scryfallId": "d6e4e354-dee5-4c9d-960d-9847fca97c7a",
+      "count": 1
+    },
+    {
+      "name": "Sakura-Tribe Elder",
+      "setCode": "BLC",
+      "number": "236",
+      "scryfallId": "3696297a-b068-4e89-a62c-6cd5ad437618",
+      "count": 1
+    },
+    {
+      "name": "Beast Within",
+      "setCode": "BLC",
+      "number": "206",
+      "scryfallId": "601c59cf-f3df-4003-9ae9-613a1d4a620b",
+      "count": 1
+    },
+    {
+      "name": "Garruk's Packleader",
+      "setCode": "BLC",
+      "number": "218",
+      "scryfallId": "109dee37-5de5-40fa-9405-8645be6c5076",
+      "count": 1
+    },
+    {
+      "name": "Harmonize",
+      "setCode": "BLC",
+      "number": "120",
+      "scryfallId": "bb27bd6f-dec5-4e05-b228-d606a03380ad",
+      "count": 1
+    },
+    {
+      "name": "Garruk's Uprising",
+      "setCode": "BLC",
+      "number": "219",
+      "scryfallId": "0d229647-ffe9-4428-b4d6-a318108fc550",
+      "count": 1
+    },
+    {
+      "name": "Gruul Signet",
+      "setCode": "BLC",
+      "number": "273",
+      "scryfallId": "1e71ad66-28ae-4cd6-ac71-d8710e9ea9cd",
+      "count": 1
+    },
+    {
+      "name": "Burnished Hart",
+      "setCode": "BLC",
+      "number": "266",
+      "scryfallId": "2a7f80b8-e634-4770-b6d1-bdc05e4cbb69",
+      "count": 1
+    },
+    {
+      "name": "Hedron Archive",
+      "setCode": "BLC",
+      "number": "275",
+      "scryfallId": "228ce785-033c-4973-89c7-4616a5b9c9d2",
+      "count": 1
+    },
+    {
+      "name": "Fellwar Stone",
+      "setCode": "BLC",
+      "number": "269",
+      "scryfallId": "e99c4fec-eb21-4288-a12f-1c58c4946bae",
+      "count": 1
+    },
+    {
+      "name": "Thran Dynamo",
+      "setCode": "BLC",
+      "number": "290",
+      "scryfallId": "6455b185-aa5e-45e1-951e-f6eef517daf2",
+      "count": 1
+    },
+    {
+      "name": "Sol Ring",
+      "setCode": "BLC",
+      "number": "129",
+      "scryfallId": "fff440c0-7e6a-46c2-9989-f1b5af20fd44",
+      "count": 1
+    },
+    {
+      "name": "Mind Stone",
+      "setCode": "BLC",
+      "number": "280",
+      "scryfallId": "5cf95476-27ed-487d-8459-c97a921bb808",
+      "count": 1
+    },
+    {
+      "name": "Talisman of Impulse",
+      "setCode": "BLC",
+      "number": "287",
+      "scryfallId": "ce42eaf0-dfb5-45b6-9ae9-3a73275fcbbb",
+      "count": 1
+    },
+    {
+      "name": "Terramorphic Expanse",
+      "setCode": "BLC",
+      "number": "345",
+      "scryfallId": "21bb96d8-483c-4fde-97ea-08be9570c289",
+      "count": 1
+    },
+    {
+      "name": "Path of Ancestry",
+      "setCode": "BLC",
+      "number": "322",
+      "scryfallId": "821cb722-146d-447e-907d-dc97baa5bc4f",
+      "count": 1
+    },
+    {
+      "name": "Gruul Turf",
+      "setCode": "BLC",
+      "number": "310",
+      "scryfallId": "32a29fdf-12f0-4932-9a41-faa18cd56b44",
+      "count": 1
+    },
+    {
+      "name": "Evolving Wilds",
+      "setCode": "BLC",
+      "number": "302",
+      "scryfallId": "516d6669-929e-4884-ae92-9a98cb7f9376",
+      "count": 1
+    },
+    {
+      "name": "Forgotten Cave",
+      "setCode": "BLC",
+      "number": "305",
+      "scryfallId": "e8ae2de4-0460-40b4-aa41-70f95919923e",
+      "count": 1
+    },
+    {
+      "name": "Tranquil Thicket",
+      "setCode": "BLC",
+      "number": "350",
+      "scryfallId": "bdf8439b-a31e-49d4-981a-d9532f83c370",
+      "count": 1
+    },
+    {
+      "name": "Command Tower",
+      "setCode": "BLC",
+      "number": "130",
+      "scryfallId": "63a39996-48b7-42bb-9759-a42382ee0468",
+      "count": 1
+    },
+    {
+      "name": "Reliquary Tower",
+      "setCode": "BLC",
+      "number": "132",
+      "scryfallId": "c4bb10b5-13ee-43b9-8d5f-4ef812373d20",
+      "count": 1
+    },
+    {
+      "name": "Mountain",
+      "setCode": "BLB",
+      "number": "375",
+      "scryfallId": "4b827c54-8bfe-4ef5-830e-e17b8690bbe7",
+      "count": 4
+    },
+    {
+      "name": "Mountain",
+      "setCode": "BLB",
+      "number": "376",
+      "scryfallId": "62aaa129-69ff-4e22-861e-b2efd1cd5a10",
+      "count": 4
+    },
+    {
+      "name": "Forest",
+      "setCode": "BLB",
+      "number": "377",
+      "scryfallId": "43b3be4a-973d-4aeb-a94e-37e2710ac178",
+      "count": 5
+    },
+    {
+      "name": "Forest",
+      "setCode": "BLB",
+      "number": "378",
+      "scryfallId": "bddc66f7-4e94-4857-ba7d-6b0083d0bfa0",
+      "count": 5
+    }
+  ]
+}

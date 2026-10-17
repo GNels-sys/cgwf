@@ -1,0 +1,40 @@
+# Fly app for the rules engine spike. Separate app from "cgwf" so the Java service can be sized,
+# deployed and rolled back on its own. Deploy from this folder:
+#   fly deploy --remote-only --ha=false
+app = "cgwf-engine"
+primary_region = "lax"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8081"
+  CGWF_LAZY_CARDS = "true"
+  CGWF_PROMPT_TIMEOUT_MS = "600000"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8081
+  # After the spike: the machine stops when idle and starts on the first connection (cold boot
+  # ~20 s, see README). Stage 1 switches this to "off" + 1 while games are live, because a stopped
+  # machine loses every game in progress (the engine keeps games in RAM only).
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.tcp_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
