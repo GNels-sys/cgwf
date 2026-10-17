@@ -18,10 +18,14 @@ import forge.game.card.CardLists;
 import forge.game.card.CardUtil;
 import forge.game.combat.Combat;
 import forge.game.combat.CombatUtil;
+import forge.game.phase.PhaseHandler;
+import forge.game.phase.PhaseType;
 import forge.game.player.DelayedReveal;
 import forge.game.player.Player;
 import forge.game.player.PlayerActionConfirmMode;
 import forge.game.spellability.SpellAbility;
+import forge.game.spellability.SpellAbilityStackInstance;
+import forge.game.zone.MagicStack;
 import forge.game.zone.ZoneType;
 import forge.util.collect.FCollectionView;
 
@@ -32,12 +36,13 @@ import java.util.Map;
 
 /**
  * The human seat. Forge asks a {@code PlayerController} ~110 kinds of questions; this class turns
- * the ones the spike models into JSON prompts and blocks until the seat answers. Everything it does
- * not model (and every prompt nobody answers: disconnect, timeout) falls through to Forge's own AI,
- * which is what {@code super} is. Stage 1 widens the modelled set prompt by prompt.
+ * the ones modelled so far into JSON prompts and blocks until the seat answers. Everything it does
+ * not model (and every prompt nobody answers: absent seat, timeout) falls through to Forge's own
+ * AI, which is what {@code super} is. The modelled set grows prompt by prompt.
  *
- * Modelled here: priority ("choose an ability to play", mana paid automatically), targets,
- * declare attackers, declare blockers, single choice, multiple choice, confirm, mulligan + bottom.
+ * Modelled: priority ("choose an ability to play", mana paid automatically, with Arena-style
+ * auto-pass from the seat's stops), targets, declare attackers, declare blockers, single choice,
+ * multiple choice, confirm, mulligan + bottom.
  */
 public final class BridgeController extends PlayerControllerAi {
     private final BridgeSession session;
@@ -51,13 +56,13 @@ public final class BridgeController extends PlayerControllerAi {
 
     public BridgeSession session() { return session; }
 
-    private boolean autopilot() { return session.isDisconnected(); }
+    private boolean autopilot() { return session.isAbsent(); }
 
     private JsonObject prompt(String kind, String title) {
         JsonObject p = new JsonObject();
         p.addProperty("prompt", kind);
         p.addProperty("title", title);
-        p.add("view", SeatView.build(game, player));
+        p.add("view", session.viewFor(player));
         return p;
     }
 
@@ -71,16 +76,36 @@ public final class BridgeController extends PlayerControllerAi {
         }
         if (autopilot()) return super.chooseSpellAbilityToPlay();
 
+        PhaseHandler ph = game.getPhaseHandler();
+        PhaseType phase = ph.getPhase();
+        MagicStack stack = game.getStack();
+        boolean stackTopNotMine = false;
+        if (!stack.isEmpty()) {
+            SpellAbilityStackInstance top = stack.peek();
+            stackTopNotMine = top == null || top.getActivatingPlayer() != player;
+        }
+        if (!session.stopsAt(phase == null ? "" : phase.name(), ph.isPlayerTurn(player), stackTopNotMine, ph.getTurn())) {
+            return null; // auto-pass
+        }
+
         List<SpellAbility> legal = legalAbilities();
         JsonObject p = prompt("priority", "You have priority");
         JsonArray opts = new JsonArray();
         for (int i = 0; i < legal.size(); i++) opts.add(abilityJson(i, legal.get(i)));
         p.add("options", opts);
+        p.addProperty("phase", phase == null ? null : phase.name());
+        p.addProperty("myTurn", ph.isPlayerTurn(player));
+        p.addProperty("stackEmpty", stack.isEmpty());
+        p.addProperty("stackTopMine", !stack.isEmpty() && !stackTopNotMine);
 
         JsonObject a = session.ask(p);
         if (a == null) return super.chooseSpellAbilityToPlay();
         if (isTrue(a, "concede")) {
             player.concede();
+            return null;
+        }
+        if (a.has("passUntilTurn") && !a.get("passUntilTurn").isJsonNull()) {
+            session.passUntilTurn(a.get("passUntilTurn").getAsInt());
             return null;
         }
         if (!a.has("option") || a.get("option").isJsonNull()) return null; // pass
@@ -169,6 +194,7 @@ public final class BridgeController extends PlayerControllerAi {
             p.addProperty("max", max);
             p.add("options", objectsJson(candidates));
             JsonObject a = autopilot() ? null : session.ask(p);
+            if (a != null && isTrue(a, "cancel")) return false;
             List<Integer> picks = a == null ? firstN(Math.max(1, min), candidates.size()) : indices(a, "options");
             for (int idx : picks) {
                 if (idx >= 0 && idx < candidates.size()) sa.getTargets().add(candidates.get(idx));
@@ -204,7 +230,10 @@ public final class BridgeController extends PlayerControllerAi {
         for (GameEntity d : defenders) {
             JsonObject dj = SeatView.entityRef(d);
             if (d instanceof Player pl) dj.addProperty("life", pl.getLife());
-            if (d instanceof Card dc) dj.addProperty("name", dc.getName());
+            if (d instanceof Card dc) {
+                dj.addProperty("name", dc.getName());
+                dj.addProperty("controller", dc.getController() == null ? null : dc.getController().getId());
+            }
             defs.add(dj);
         }
         p.add("defenders", defs);
@@ -324,7 +353,7 @@ public final class BridgeController extends PlayerControllerAi {
         if (cardToShow != null) p.add("card", SeatView.card(cardToShow, player));
         JsonObject a = session.ask(p);
         if (a == null) return super.confirmAction(sa, mode, message, options, cardToShow, params);
-        if (a.has("confirm")) return a.get("confirm").getAsBoolean();
+        if (a.has("confirm") && !a.get("confirm").isJsonNull()) return a.get("confirm").getAsBoolean();
         return a.has("option") && !a.get("option").isJsonNull() && a.get("option").getAsInt() == 0;
     }
 
@@ -338,7 +367,7 @@ public final class BridgeController extends PlayerControllerAi {
         p.add("hand", objectsJson(new ArrayList<>(player.getCardsIn(ZoneType.Hand))));
         JsonObject a = session.ask(p);
         if (a == null) return super.mulliganKeepHand(firstPlayer, cardsToReturn);
-        return !a.has("keep") || a.get("keep").getAsBoolean();
+        return !a.has("keep") || a.get("keep").isJsonNull() || a.get("keep").getAsBoolean();
     }
 
     @Override
@@ -349,6 +378,7 @@ public final class BridgeController extends PlayerControllerAi {
         JsonObject p = prompt("chooseMany", "Put " + cardsToReturn + " card(s) on the bottom of your library");
         p.addProperty("min", cardsToReturn);
         p.addProperty("max", cardsToReturn);
+        p.addProperty("reason", "mulligan");
         p.add("options", objectsJson(cards));
         JsonObject a = session.ask(p);
         if (a == null) return super.tuckCardsViaMulligan(hand, cardsToReturn);
@@ -369,7 +399,7 @@ public final class BridgeController extends PlayerControllerAi {
             if (o instanceof Card c) {
                 j = SeatView.card(c, player);
                 j.addProperty("kind", "card");
-                if (!j.has("name")) j.addProperty("name", c.getName());
+                if (!j.has("name")) SeatView.addIdentity(j, c);
             } else if (o instanceof GameEntity e) {
                 j = SeatView.entityRef(e);
             } else {

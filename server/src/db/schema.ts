@@ -168,6 +168,10 @@ export const rooms = sqliteTable(
     lastSeq: integer("last_seq").notNull().default(0),
     /** Set when the host starts a rematch: the room everyone should move to. */
     nextRoomId: text("next_room_id"),
+    /** Rules-engine table: the Forge service runs the game; the event log holds EngineLog/EngineAnswer rows. */
+    engine: integer("engine", { mode: "boolean" }).notNull().default(false),
+    /** JSON (seats with Forge player ids, card id -> printing id map) so a restart can still render the table. */
+    engineState: text("engine_state"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

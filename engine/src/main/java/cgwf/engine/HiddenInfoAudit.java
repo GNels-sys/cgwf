@@ -1,5 +1,7 @@
 package cgwf.engine;
 
+import cgwf.engine.bridge.BridgeLobbyPlayer;
+import cgwf.engine.bridge.BridgeSession;
 import com.google.common.eventbus.Subscribe;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -21,15 +23,18 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * Runs a four-seat AI game and, at every priority pass, step change and zone change, serialises
- * the view of every seat plus a spectator and checks that none of them contains a card that sits
- * in any library or in another seat's hand: not its id, not a name that only such a card could
- * have supplied, and never more than the public count. The JUnit test in src/test wraps this.
+ * Runs a four-seat game (three Forge AIs and one scripted human seat driven through the real
+ * {@code BridgeController}) and, at every priority pass, step change, zone change and every
+ * prompt the human seat receives, serialises the view of every seat plus a spectator and checks
+ * that none of them contains a card that sits in any library or in another seat's hand: not its
+ * id, not a name that only such a card could have supplied, and never more than the public
+ * count. The JUnit test in src/test wraps this.
  */
 public final class HiddenInfoAudit {
-    public record Result(int views, int events, int turns, List<String> leaks) { }
+    public record Result(int views, int events, int prompts, int turns, List<String> leaks) { }
 
     private static final int MAX_LEAKS = 50;
 
@@ -37,12 +42,44 @@ public final class HiddenInfoAudit {
 
     public static Result run(Path decksDir, long seed, int maxTurns) throws IOException {
         List<DeckLoader.Loaded> decks = DeckLoader.loadDir(decksDir, 4);
+        List<String> leaks = new ArrayList<>();
+        int[] counts = new int[3]; // views, events, prompts
+
+        // Seat 0 is a human driven by a scripted policy on another thread; the game thread blocks in ask().
+        LinkedBlockingQueue<JsonObject> prompts = new LinkedBlockingQueue<>();
+        BridgeSession human = new BridgeSession(0, 30_000);
+        human.attach(frame -> {
+            if ("prompt".equals(frame.has("type") ? frame.get("type").getAsString() : "")) prompts.add(frame);
+        });
+
         List<GameFactory.Seat> seats = new ArrayList<>();
-        for (DeckLoader.Loaded d : decks) seats.add(new GameFactory.Seat("Seat " + (seats.size() + 1), d.deck(), GameFactory.ai("Seat " + (seats.size() + 1))));
+        for (int i = 0; i < decks.size(); i++) {
+            String name = "Seat " + (i + 1);
+            seats.add(new GameFactory.Seat(name, decks.get(i).deck(), i == 0 ? new BridgeLobbyPlayer(name, human) : GameFactory.ai(name)));
+        }
         GameFactory.Created created = GameFactory.create(seats, seed);
         Game game = created.game();
-        List<String> leaks = new ArrayList<>();
-        int[] counts = new int[2];
+        human.setViewBuilder(p -> SeatView.build(game, p));
+        Player humanPlayer = null;
+        for (Player p : game.getRegisteredPlayers()) if (p.getController() instanceof cgwf.engine.bridge.BridgeController) humanPlayer = p;
+        final Player hp = humanPlayer;
+
+        Thread answerer = new Thread(() -> {
+            try {
+                while (true) {
+                    JsonObject prompt = prompts.take();
+                    // The game thread is parked inside ask(): reading the game here is safe.
+                    counts[2]++;
+                    if (prompt.has("view") && prompt.get("view").isJsonObject()) {
+                        leaks.addAll(check(game, hp, prompt.getAsJsonObject("view")));
+                    }
+                    human.answer(ScriptedSeat.answer(prompt, hp == null ? -1 : hp.getId()));
+                }
+            } catch (InterruptedException ignored) { }
+        }, "audit-human");
+        answerer.setDaemon(true);
+        answerer.start();
+
         Object auditor = new Object() {
             @Subscribe public void onPriority(GameEventPlayerPriority e) { audit(); }
             @Subscribe public void onPhase(GameEventTurnPhase e) { audit(); }
@@ -62,8 +99,12 @@ public final class HiddenInfoAudit {
         Metrics metrics = new Metrics(game, maxTurns);
         game.subscribeToEvents(auditor);
         game.subscribeToEvents(metrics);
-        created.match().startGame(game);
-        return new Result(counts[0], counts[1], metrics.turns(), leaks);
+        try {
+            created.match().startGame(game);
+        } finally {
+            answerer.interrupt();
+        }
+        return new Result(counts[0], counts[1], counts[2], metrics.turns(), leaks);
     }
 
     /** Pure check of one serialised view against the true state. */

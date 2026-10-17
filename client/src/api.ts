@@ -11,7 +11,9 @@ import type {
   RoomAgentsResponse,
   ChangePasswordRequest,
   CreateDeckRequest,
+  CreateRoomRequest,
   CreateRoomResponse,
+  FeaturesResponse,
   DeckAnalysisResponse,
   DeckStatsResponse,
   MyRoomsResponse,
@@ -262,8 +264,9 @@ export const api = {
     },
   },
 
+  features: () => request<FeaturesResponse>("/api/features"),
   rooms: {
-    create: () => request<CreateRoomResponse>("/api/rooms", { method: "POST", json: {} }),
+    create: (opts: CreateRoomRequest = {}) => request<CreateRoomResponse>("/api/rooms", { method: "POST", json: opts }),
     get: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}`),
     join: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}/join`, { method: "POST", json: {} }),
     mine: () => request<MyRoomsResponse>("/api/rooms/mine"),

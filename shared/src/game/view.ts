@@ -1,4 +1,5 @@
 import type { CardPrinting } from "../cards.js";
+import type { EngineInfo } from "../engine.js";
 import type { AttachmentEffect, CardInstance, CardModifier, CombatState, CustomToken, EliminationCause, GameState, LogEntry, ManaPool, ManualAnthem, PendingTrigger, PlayerId, Row, StackItem, Step, WinAdvisory, ZoneRef } from "./types.js";
 
 /**
@@ -30,6 +31,8 @@ export interface ViewCard {
   public: boolean;
   /** Library cards only: 0 = top. */
   position?: number;
+  /** Engine tables only: the rules engine's current power/toughness, damage and summoning sickness. */
+  engine?: { power: number | null; toughness: number | null; damage: number; sick: boolean } | undefined;
 }
 
 export interface ViewPlayer {
@@ -73,6 +76,8 @@ export interface PlayerView {
   drewForTurn: boolean;
   combat: CombatState | null;
   winAdvisories: WinAdvisory[];
+  /** Present on rules-engine tables only (shared/engine.ts). */
+  engine?: EngineInfo | undefined;
 }
 
 function identityVisible(c: CardInstance, viewer: PlayerId | null): boolean {

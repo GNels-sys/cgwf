@@ -31,6 +31,7 @@ import { presence } from "./social/presence.js";
 import { SocialService } from "./social/service.js";
 import { SubmissionService } from "./social/submissions.js";
 import { RoomManager } from "./rooms/live.js";
+import { EngineClient } from "./engine/client.js";
 import { Ingestor } from "./scryfall/ingest.js";
 import { NameIndex } from "./search/index.js";
 
@@ -47,6 +48,8 @@ export interface AppContext {
   social: SocialService;
   submissions: SubmissionService;
   singles: SinglesClient;
+  /** Rules engine control socket (enabled only when ENGINE_URL is set). */
+  engine: EngineClient;
 }
 
 export interface BuildOptions {
@@ -62,6 +65,9 @@ export interface BuildOptions {
   /** Phase 7: tests pass a ScriptedLlm (or null for a dry run) and force the feature on. */
   agentLlm?: import("./agents/llm.js").Llm | null;
   agentsEnabled?: boolean;
+  /** Rules engine: tests point this at a fake engine WebSocket server; production reads config. */
+  engineUrl?: string;
+  engineToken?: string;
 }
 
 /** Build the Fastify app with every route wired. Listening is the caller's job. */
@@ -88,7 +94,9 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   await app.register(rateLimit, { max: 300, timeWindow: "1 minute" });
   // One WebSocket per connected client; the largest frame is a token with a full printing.
   await app.register(websocket, { options: { maxPayload: 256 * 1024 } });
-  const roomsManager = new RoomManager(handle, app.log);
+  const engine = new EngineClient({ url: opts.engineUrl ?? config.engineUrl, token: opts.engineToken ?? config.engineToken, log: app.log });
+  const roomsManager = new RoomManager(handle, app.log, engine.enabled ? { client: engine, index } : null);
+  engine.start();
   const spellbook = new SpellbookClient(app.log, opts.spellbookFetch);
   const analyzer = new DeckAnalyzer(handle, spellbook, app.log);
 
@@ -151,8 +159,9 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   app.addHook("onClose", async () => {
     agents.close();
     roomsManager.close();
+    engine.close();
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, agents, social, submissions, singles };
+  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, agents, social, submissions, singles, engine };
 }

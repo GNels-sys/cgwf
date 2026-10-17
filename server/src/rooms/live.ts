@@ -30,6 +30,17 @@ import { rowToPrinting } from "../scryfall/map.js";
 import { newRoomCode } from "./codes.js";
 import { describeDeck, loadDeckForGame } from "./deck.js";
 import { loadSettings } from "../settings.js";
+import type { EngineClient, EngineFrame } from "../engine/client.js";
+import { PrintingMapper } from "../engine/mapping.js";
+import type { NameIndex } from "../search/index.js";
+import { EngineRoomError, EngineTable, type RoomPort } from "./engineTable.js";
+import type { EngineAnswer, EngineStops } from "@cgwf/shared";
+
+/** What the rules-engine integration needs (null when no engine is configured). */
+export interface EngineDeps {
+  client: EngineClient;
+  index: NameIndex;
+}
 
 /**
  * In-memory runtime for rooms. The database is the source of truth
@@ -51,6 +62,8 @@ interface Conn {
   sentPrintings: Set<string>;
   /** Simple per-socket flood guard. */
   window: { start: number; count: number };
+  /** The engine table's handle on this socket (engine rooms only). */
+  port: { userId: string; sentPrintings: Set<string>; send: (msg: ServerMessage) => void };
 }
 
 const MSGS_PER_SECOND = 25;
@@ -88,13 +101,45 @@ export class LiveRoom {
   private stateListeners = new Set<(state: GameState) => void>();
   /** Agents seated in this room that have a live runner, and whether a decision is in flight. */
   private agentPresence = new Map<string, { thinking: boolean }>();
+  /** Rules-engine tables: the relay to the Forge service. Null on classic tables. */
+  readonly engineTable: EngineTable | null;
 
   constructor(
     private readonly handle: DbHandle,
     private readonly log: FastifyBaseLogger,
     private row: RoomRow,
+    engineDeps: EngineDeps | null = null,
   ) {
     this.id = row.id;
+    this.engineTable = row.engine && engineDeps ? new EngineTable(this.port(), engineDeps.client, new PrintingMapper(handle, engineDeps.index)) : null;
+  }
+
+  /** The narrow face the engine table sees of this room. */
+  private port(): RoomPort {
+    return {
+      id: this.id,
+      handle: this.handle,
+      log: this.log,
+      row: () => this.refreshRow(),
+      members: () => this.members(),
+      connections: () => [...this.conns].map((c) => c.port),
+      appendEngine: (actor, input, status) => this.appendEngine(actor, input, status),
+      loadedEvents: () => {
+        this.ensureLoaded();
+        return this.events;
+      },
+      saveEngineState: (json) => {
+        this.handle.db.update(rooms).set({ engineState: json, updatedAt: now() }).where(eq(rooms.id, this.id)).run();
+        this.refreshRow();
+      },
+      broadcastRoom: () => this.broadcastRoom(),
+      userName: (userId) => this.handle.db.select({ name: users.displayName }).from(users).where(eq(users.id, userId)).get()?.name ?? "Player",
+    };
+  }
+
+  /** True when the Forge rules engine runs this table instead of the manual reducer. */
+  get isEngine(): boolean {
+    return Boolean(this.row.engine);
   }
 
   get code(): string {
@@ -118,7 +163,8 @@ export class LiveRoom {
     if (this.loaded) return;
     const rows = this.handle.db.select().from(roomEvents).where(eq(roomEvents.roomId, this.id)).orderBy(roomEvents.seq).all();
     this.events = rows.map((r) => ({ seq: r.seq, actor: r.actor, type: r.type, payload: JSON.parse(r.payload), ts: r.ts }) as GameEvent);
-    this.state = this.events.length ? replay(this.events, this.row.seed) : null;
+    // Engine tables keep their log as EngineLog rows; the classic reducer never runs on them.
+    this.state = this.events.length && !this.isEngine ? replay(this.events, this.row.seed) : null;
     this.loaded = true;
   }
 
@@ -180,6 +226,7 @@ export class LiveRoom {
       createdAt: row.createdAt,
       nextCode: next?.code ?? null,
       you: me ? { userId: me.userId, role: me.role, seat: me.seat } : null,
+      engine: Boolean(row.engine),
     };
   }
 
@@ -214,9 +261,12 @@ export class LiveRoom {
     const m = this.member(userId);
     if (!m) return;
     if (this.status === "playing" && m.role === "player") {
-      this.ensureLoaded();
-      const p = this.state?.players[userId];
-      if (p && !p.conceded) this.append(userId, { type: "PlayerConceded", payload: { player: userId } });
+      if (this.engineTable) this.engineTable.concede(userId);
+      else {
+        this.ensureLoaded();
+        const p = this.state?.players[userId];
+        if (p && !p.conceded) this.append(userId, { type: "PlayerConceded", payload: { player: userId } });
+      }
     }
     this.handle.db.delete(roomMembers).where(and(eq(roomMembers.roomId, this.id), eq(roomMembers.userId, userId))).run();
     if (this.row.hostUserId === userId) {
@@ -235,6 +285,22 @@ export class LiveRoom {
   }
 
   // ------------------------------------------------------------ game
+
+  /** Start the game: the rules engine for engine tables, the classic reducer otherwise. */
+  async startAny(userId: string): Promise<void> {
+    if (this.engineTable) {
+      try {
+        await this.engineTable.start(userId);
+      } catch (err) {
+        if (err instanceof EngineRoomError) throw new RoomError(err.message);
+        this.log.warn({ err }, "engine start failed");
+        throw new RoomError(err instanceof Error ? err.message : "the rules engine could not start the game");
+      }
+      return;
+    }
+    if (this.isEngine) throw new RoomError("the rules engine is not configured on this server");
+    this.start(userId);
+  }
 
   start(userId: string): void {
     const row = this.refreshRow();
@@ -256,8 +322,56 @@ export class LiveRoom {
     this.append(SYSTEM_ACTOR, { type: "GameStarted", payload });
   }
 
+  /** Engine tables: a seat answers the prompt the engine is waiting on. */
+  engineAnswer(userId: string, answer: EngineAnswer): void {
+    if (!this.engineTable) throw new RoomError("this table is not run by the rules engine");
+    if (this.status !== "playing") throw new RoomError("no game in progress");
+    try {
+      this.engineTable.answer(userId, answer);
+    } catch (err) {
+      if (err instanceof EngineRoomError) throw new RoomError(err.message);
+      throw new RoomError(err instanceof Error ? err.message : "the rules engine refused that");
+    }
+  }
+
+  engineStops(userId: string, stops: EngineStops): void {
+    if (!this.engineTable) throw new RoomError("this table is not run by the rules engine");
+    try {
+      this.engineTable.setStops(userId, stops);
+    } catch (err) {
+      if (err instanceof EngineRoomError) throw new RoomError(err.message);
+      throw err;
+    }
+  }
+
+  onEngineFrame(frame: EngineFrame): void {
+    try {
+      this.engineTable?.onFrame(frame);
+    } catch (err) {
+      this.log.error({ err, type: frame.type }, "engine frame failed");
+    }
+  }
+
+  /** Persist an engine-only event without running the reducer. */
+  private appendEngine(actor: string, input: EventInput, status?: "playing" | "ended"): GameEvent {
+    this.ensureLoaded();
+    const seq = this.events.length + 1;
+    const ev = { ...input, seq, actor, ts: Date.now() } as GameEvent;
+    this.handle.sqlite.transaction(() => {
+      this.handle.db.insert(roomEvents).values({ roomId: this.id, seq, actor, type: ev.type, payload: JSON.stringify(ev.payload), ts: ev.ts }).run();
+      const set: Partial<typeof rooms.$inferInsert> = { lastSeq: seq, updatedAt: now() };
+      if (status) set.status = status;
+      this.handle.db.update(rooms).set(set).where(eq(rooms.id, this.id)).run();
+    })();
+    this.events.push(ev);
+    this.lastActivity = Date.now();
+    this.refreshRow();
+    return ev;
+  }
+
   /** Validate, persist and apply one event from a client. */
   submit(userId: string, raw: unknown): void {
+    if (this.isEngine) throw new RoomError("the rules engine runs this table; use its prompts");
     this.ensureLoaded();
     if (this.status !== "playing") throw new RoomError("no game in progress");
     if (!this.state?.players[userId]) throw new RoomError("spectators cannot act");
@@ -288,6 +402,7 @@ export class LiveRoom {
   }
 
   undo(userId: string): void {
+    if (this.isEngine) throw new RoomError("there is no undo on a rules-engine table");
     this.ensureLoaded();
     // Allowed after the game ended too: an automatic elimination from a mistyped life total must be reversible.
     if (this.status !== "playing" && this.status !== "ended") throw new RoomError("no game in progress");
@@ -299,6 +414,7 @@ export class LiveRoom {
   }
 
   revert(userId: string, toSeq: number): void {
+    if (this.isEngine) throw new RoomError("there is no rewind on a rules-engine table");
     this.ensureLoaded();
     if (this.status !== "playing" && this.status !== "ended") throw new RoomError("no game in progress");
     if (!this.state?.players[userId]) throw new RoomError("spectators cannot revert");
@@ -356,13 +472,15 @@ export class LiveRoom {
   // ------------------------------------------------------------ sockets
 
   attach(ws: WebSocket, userId: string): Conn {
-    const conn: Conn = { ws, userId, sentPrintings: new Set(), window: { start: Date.now(), count: 0 } };
+    const sentPrintings = new Set<string>();
+    const conn: Conn = { ws, userId, sentPrintings, window: { start: Date.now(), count: 0 }, port: { userId, sentPrintings, send: (msg) => this.send(conn, msg) } };
     this.conns.add(conn);
     this.lastActivity = Date.now();
     this.join(userId);
     this.broadcastRoom();
     this.ensureLoaded();
-    if (this.state) this.sendState(conn);
+    if (this.engineTable) this.engineTable.onAttach(conn.port);
+    else if (this.state) this.sendState(conn);
     return conn;
   }
 
@@ -407,7 +525,8 @@ export class LiveRoom {
   }
 
   broadcastState(): void {
-    for (const conn of this.conns) this.sendState(conn);
+    if (this.engineTable) this.engineTable.broadcast();
+    else for (const conn of this.conns) this.sendState(conn);
     if (this.status === "ended") this.broadcastRoom();
   }
 
@@ -425,12 +544,51 @@ export class RoomManager {
   constructor(
     private readonly handle: DbHandle,
     private readonly log: FastifyBaseLogger,
+    private readonly engine: EngineDeps | null = null,
   ) {
     this.sweeper = setInterval(() => this.sweep(), 5 * 60 * 1000);
     this.sweeper.unref();
+    if (engine) {
+      // Every engine frame names its game; the game id is the room id.
+      engine.client.on("frame", (frame: EngineFrame) => {
+        if (this.closed || typeof frame.gameId !== "string") return;
+        const room = this.getById(frame.gameId);
+        room?.onEngineFrame(frame);
+      });
+      engine.client.on("open", () => {
+        if (this.closed) return;
+        for (const room of this.live.values()) room.engineTable?.onEngineReconnected();
+      });
+      engine.client.on("close", () => {
+        if (this.closed) return;
+        for (const room of this.live.values()) room.engineTable?.onEngineDown();
+      });
+    }
   }
 
+  /** Engine tables can be opened: an engine is configured and currently connected. */
+  engineAvailable(): boolean {
+    return Boolean(this.engine && this.engine.client.enabled && this.engine.client.connected);
+  }
+
+  engineConfigured(): boolean {
+    return Boolean(this.engine && this.engine.client.enabled);
+  }
+
+  getById(id: string): LiveRoom | null {
+    let room = this.live.get(id);
+    if (room) return room;
+    const row = this.handle.db.select().from(rooms).where(eq(rooms.id, id)).get();
+    if (!row) return null;
+    room = new LiveRoom(this.handle, this.log, row, this.engine);
+    this.live.set(row.id, room);
+    return room;
+  }
+
+  private closed = false;
+
   close(): void {
+    this.closed = true;
     clearInterval(this.sweeper);
     this.live.clear();
   }
@@ -442,7 +600,7 @@ export class RoomManager {
     }
   }
 
-  create(hostUserId: string): LiveRoom {
+  create(hostUserId: string, opts: { engine?: boolean } = {}): LiveRoom {
     const id = randomUUID();
     const seed = randomBytes(16).toString("hex");
     const ts = now();
@@ -451,8 +609,9 @@ export class RoomManager {
       if (!this.handle.db.select({ id: rooms.id }).from(rooms).where(eq(rooms.code, code)).get()) break;
       code = newRoomCode();
     }
+    const engine = Boolean(opts.engine);
     this.handle.sqlite.transaction(() => {
-      this.handle.db.insert(rooms).values({ id, code, hostUserId, status: "lobby", format: "commander", seed, lastSeq: 0, createdAt: ts, updatedAt: ts }).run();
+      this.handle.db.insert(rooms).values({ id, code, hostUserId, status: "lobby", format: "commander", seed, lastSeq: 0, engine, createdAt: ts, updatedAt: ts }).run();
       this.handle.db.insert(roomMembers).values({ roomId: id, userId: hostUserId, role: "player", seat: 0, deckId: null, joinedAt: ts }).run();
     })();
     return this.get(code)!;
@@ -482,19 +641,22 @@ export class RoomManager {
     }
     const members = old.members();
     this.handle.sqlite.transaction(() => {
-      this.handle.db.insert(rooms).values({ id, code, hostUserId: userId, status: "lobby", format: "commander", seed, lastSeq: 0, createdAt: ts, updatedAt: ts }).run();
+      this.handle.db.insert(rooms).values({ id, code, hostUserId: userId, status: "lobby", format: "commander", seed, lastSeq: 0, engine: Boolean(row.engine), createdAt: ts, updatedAt: ts }).run();
       for (const m of members) {
         this.handle.db.insert(roomMembers).values({ roomId: id, userId: m.userId, role: m.role, seat: m.seat, deckId: m.deckId, joinedAt: ts }).run();
       }
       this.handle.db.update(rooms).set({ nextRoomId: id, updatedAt: ts }).where(eq(rooms.id, old.id)).run();
     })();
     const next = this.get(code)!;
-    try {
-      next.start(userId);
-    } catch (err) {
-      // A deck was deleted meanwhile: the new table opens as a lobby instead of failing the rematch.
-      this.log.info({ err }, "rematch opened as a lobby");
+    if (!next.isEngine) {
+      try {
+        next.start(userId);
+      } catch (err) {
+        // A deck was deleted meanwhile: the new table opens as a lobby instead of failing the rematch.
+        this.log.info({ err }, "rematch opened as a lobby");
+      }
     }
+    // Engine rematches open as a lobby: the host presses Start (the engine call is asynchronous).
     old.broadcastRoom();
     return next;
   }
@@ -523,7 +685,7 @@ export class RoomManager {
     if (!row) return null;
     let room = this.live.get(row.id);
     if (!room) {
-      room = new LiveRoom(this.handle, this.log, row);
+      room = new LiveRoom(this.handle, this.log, row, this.engine);
       this.live.set(row.id, room);
     }
     return room;

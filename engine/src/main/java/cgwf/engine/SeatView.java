@@ -21,7 +21,7 @@ import forge.game.zone.ZoneType;
 import forge.item.IPaperCard;
 
 import java.util.List;
-import java.util.Map;
+import java.util.function.ToIntFunction;
 
 /**
  * The per-seat JSON view. The ONLY place the engine turns game state into bytes for a client,
@@ -36,10 +36,16 @@ import java.util.Map;
  */
 public final class SeatView {
     public static final int LOG_LINES = 40;
+    private static final ToIntFunction<Player> NO_SEATS = p -> -1;
 
     private SeatView() { }
 
     public static JsonObject build(Game game, Player viewer) {
+        return build(game, viewer, NO_SEATS);
+    }
+
+    /** @param seatOf maps a Forge player to the table seat the caller knows it by (-1 when unknown). */
+    public static JsonObject build(Game game, Player viewer, ToIntFunction<Player> seatOf) {
         PhaseHandler ph = game.getPhaseHandler();
         JsonObject o = new JsonObject();
         o.addProperty("type", "state");
@@ -56,7 +62,7 @@ public final class SeatView {
             o.addProperty("endReason", game.getOutcome().getWinCondition() == null ? null : game.getOutcome().getWinCondition().name());
         }
         JsonArray players = new JsonArray();
-        for (Player p : game.getRegisteredPlayers()) players.add(player(p, viewer)); // registered = includes eliminated seats
+        for (Player p : game.getRegisteredPlayers()) players.add(player(p, viewer, seatOf)); // registered = includes eliminated seats
         o.add("players", players);
         o.add("stack", stack(game));
         o.add("combat", combat(game.getCombat()));
@@ -64,9 +70,10 @@ public final class SeatView {
         return o;
     }
 
-    private static JsonObject player(Player p, Player viewer) {
+    private static JsonObject player(Player p, Player viewer, ToIntFunction<Player> seatOf) {
         JsonObject j = new JsonObject();
         j.addProperty("id", p.getId());
+        j.addProperty("seat", seatOf.applyAsInt(p));
         j.addProperty("name", p.getName());
         j.addProperty("isYou", p == viewer);
         j.addProperty("human", p.getController() instanceof cgwf.engine.bridge.BridgeController);
@@ -77,7 +84,7 @@ public final class SeatView {
         j.addProperty("libraryCount", p.getCardsIn(ZoneType.Library).size());
         j.addProperty("landsPlayedThisTurn", p.getLandsPlayedThisTurn());
         JsonObject cmdDamage = new JsonObject();
-        for (Map.Entry<Card, Integer> e : p.getCommanderDamage()) {
+        for (java.util.Map.Entry<Card, Integer> e : p.getCommanderDamage()) {
             cmdDamage.addProperty(String.valueOf(e.getKey().getId()), e.getValue());
         }
         j.add("commanderDamage", cmdDamage);
@@ -137,21 +144,24 @@ public final class SeatView {
             for (Multiset.Entry<CounterType> e : counters.entrySet()) cj.addProperty(e.getElement().getName(), e.getCount());
             j.add("counters", cj);
         }
-        if (identityVisible(c, viewer)) {
-            j.addProperty("name", c.getName());
-            String set = c.getSetCode();
-            j.addProperty("set", set);
-            j.addProperty("scryfallSet", scryfallSet(set));
-            IPaperCard pc = c.getPaperCard();
-            j.addProperty("number", pc == null ? null : pc.getCollectorNumber());
-            j.addProperty("types", c.getType().toString());
-            if (c.getManaCost() != null && !c.getManaCost().isNoCost()) j.addProperty("manaCost", c.getManaCost().getShortString());
-            if (c.isCreature()) {
-                j.addProperty("power", c.getNetPower());
-                j.addProperty("toughness", c.getNetToughness());
-            }
-        }
+        if (identityVisible(c, viewer)) addIdentity(j, c);
         return j;
+    }
+
+    /** Name, printing and stats of a card (only call this when the viewer may see the face). */
+    public static void addIdentity(JsonObject j, Card c) {
+        j.addProperty("name", c.getName());
+        String set = c.getSetCode();
+        j.addProperty("set", set);
+        j.addProperty("scryfallSet", scryfallSet(set));
+        IPaperCard pc = c.getPaperCard();
+        j.addProperty("number", pc == null ? null : pc.getCollectorNumber());
+        j.addProperty("types", c.getType().toString());
+        if (c.getManaCost() != null && !c.getManaCost().isNoCost()) j.addProperty("manaCost", c.getManaCost().getShortString());
+        if (c.isCreature()) {
+            j.addProperty("power", c.getNetPower());
+            j.addProperty("toughness", c.getNetToughness());
+        }
     }
 
     private static String scryfallSet(String forgeCode) {

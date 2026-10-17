@@ -41,6 +41,14 @@ public final class DeckLoader {
                 spec.commanders() == null ? List.of() : spec.commanders(), spec.main());
     }
 
+    /** A deck sent inline over the control socket (same shape as the files). */
+    public static DeckSpec parse(com.google.gson.JsonElement json) {
+        DeckSpec spec = GSON.fromJson(json, DeckSpec.class);
+        if (spec == null || spec.main() == null) throw new IllegalArgumentException("deck needs a main list");
+        return new DeckSpec(spec.name() == null ? "Deck" : spec.name(), spec.code(),
+                spec.commanders() == null ? List.of() : spec.commanders(), spec.main());
+    }
+
     public static Loaded build(DeckSpec spec) {
         CardDb db = FModel.getMagicDb().getCommonCards();
         Map<String, String> scryfallToForge = editionMap();

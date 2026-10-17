@@ -58,6 +58,9 @@ export const config = {
   singlesApiUrl: env("SINGLES_API_URL", ""),
   singlesApiToken: env("SINGLES_API_TOKEN", ""),
   singlesTimeoutMs: Number(env("SINGLES_TIMEOUT_MS", "4000")),
+  /** Rules engine (engine/, Fly app cgwf-engine). Unset URL = engine tables unavailable. */
+  engineUrl: env("ENGINE_URL", ""),
+  engineToken: env("ENGINE_TOKEN", ""),
   /** Hand-maintained bracket data (the Game Changers list). */
   bracketDataDir: path.resolve(env("BRACKET_DATA_DIR", path.join(serverRoot, "data", "brackets"))),
 } as const;

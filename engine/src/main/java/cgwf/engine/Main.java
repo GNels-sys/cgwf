@@ -1,6 +1,6 @@
 package cgwf.engine;
 
-import cgwf.engine.bridge.BridgeServer;
+import cgwf.engine.bridge.EngineServer;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -19,9 +19,10 @@ import java.util.Map;
  * <pre>
  *   java -jar cgwf-engine.jar bench [--assets DIR] [--decks DIR] [--seed N] [--games N] [--max-turns N] [--lazy true|false]
  *   java -jar cgwf-engine.jar audit [--assets DIR] [--decks DIR] [--seed N] [--max-turns N]
- *   java -jar cgwf-engine.jar serve [--assets DIR] [--decks DIR] [--port 8081] [--prompt-timeout-ms N]
+ *   java -jar cgwf-engine.jar serve [--assets DIR] [--port 8081] [--prompt-timeout-ms N] [--max-games N]
  * </pre>
- * Environment fallbacks: FORGE_ASSETS, CGWF_DECKS, PORT, CGWF_LAZY_CARDS, CGWF_PROMPT_TIMEOUT_MS.
+ * Environment fallbacks: FORGE_ASSETS, CGWF_DECKS, PORT, CGWF_LAZY_CARDS, CGWF_PROMPT_TIMEOUT_MS,
+ * CGWF_MAX_GAMES, ENGINE_TOKEN (the bearer token the control socket demands).
  * Forge prints to System.out; everything of ours goes to stderr except the bench JSON report.
  */
 public final class Main {
@@ -56,7 +57,7 @@ public final class Main {
                     Integer.parseInt(opt.getOrDefault("max-turns", "60")), startupMs, lazy, realOut);
             case "audit" -> {
                 HiddenInfoAudit.Result r = HiddenInfoAudit.run(decks, Long.parseLong(opt.getOrDefault("seed", "7")), Integer.parseInt(opt.getOrDefault("max-turns", "40")));
-                System.err.printf("[audit] %d events, %d views checked over %d turns, %d leaks%n", r.events(), r.views(), r.turns(), r.leaks().size());
+                System.err.printf("[audit] %d events, %d views + %d prompt views checked over %d turns, %d leaks%n", r.events(), r.views(), r.prompts(), r.turns(), r.leaks().size());
                 for (String leak : r.leaks()) System.err.println("[audit] LEAK " + leak);
                 realOut.println(r.leaks().isEmpty() ? "HIDDEN-INFO OK" : "HIDDEN-INFO FAIL");
                 System.exit(r.leaks().isEmpty() ? 0 : 1);
@@ -64,8 +65,12 @@ public final class Main {
             case "serve" -> {
                 int port = Integer.parseInt(opt.getOrDefault("port", envOr("PORT", "8081")));
                 long timeout = Long.parseLong(opt.getOrDefault("prompt-timeout-ms", envOr("CGWF_PROMPT_TIMEOUT_MS", "600000")));
-                BridgeServer server = new BridgeServer(port, decks, timeout);
+                int maxGames = Integer.parseInt(opt.getOrDefault("max-games", envOr("CGWF_MAX_GAMES", "4")));
+                String token = envOr("ENGINE_TOKEN", "");
+                if (token.isEmpty()) System.err.println("[engine] WARNING: ENGINE_TOKEN is not set; the control socket accepts anyone");
+                EngineServer server = new EngineServer(port, token, timeout, maxGames);
                 server.setReuseAddr(true);
+                server.setConnectionLostTimeout(60);
                 server.run();
             }
             default -> {

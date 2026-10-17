@@ -1230,6 +1230,12 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
       log(state, ev, `${p.name}: ${text}`);
       break;
     }
+    case "EngineLog":
+    case "EngineAnswer":
+    case "EngineGameOver":
+      // Rules-engine tables keep their own log; the classic reducer never sees these (the relay appends them without reducing).
+      fail("engine events do not apply to this table");
+      break;
     default: {
       const never: never = ev;
       fail(`unknown event ${(never as { type: string }).type}`);
