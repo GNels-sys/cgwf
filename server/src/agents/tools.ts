@@ -88,7 +88,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   { name: "set_step", description: "Move your turn to a step: combat (declare attackers next), main2, end.", input_schema: obj({ step: { type: "string", enum: [...STEP_TARGETS] } }, ["step"]) },
   {
     name: "attack",
-    description: "Declare an attack: taps the attackers and announces it. When the defender is a computer player the damage is applied as unblocked; humans handle blocks and their own life.",
+    description: "Declare an attack on a player: the table taps the attackers (vigilance excepted), logs it, lets human defenders declare blocks, and applies combat damage (default assignment) when you move past combat or pass the turn.",
     input_schema: obj({ attacker_iids: { type: "array", items: { type: "string" } }, defender: { type: "string", description: "Defending player's name" }, total_power: { type: "integer", minimum: 0 } }, ["attacker_iids", "defender", "total_power"]),
   },
   { name: "resolve_trigger", description: "Mark one of your pending triggers as handled.", input_schema: obj({ id: { type: "string" } }, ["id"]) },
@@ -300,22 +300,17 @@ export function mapToolCall(name: string, input: Record<string, unknown>, ctx: T
         if (ids.length === 0) throw new Error("no attackers given");
         const defender = findPlayer(ctx, str(input.defender, "defender"));
         if (defender === me) throw new Error("you cannot attack yourself");
-        const total = int(input.total_power ?? 0, "total_power", 0, 500);
-        const events: EventInput[] = [];
-        const names: string[] = [];
+        int(input.total_power ?? 0, "total_power", 0, 500); // accepted for compatibility; the table computes damage itself
+        const attacks: Array<{ iid: string; player: string }> = [];
         for (const iid of ids) {
           const c = card(iid);
           mine(ctx, c, "you can only attack with your own creatures");
           if (c.zone.kind !== "battlefield") throw new Error(`${iid} is not on the battlefield`);
           if (c.tapped) throw new Error(`${iid} ${nameOf(c)} is tapped and cannot attack`);
-          names.push(nameOf(c));
-          events.push({ type: "CardTapped", payload: { iid, tapped: true } });
+          attacks.push({ iid, player: defender });
         }
         const defName = ctx.view.players[defender]?.name ?? "them";
-        const auto = ctx.agentIds.has(defender) && total > 0;
-        events.push({ type: "NoteAdded", payload: { player: me, text: `attacks ${defName} with ${names.join(", ")} (${total} power)${auto ? ", unblocked" : ""}` } });
-        if (auto) events.push({ type: "LifeChanged", payload: { player: defender, delta: -total } });
-        return ok(events, `attacked ${defName} with ${names.length} creature(s)`);
+        return ok([{ type: "AttackersDeclared", payload: { attacks } }], `attacked ${defName} with ${attacks.length} creature(s)`);
       }
       case "resolve_trigger": {
         const id = str(input.id, "id");

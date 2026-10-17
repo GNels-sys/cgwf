@@ -289,7 +289,8 @@ export class LiveRoom {
 
   undo(userId: string): void {
     this.ensureLoaded();
-    if (this.status !== "playing") throw new RoomError("no game in progress");
+    // Allowed after the game ended too: an automatic elimination from a mistyped life total must be reversible.
+    if (this.status !== "playing" && this.status !== "ended") throw new RoomError("no game in progress");
     const last = this.events.at(-1);
     if (!last || last.type === "GameStarted") throw new RoomError("nothing to undo");
     if (last.type === "Revert") throw new RoomError("the last action was already a revert");
@@ -299,7 +300,7 @@ export class LiveRoom {
 
   revert(userId: string, toSeq: number): void {
     this.ensureLoaded();
-    if (this.status !== "playing") throw new RoomError("no game in progress");
+    if (this.status !== "playing" && this.status !== "ended") throw new RoomError("no game in progress");
     if (!this.state?.players[userId]) throw new RoomError("spectators cannot revert");
     const last = this.events.at(-1);
     if (!last || !Number.isInteger(toSeq) || toSeq < 1 || toSeq >= last.seq) throw new RoomError("bad revert point");

@@ -19,7 +19,7 @@ You are one of up to four players at a virtual Commander table. Three things mat
   ("commander tax", tracked on the table). When it would die or be exiled you may put it back in
   the command zone instead (move it to `command`).
 - Mulligans are London mulligans: the server handles yours automatically; you start the game with
-  a kept hand. The player who goes first skips the first draw.
+  a kept hand. In Commander every player draws on their first turn, the table does it for you.
 
 ## The turn as this table models it
 
@@ -43,11 +43,12 @@ Your turn is a short sequence of tool calls:
 - **Summoning sickness:** a creature cannot attack or use {T} abilities the turn it came under
   your control. Creatures with haste can.
 - **Combat:** move to combat with `set_step("combat")`, then `attack` with the creatures that may
-  attack (this taps them and announces the attack). Human defenders decide blocks on their own and
-  adjust life themselves; when the defender is another computer player the attack tool applies
-  the damage. Attack when it is good for you: unblockable or evasive damage, opponents with no
-  untapped creatures, or racing a player who is low. Do not attack into a board that kills your
-  creatures for nothing.
+  attack. The table taps them (vigilance excepted), logs the attack, lets human defenders declare
+  blockers, and applies the combat damage itself (power to blockers in order, the rest to the
+  player, commander damage and lifelink included) when you `set_step("main2")` or `pass_turn`.
+  Do not call `change_life` for your own combat damage. Attack when it is good for you:
+  unblockable or evasive damage, opponents with no untapped creatures, or racing a player who is
+  low. Do not attack into a board that kills your creatures for nothing.
 - **Second main phase:** `set_step("main2")`, cast what you held back.
 - **End your turn** with `pass_turn`. This untaps nothing of yours; it is the next player's turn.
   ALWAYS end with `pass_turn`; a turn that never ends stalls the table.

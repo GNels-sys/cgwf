@@ -280,6 +280,51 @@ describe("rooms over WebSocket", () => {
     expect(await blair.errorSince(m)).toMatch(/not sent directly/);
   });
 
+  it("library searches show the owner only (nothing reaches other sockets); other players' cards cannot be touched", async () => {
+    const room = ctx.roomsManager.get(code)!;
+    const alexId = alex.lastView().viewer!;
+    const truth = room.currentState()!;
+    const libraryIids = truth.players[alexId]!.zones.library.slice();
+    expect(libraryIids.length).toBeGreaterThan(0);
+    let m = alex.mark();
+    const mb = blair.mark();
+    const mc = casey.mark();
+    alex.send({ t: "event", event: { type: "LibrarySearched", payload: { player: alexId } } });
+    const va = await alex.stateSince(m);
+    await blair.stateSince(mb);
+    await casey.stateSince(mc);
+    expect(va.players[alexId]!.library.known.map((c) => c.iid).sort()).toEqual(libraryIids.slice().sort());
+    expect(va.log.at(-1)!.text).toBe("Alex searched their library");
+    for (const iid of libraryIids) {
+      expect(blair.everything()).not.toContain(iid);
+      expect(casey.everything()).not.toContain(iid);
+    }
+    expect(blair.lastView().players[alexId]!.library.known).toHaveLength(0);
+    expect(casey.lastView().players[alexId]!.library.known).toHaveLength(0);
+    // Nobody else may search, look at or shuffle it.
+    m = blair.mark();
+    blair.send({ t: "event", event: { type: "LibrarySearched", payload: { player: alexId } } });
+    expect(await blair.errorSince(m)).toMatch(/only the owner/);
+    m = blair.mark();
+    blair.send({ t: "event", event: { type: "LibraryLooked", payload: { player: alexId, count: 2 } } });
+    expect(await blair.errorSince(m)).toMatch(/only the owner/);
+    // Ownership guardrails over the wire: Blair cannot untap Alex's permanents or move Alex's cards; Casey (spectator) cannot attack.
+    m = blair.mark();
+    blair.send({ t: "event", event: { type: "UntapAll", payload: { player: alexId } } });
+    expect(await blair.errorSince(m)).toMatch(/only that player/);
+    const alexCommander = alex.lastView().players[alexId]!.command[0]!;
+    m = blair.mark();
+    blair.send({ t: "event", event: { type: "CardMoved", payload: { iid: alexCommander.iid, to: { kind: "graveyard", owner: alexId } } } });
+    expect(await blair.errorSince(m)).toMatch(/only the owner/);
+    m = casey.mark();
+    casey.send({ t: "event", event: { type: "AttackersDeclared", payload: { attacks: [{ iid: alexCommander.iid, player: alexId }] } } });
+    expect(await casey.errorSince(m)).toMatch(/spectator/);
+    // A shuffle forgets what the search showed.
+    m = alex.mark();
+    alex.send({ t: "event", event: { type: "LibraryShuffled", payload: { player: alexId } } });
+    expect((await alex.stateSince(m)).players[alexId]!.library.known).toHaveLength(0);
+  });
+
   it("playing a card reveals it to everyone; tokens come from real printings only; undo and revert", async () => {
     const alexId = alex.lastView().viewer!;
     const blairId = blair.lastView().viewer!;

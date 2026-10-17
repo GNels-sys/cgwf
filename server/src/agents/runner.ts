@@ -183,11 +183,10 @@ export class AgentRunner {
   // ------------------------------------------------------------ the turn
 
   private async playTurn(): Promise<void> {
-    // The table does the mechanical start of the turn for the agent: draw (not on the game's first turn), then main phase.
+    // The table does the mechanical start of the turn: untap happened on TurnAdvanced and the reducer
+    // draws the turn's card when the step reaches or passes "draw", so jumping to main1 is enough.
     let { view, printings } = this.viewNow();
-    const me = view.players[this.d.me]!;
     if (view.step === "untap" || view.step === "upkeep" || view.step === "draw") {
-      if (view.turn > 1 && me.library.count > 0) this.safeSubmit({ type: "CardsDrawn", payload: { player: this.d.me, count: 1 } });
       this.safeSubmit({ type: "StepSet", payload: { step: "main1" } });
       ({ view, printings } = this.viewNow());
     }

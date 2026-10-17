@@ -207,7 +207,8 @@ describe("reducer", () => {
     expect(s.cards[creature.iid]!.tapped).toBe(true);
     s = g.push(A, { type: "CounterChanged", payload: { iid: creature.iid, kind: "+1/+1", delta: 2 } });
     expect(s.cards[creature.iid]!.counters["+1/+1"]).toBe(2);
-    s = g.push(B, { type: "UntapAll", payload: { player: A } });
+    expect(() => g.push(B, { type: "UntapAll", payload: { player: A } })).toThrow(/only that player/);
+    s = g.push(A, { type: "UntapAll", payload: { player: A } });
     expect(s.cards[creature.iid]!.tapped).toBe(false);
 
     // Token + attach: the token follows the host when it changes rows / controller.
@@ -215,16 +216,20 @@ describe("reducer", () => {
     const token = a().zones.battlefield.other.at(-1)!;
     s = g.push(A, { type: "Attached", payload: { iid: token, to: creature.iid } });
     expect(s.cards[token]!.zone.row).toBe("creatures");
-    s = g.push(B, { type: "CardMoved", payload: { iid: creature.iid, to: { kind: "battlefield", owner: B, row: "creatures" } } });
+    expect(() => g.push(B, { type: "CardMoved", payload: { iid: creature.iid, to: { kind: "battlefield", owner: B, row: "creatures" } } })).toThrow(/controller/);
+    s = g.push(B, { type: "ControlTaken", payload: { iid: creature.iid, row: "creatures" } });
+    expect(s.log.at(-1)!.text).toBe(`Blair took control of ${creature.printing!.name} from Alex`);
     expect(s.players[B]!.zones.battlefield.creatures).toContain(token);
     expect(s.cards[token]!.attachedTo).toBe(creature.iid);
     // Counters survive a control change; when the host leaves the battlefield the equipment stays, unattached.
     expect(s.cards[creature.iid]!.counters["+1/+1"]).toBe(2);
-    s = g.push(A, { type: "CardMoved", payload: { iid: creature.iid, to: { kind: "graveyard", owner: A } } });
+    // Blair controls it now, so only Blair may move it (to its owner's graveyard).
+    expect(() => g.push(A, { type: "CardMoved", payload: { iid: creature.iid, to: { kind: "graveyard", owner: A } } })).toThrow(/controller/);
+    s = g.push(B, { type: "CardMoved", payload: { iid: creature.iid, to: { kind: "graveyard", owner: A } } });
     expect(s.cards[token]!.attachedTo).toBeNull();
     expect(s.cards[creature.iid]!.counters).toEqual({});
     // A token leaving the battlefield ceases to exist.
-    s = g.push(A, { type: "CardMoved", payload: { iid: token, to: { kind: "graveyard", owner: A } } });
+    s = g.push(B, { type: "CardMoved", payload: { iid: token, to: { kind: "graveyard", owner: A } } });
     expect(s.cards[token]).toBeUndefined();
     expect(a().zones.graveyard).not.toContain(token);
 
@@ -243,12 +248,13 @@ describe("reducer", () => {
     g.start();
     let s = g.keepAll();
     const first = s.activePlayer;
+    expect(s.step).toBe("upkeep"); // untap is automatic, so a turn opens on upkeep
     s = g.push(first, { type: "StepAdvanced", payload: {} });
-    expect(s.step).toBe("upkeep");
+    expect(s.step).toBe("draw");
     s = g.push(first, { type: "TurnAdvanced", payload: {} });
     expect(s.turn).toBe(2);
     expect(s.activePlayer).not.toBe(first);
-    expect(s.step).toBe("untap");
+    expect(s.step).toBe("upkeep");
     s = g.push(first, { type: "StepSet", payload: { step: "main2" } });
     expect(s.step).toBe("main2");
 
