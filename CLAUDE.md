@@ -951,8 +951,17 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   decided by Forge's AI for that seat. Full list of prompt kinds still to build: design doc 3.3.
 - **Auto-pass.** The engine only offers priority at a seat's stops (`EngineStops`: my turn
   MAIN1, declare attackers, MAIN2, end; opponents' end step; always when the top of the stack is
-  someone else's); `{t:"stops"}` changes them (UI for that: Stage 1 M3). "End turn" answers
-  with `passUntilTurn` so the rest of the turn passes without prompts.
+  someone else's). Stops live in `UserSettings.engineStops` (sanitised in `shared/settings.ts`),
+  are sent to the engine for every seat right after `createGame`, and the table's Menu -> Stops
+  panel changes them for the game AND saves them (`{t:"stops"}` -> `saveEngineStops`). "End turn"
+  answers with `passUntilTurn` so the rest of the turn passes without prompts.
+- **Absent seats.** When a seated player's last socket closes during a game the relay waits
+  `ENGINE_ABSENT_GRACE_MS` (3 min), then tells the engine `detachSeat`: Forge's AI plays that seat
+  (a log line says so) until a socket is back (`attachSeat` + `resync`). Reloading the page
+  re-sends the cached state and the open prompt at once.
+- **Legality in the lobby.** `RoomMember.deckProblems` (engine rooms) lists why a seated deck
+  cannot start an engine game; the lobby shows it under the seat and the host's Start button
+  names the player to fix. Start refuses with the same reasons.
 - **Client.** `client/src/game/Engine.tsx` (prompt bar inside the phase strip, list sheet,
   ability picker, mulligan overlay); `Table.tsx` engine mode: a tap on a glowing card answers
   the open prompt, classic actions/events are hidden, life is read-only, concede goes through
