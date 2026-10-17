@@ -42,7 +42,7 @@ export function LifeTicks({ ticks }: { ticks: Array<{ id: number; delta: number 
  * bigger change (the parent opens a number dialog). Poison and commander
  * damage ride along as small badges.
  */
-export function LifeWidget({ player, mine, onDelta, onBig, onCounters }: { player: ViewPlayer; mine: boolean; onDelta: (d: number) => void; onBig: () => void; onCounters: () => void }) {
+export function LifeWidget({ player, mine, onDelta, onBig, onCounters, readOnly = false }: { player: ViewPlayer; mine: boolean; onDelta: (d: number) => void; onBig: () => void; onCounters: () => void; /** Rules-engine tables: life is the engine's to change. */ readOnly?: boolean }) {
   const timer = useRef<number | null>(null);
   const held = useRef(false);
   const ticks = useLifeTicks(player.life);
@@ -60,13 +60,15 @@ export function LifeWidget({ player, mine, onDelta, onBig, onCounters }: { playe
   const poison = player.counters.poison ?? 0;
   const cmd = totalCommanderDamage(player);
   return (
-    <div className={`life${mine ? " is-mine" : ""}${player.conceded || player.eliminated ? " is-out" : ""}`}>
-      <button className="life-btn" onClick={() => onDelta(-1)} aria-label="Lose 1 life">
-        &minus;
-      </button>
+    <div className={`life${mine ? " is-mine" : ""}${player.conceded || player.eliminated ? " is-out" : ""}${readOnly ? " is-readonly" : ""}`}>
+      {!readOnly && (
+        <button className="life-btn" onClick={() => onDelta(-1)} aria-label="Lose 1 life">
+          &minus;
+        </button>
+      )}
       <button
         className="life-total"
-        onPointerDown={down}
+        onPointerDown={readOnly ? undefined : down}
         onPointerUp={up}
         onPointerLeave={up}
         onPointerCancel={up}
@@ -75,7 +77,7 @@ export function LifeWidget({ player, mine, onDelta, onBig, onCounters }: { playe
             held.current = false;
             return;
           }
-          onCounters();
+          if (!readOnly) onCounters();
         }}
         onContextMenu={(e) => e.preventDefault()}
         aria-label={`${player.life} life. Tap for counters, hold for a bigger change`}
@@ -90,9 +92,11 @@ export function LifeWidget({ player, mine, onDelta, onBig, onCounters }: { playe
           </span>
         )}
       </button>
-      <button className="life-btn" onClick={() => onDelta(1)} aria-label="Gain 1 life">
-        +
-      </button>
+      {!readOnly && (
+        <button className="life-btn" onClick={() => onDelta(1)} aria-label="Gain 1 life">
+          +
+        </button>
+      )}
     </div>
   );
 }

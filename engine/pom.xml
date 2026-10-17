@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>app.cgwf</groupId>
+  <artifactId>cgwf-engine</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+  <name>CGwF rules engine (Forge bridge)</name>
+  <description>Headless Forge rules engine with a JSON-over-WebSocket bridge for CGwF. GPL-3.0 (links forge-game).</description>
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Pinned Forge release tag (forge-${forge.version}); built from source, see README. -->
+    <forge.version>2.0.15</forge.version>
+    <!-- Path to forge-gui (res/cardsfolder lives under it); the hidden-information test needs it. -->
+    <forge.assets>${env.FORGE_ASSETS}</forge.assets>
+  </properties>
+
+  <dependencies>
+    <dependency><groupId>forge</groupId><artifactId>forge-core</artifactId><version>${forge.version}</version></dependency>
+    <dependency><groupId>forge</groupId><artifactId>forge-game</artifactId><version>${forge.version}</version></dependency>
+    <dependency><groupId>forge</groupId><artifactId>forge-ai</artifactId><version>${forge.version}</version></dependency>
+    <!-- forge-gui is the GUI-agnostic layer (FModel card loading, preferences, GuiBase); no Swing in it. -->
+    <dependency><groupId>forge</groupId><artifactId>forge-gui</artifactId><version>${forge.version}</version></dependency>
+    <dependency><groupId>com.google.code.gson</groupId><artifactId>gson</artifactId><version>2.11.0</version></dependency>
+    <dependency><groupId>org.java-websocket</groupId><artifactId>Java-WebSocket</artifactId><version>1.5.7</version></dependency>
+    <dependency><groupId>org.slf4j</groupId><artifactId>slf4j-simple</artifactId><version>2.0.16</version></dependency>
+    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.11.4</version><scope>test</scope></dependency>
+  </dependencies>
+
+  <build>
+    <finalName>cgwf-engine</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.5.2</version>
+        <configuration>
+          <systemPropertyVariables>
+            <forge.assets>${forge.assets}</forge.assets>
+            <cgwf.decks>${project.basedir}/spike/decks</cgwf.decks>
+          </systemPropertyVariables>
+          <argLine>-Xmx1536m</argLine>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>shade</goal></goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>cgwf.engine.Main</mainClass>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

@@ -1,0 +1,479 @@
+import { useEffect, useState } from "react";
+import { AVATAR_COLORS, type EngineAnswer, type EngineEntityRef, type EngineOption, type EnginePrompt, type PlayerView, type RoomMember, type ViewCard } from "@cgwf/shared";
+import { CardTile } from "./CardTile";
+import { findCard, nameOf, type Printings } from "./model";
+
+/**
+ * Rules-engine tables: the UI for the prompt the engine is waiting on. The engine decides what is
+ * legal; this file only lets the player pick among the options it sent and answers with ids.
+ * Cards that are options glow on the table (Table.tsx passes the sets); the bar at the top of the
+ * battlefield names the question and holds the buttons; list-shaped choices open a sheet.
+ */
+
+export type EnginePick =
+  | { kind: "none" }
+  /** targets / chooseMany: option indices picked so far. */
+  | { kind: "select"; picked: number[] }
+  | { kind: "attack"; targets: Record<string, EngineEntityRef>; current: EngineEntityRef | null }
+  | { kind: "block"; blocks: Record<string, string>; current: string | null };
+
+export const NO_PICK: EnginePick = { kind: "none" };
+
+export function refKey(r: EngineEntityRef): string {
+  return r.kind === "player" ? `p:${r.player}` : `c:${r.iid}`;
+}
+
+export function colorOfMember(members: RoomMember[], userId: string): string | undefined {
+  const m = members.find((x) => x.userId === userId);
+  return m ? AVATAR_COLORS[m.color] : undefined;
+}
+
+/** Option indices of cards (by iid) in a list-shaped prompt. */
+export function cardOptionIndex(options: EngineOption[], iid: string): number | null {
+  const o = options.find((x) => x.kind === "card" && x.iid === iid);
+  return o ? o.index : null;
+}
+
+/** Which card iids should glow for this prompt. */
+export function promptHighlights(prompt: EnginePrompt | null): Set<string> {
+  const out = new Set<string>();
+  if (!prompt) return out;
+  switch (prompt.kind) {
+    case "priority":
+      for (const o of prompt.options) out.add(o.iid);
+      break;
+    case "targets":
+    case "choose":
+    case "chooseMany":
+      for (const o of prompt.options) if (o.kind === "card") out.add(o.iid);
+      break;
+    case "attackers":
+      for (const c of prompt.candidates) out.add(c.iid);
+      break;
+    case "blockers":
+      for (const c of prompt.blockers) out.add(c.iid);
+      for (const c of prompt.attackers) out.add(c.iid);
+      break;
+    default:
+      break;
+  }
+  return out;
+}
+
+/** The initial pick state for a prompt. */
+export function initialPick(prompt: EnginePrompt | null): EnginePick {
+  if (!prompt) return NO_PICK;
+  switch (prompt.kind) {
+    case "targets":
+    case "chooseMany":
+      return { kind: "select", picked: [] };
+    case "attackers": {
+      const first = prompt.defenders.find((d) => d.kind === "player") ?? prompt.defenders[0] ?? null;
+      return { kind: "attack", targets: {}, current: first };
+    }
+    case "blockers":
+      return { kind: "block", blocks: {}, current: prompt.attackers[0]?.iid ?? null };
+    default:
+      return NO_PICK;
+  }
+}
+
+function describeRef(r: EngineEntityRef, view: PlayerView, printings: Printings): string {
+  if (r.kind === "player") return view.players[r.player]?.name ?? r.name ?? "?";
+  const c = findCard(view, r.iid);
+  return c ? nameOf(c, printings) : (r.name ?? "a permanent");
+}
+
+export interface EngineBarProps {
+  prompt: EnginePrompt;
+  view: PlayerView;
+  printings: Printings;
+  members: RoomMember[];
+  me: string;
+  pick: EnginePick;
+  setPick: (p: EnginePick) => void;
+  answer: (a: EngineAnswer) => void;
+  onZoom: (c: ViewCard) => void;
+  /** Open the list sheet for the current prompt (choose / chooseMany / targets with non-card options). */
+  openList: () => void;
+}
+
+/** The bar inside the phase strip while the engine waits on me. */
+export function EngineBar({ prompt, view, printings, members, me, pick, setPick, answer, onZoom, openList }: EngineBarProps) {
+  const id = prompt.promptId;
+  switch (prompt.kind) {
+    case "priority": {
+      const lands = prompt.options.filter((o) => o.kind === "land").length;
+      const spells = prompt.options.filter((o) => o.kind === "spell").length;
+      const abilities = prompt.options.filter((o) => o.kind === "ability").length;
+      const parts = [lands ? `${lands} land${lands === 1 ? "" : "s"}` : "", spells ? `${spells} spell${spells === 1 ? "" : "s"}` : "", abilities ? `${abilities} abilit${abilities === 1 ? "y" : "ies"}` : ""].filter(Boolean);
+      return (
+        <div className="engine-bar" role="region" aria-label="Your priority">
+          <div className="engine-bar-head">
+            <strong>{prompt.stackEmpty ? (prompt.myTurn ? "Your move" : "You may respond") : prompt.stackTopMine ? "Your spell or ability is on the stack" : "Something is on the stack: respond?"}</strong>
+            <span className="muted small">{prompt.options.length === 0 ? "Nothing to play right now." : `Tap a glowing card to play it (${parts.join(", ")}). Mana is paid for you.`}</span>
+          </div>
+          <div className="engine-bar-actions">
+            <button className={`btn btn-small${prompt.options.length === 0 ? " btn-primary" : ""}`} onClick={() => answer({ promptId: id, option: null })}>
+              {prompt.stackEmpty ? "Pass" : "Let it resolve"}
+            </button>
+            {prompt.myTurn && prompt.stackEmpty && (
+              <button className="btn btn-small" onClick={() => answer({ promptId: id, option: null, passUntilTurn: view.turn })} title="Pass every remaining priority this turn">
+                End turn
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
+    case "targets": {
+      const picked = pick.kind === "select" ? pick.picked : [];
+      const players = prompt.options.filter((o) => o.kind === "player");
+      const hasOther = prompt.options.some((o) => o.kind === "text");
+      return (
+        <div className="engine-bar" role="region" aria-label="Choose targets">
+          <div className="engine-bar-head">
+            <strong>
+              Choose {prompt.min === prompt.max ? prompt.min : `${prompt.min}-${prompt.max}`} target{prompt.max === 1 ? "" : "s"}
+            </strong>
+            <span className="muted small">{prompt.ability}. Tap glowing cards{players.length ? " or a player" : ""}; {picked.length} picked.</span>
+          </div>
+          {players.length > 0 && (
+            <div className="combat-chips">
+              {players.map((o) => {
+                if (o.kind !== "player") return null;
+                const selected = picked.includes(o.index);
+                return (
+                  <button key={o.index} className={`chip combat-chip${selected ? " is-selected" : ""}`} style={{ "--who": colorOfMember(members, o.player) ?? "var(--accent)" } as React.CSSProperties} onClick={() => setPick({ kind: "select", picked: toggle(picked, o.index, prompt.max) })} aria-pressed={selected}>
+                    <span className="combat-chip-dot" aria-hidden="true" />
+                    {view.players[o.player]?.name ?? o.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="engine-bar-actions">
+            {hasOther && (
+              <button className="btn btn-small" onClick={openList}>
+                List
+              </button>
+            )}
+            <button className="btn btn-small btn-primary" disabled={picked.length < prompt.min || picked.length > prompt.max} onClick={() => answer({ promptId: id, options: picked })}>
+              Confirm
+            </button>
+            <button className="btn btn-small" onClick={() => answer({ promptId: id, options: [], cancel: true })}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+    case "attackers": {
+      const targets = pick.kind === "attack" ? pick.targets : {};
+      const current = pick.kind === "attack" ? pick.current : null;
+      const n = Object.keys(targets).length;
+      return (
+        <div className="engine-bar" role="region" aria-label="Declare attackers">
+          <div className="engine-bar-head">
+            <strong>Attack</strong>
+            <span className="muted small">Pick a target, then tap the creatures that attack it. Tap again to take one back.</span>
+          </div>
+          <div className="combat-chips">
+            {prompt.defenders.map((d) => {
+              const key = refKey(d);
+              const selected = current !== null && refKey(current) === key;
+              const count = Object.values(targets).filter((t) => refKey(t) === key).length;
+              const color = d.kind === "player" ? colorOfMember(members, d.player) : d.controller ? colorOfMember(members, d.controller) : undefined;
+              return (
+                <button key={key} className={`chip combat-chip${selected ? " is-selected" : ""}`} style={{ "--who": color ?? "var(--accent)" } as React.CSSProperties} onClick={() => setPick({ kind: "attack", targets, current: d })} aria-pressed={selected}>
+                  <span className="combat-chip-dot" aria-hidden="true" />
+                  {describeRef(d, view, printings)}
+                  {d.kind === "player" && d.life !== undefined && <span className="muted small"> {d.life}</span>}
+                  {count > 0 && <span className="combat-chip-count">{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="engine-bar-actions">
+            <button className="btn btn-small btn-primary" disabled={n === 0} onClick={() => answer({ promptId: id, attacks: Object.entries(targets).map(([iid, defender]) => ({ iid, defender })) })}>
+              Declare {n === 0 ? "attack" : `${n} attacker${n === 1 ? "" : "s"}`}
+            </button>
+            <button className="btn btn-small" onClick={() => answer({ promptId: id, attacks: [] })}>
+              No attack
+            </button>
+          </div>
+        </div>
+      );
+    }
+    case "blockers": {
+      const blocks = pick.kind === "block" ? pick.blocks : {};
+      const current = pick.kind === "block" ? pick.current : null;
+      const n = Object.keys(blocks).length;
+      return (
+        <div className="engine-bar" role="region" aria-label="Declare blockers">
+          <div className="engine-bar-head">
+            <strong>Block</strong>
+            <span className="muted small">Pick an attacker, then tap your creatures that block it. Several blockers may share one attacker.</span>
+          </div>
+          <div className="combat-attackers">
+            {prompt.attackers.map((a) => {
+              const c = findCard(view, a.iid);
+              const selected = current === a.iid;
+              const blockers = Object.values(blocks).filter((x) => x === a.iid).length;
+              return (
+                <div key={a.iid} className={`combat-attacker${selected ? " is-selected" : ""}`} role="button" tabIndex={0} onClick={() => setPick({ kind: "block", blocks, current: a.iid })} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setPick({ kind: "block", blocks, current: a.iid })} aria-pressed={selected}>
+                  {c && <CardTile card={c} printings={printings} onHold={onZoom} />}
+                  <span className="combat-attacker-text">
+                    <span>{a.name}</span>
+                    {a.power !== null && (
+                      <strong>
+                        {a.power}/{a.toughness}
+                      </strong>
+                    )}
+                    {a.attacking && <span className="muted small">at {describeRef(a.attacking, view, printings)}</span>}
+                    {blockers > 0 && <span className="combat-chip-count">{blockers} blocking</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="engine-bar-actions">
+            <button className="btn btn-small btn-primary" onClick={() => answer({ promptId: id, blocks: Object.entries(blocks).map(([blockerIid, attackerIid]) => ({ blockerIid, attackerIid })) })}>
+              {n === 0 ? "No blocks" : `Declare ${n} block${n === 1 ? "" : "s"}`}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    case "chooseMany": {
+      const picked = pick.kind === "select" ? pick.picked : [];
+      return (
+        <div className="engine-bar" role="region" aria-label={prompt.title}>
+          <div className="engine-bar-head">
+            <strong>{prompt.title}</strong>
+            <span className="muted small">
+              {prompt.source ? `${prompt.source}: ` : ""}choose {prompt.min === prompt.max ? prompt.min : `${prompt.min}-${prompt.max}`}; {picked.length} picked. Tap glowing cards or open the list.
+            </span>
+          </div>
+          <div className="engine-bar-actions">
+            <button className="btn btn-small" onClick={openList}>
+              List
+            </button>
+            <button className="btn btn-small btn-primary" disabled={picked.length < prompt.min || picked.length > prompt.max} onClick={() => answer({ promptId: id, options: picked })}>
+              Confirm
+            </button>
+          </div>
+        </div>
+      );
+    }
+    case "choose":
+      return (
+        <div className="engine-bar" role="region" aria-label={prompt.title}>
+          <div className="engine-bar-head">
+            <strong>{prompt.title}</strong>
+            <span className="muted small">{prompt.source ? `${prompt.source}: ` : ""}tap a glowing card or pick from the list.</span>
+          </div>
+          <div className="engine-bar-actions">
+            <button className="btn btn-small btn-primary" onClick={openList}>
+              Choose...
+            </button>
+            {prompt.optional && (
+              <button className="btn btn-small" onClick={() => answer({ promptId: id, option: null })}>
+                Skip
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    case "confirm":
+      return (
+        <div className="engine-bar" role="region" aria-label={prompt.title}>
+          <div className="engine-bar-head">
+            <strong>{prompt.title}</strong>
+            {prompt.source && <span className="muted small">{prompt.source}</span>}
+          </div>
+          <div className="engine-bar-actions">
+            <button className="btn btn-small btn-primary" onClick={() => answer({ promptId: id, confirm: true })}>
+              {prompt.options[0] ?? "Yes"}
+            </button>
+            <button className="btn btn-small" onClick={() => answer({ promptId: id, confirm: false })}>
+              {prompt.options[1] ?? "No"}
+            </button>
+          </div>
+        </div>
+      );
+    case "mulligan":
+      return null; // the overlay handles it
+    default:
+      return null;
+  }
+}
+
+function toggle(picked: number[], index: number, max: number): number[] {
+  if (picked.includes(index)) return picked.filter((i) => i !== index);
+  if (max === 1) return [index];
+  if (picked.length >= max) return picked;
+  return [...picked, index];
+}
+
+/** A sheet listing every option of a choose / chooseMany / targets prompt (cards, players, text). */
+export function EngineListSheet({ prompt, view, printings, pick, setPick, answer, onClose, onZoom }: { prompt: EnginePrompt; view: PlayerView; printings: Printings; pick: EnginePick; setPick: (p: EnginePick) => void; answer: (a: EngineAnswer) => void; onClose: () => void; onZoom: (c: ViewCard) => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (prompt.kind !== "choose" && prompt.kind !== "chooseMany" && prompt.kind !== "targets") return null;
+  const single = prompt.kind === "choose";
+  const picked = pick.kind === "select" ? pick.picked : [];
+  const max = single ? 1 : prompt.max;
+  const min = single ? 1 : prompt.min;
+  const label = (o: EngineOption): { title: string; hint?: string } => {
+    if (o.kind === "player") return { title: view.players[o.player]?.name ?? o.name };
+    if (o.kind === "text") return { title: o.label };
+    const bits = [o.zone, o.controller ? view.players[o.controller]?.name : null, o.power !== null ? `${o.power}/${o.toughness}` : null].filter(Boolean);
+    return { title: o.name, hint: bits.join(" - ") };
+  };
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={prompt.title} onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <strong>{prompt.title}</strong>
+          <span className="muted small">{single ? "Pick one." : `Pick ${min === max ? min : `${min} to ${max}`}.`}</span>
+          <button className="sheet-close" onClick={onClose} aria-label="Close">
+            &times;
+          </button>
+        </div>
+        <div className="engine-options">
+          {prompt.options.length === 0 && <p className="muted">Nothing to choose.</p>}
+          {prompt.options.map((o) => {
+            const { title, hint } = label(o);
+            const selected = picked.includes(o.index);
+            const card = o.kind === "card" ? findCard(view, o.iid) : null;
+            return (
+              <button
+                key={o.index}
+                className={`engine-option${selected ? " is-selected" : ""}`}
+                onClick={() => {
+                  if (single) {
+                    onClose();
+                    answer({ promptId: prompt.promptId, option: o.index });
+                  } else setPick({ kind: "select", picked: toggle(picked, o.index, max) });
+                }}
+              >
+                {card && <CardTile card={card} printings={printings} onHold={onZoom} />}
+                <span>
+                  <span>{title}</span>
+                  {hint && <small> {hint}</small>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        {!single && (
+          <div className="actions" style={{ marginTop: 10 }}>
+            <button className="btn btn-primary" disabled={picked.length < min || picked.length > max} onClick={() => answer({ promptId: prompt.promptId, options: picked })}>
+              Confirm {picked.length ? `(${picked.length})` : ""}
+            </button>
+            {prompt.kind === "targets" && (
+              <button className="btn" onClick={() => answer({ promptId: prompt.promptId, options: [], cancel: true })}>
+                Cancel
+              </button>
+            )}
+          </div>
+        )}
+        {single && prompt.kind === "choose" && prompt.optional && (
+          <div className="actions" style={{ marginTop: 10 }}>
+            <button className="btn" onClick={() => answer({ promptId: prompt.promptId, option: null })}>
+              Skip
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Several abilities on one card: pick which to play. */
+export function EngineAbilitySheet({ options, name, onPick, onClose }: { options: Array<{ index: number; description: string; cost: string | null; kind: string }>; name: string; onPick: (index: number) => void; onClose: () => void }) {
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={name} onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <strong>{name}</strong>
+          <span className="muted small">Which one?</span>
+          <button className="sheet-close" onClick={onClose} aria-label="Close">
+            &times;
+          </button>
+        </div>
+        <div className="sheet-actions">
+          {options.map((o) => (
+            <button key={o.index} className="sheet-action" onClick={() => onPick(o.index)}>
+              <span>{o.kind === "land" ? "Play" : o.kind === "spell" ? "Cast" : "Activate"}</span>
+              <small className="muted">
+                {o.description}
+                {o.cost ? ` (${o.cost})` : ""}
+              </small>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Mulligan overlay for engine tables: keep / mulligan, then "put N on the bottom" as a chooseMany. */
+export function EngineMulligan({ prompt, view, printings, me, pick, setPick, answer, onZoom }: { prompt: EnginePrompt; view: PlayerView; printings: Printings; me: string; pick: EnginePick; setPick: (p: EnginePick) => void; answer: (a: EngineAnswer) => void; onZoom: (c: ViewCard) => void }) {
+  const mePlayer = view.players[me];
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setBusy(false), [prompt.promptId]);
+  if (!mePlayer) return null;
+  if (prompt.kind === "mulligan") {
+    return (
+      <div className="mulligan">
+        <div className="mulligan-box">
+          <h2>Keep this hand?</h2>
+          <p className="muted small">{prompt.cardsToReturn > 0 ? `If you keep, you put ${prompt.cardsToReturn} card${prompt.cardsToReturn === 1 ? "" : "s"} on the bottom afterwards.` : "Seven cards. The rules engine shuffles and deals."}</p>
+          <div className="mulligan-hand">
+            {prompt.hand.map((h) => {
+              const c = findCard(view, h.iid) ?? mePlayer.hand.cards.find((x) => x.iid === h.iid);
+              return c ? <CardTile key={h.iid} card={c} printings={printings} onTap={onZoom} onHold={onZoom} /> : null;
+            })}
+          </div>
+          <div className="actions">
+            <button className="btn" disabled={busy} onClick={() => (setBusy(true), answer({ promptId: prompt.promptId, keep: false }))}>
+              Mulligan
+            </button>
+            <button className="btn btn-primary" disabled={busy} onClick={() => (setBusy(true), answer({ promptId: prompt.promptId, keep: true }))}>
+              Keep
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (prompt.kind === "chooseMany" && prompt.reason === "mulligan") {
+    const picked = pick.kind === "select" ? pick.picked : [];
+    return (
+      <div className="mulligan">
+        <div className="mulligan-box">
+          <h2>Put {prompt.min} on the bottom</h2>
+          <p className="muted small">Tap the cards to put on the bottom of your library, then confirm.</p>
+          <div className="mulligan-hand">
+            {prompt.options.map((o) => {
+              if (o.kind !== "card") return null;
+              const c = findCard(view, o.iid) ?? mePlayer.hand.cards.find((x) => x.iid === o.iid);
+              return c ? <CardTile key={o.iid} card={c} printings={printings} selected={picked.includes(o.index)} onTap={() => setPick({ kind: "select", picked: toggle(picked, o.index, prompt.max) })} onHold={onZoom} /> : null;
+            })}
+          </div>
+          <div className="actions">
+            <button className="btn btn-primary" disabled={picked.length !== prompt.min || busy} onClick={() => (setBusy(true), answer({ promptId: prompt.promptId, options: picked }))}>
+              Confirm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}

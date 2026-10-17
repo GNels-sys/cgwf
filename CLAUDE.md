@@ -905,6 +905,71 @@ them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.
   `min(100vw - 48px, 56dvh * 63/88)` above a scrolling text pane in portrait (`game.css`).
   `scripts/bots.mjs` bots act whenever they are the active player (a turn now opens on upkeep).
 
+## Rules engine tables (Forge, Stage 1)
+
+An opt-in second kind of table: the open-source Forge rules engine runs the game (untap, draw,
+mana, the stack, combat, win conditions) and humans answer its prompts. The classic manual table
+is untouched; engine tables are per room ("Rules engine (beta)" on the Play page, shown only
+when the server has an engine configured). Design and effort plan: `docs/FORGE-ENGINE.md`;
+the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge): `engine/README.md`.
+
+- **Topology.** Browser -> CGwF server (same room socket as always) -> ONE control WebSocket ->
+  the engine (Fly app `cgwf-engine`, `ws://cgwf-engine.internal:8081`, no public port,
+  `Authorization: Bearer ENGINE_TOKEN` on the handshake, same secret on both apps; the token
+  lives only in `C:\Openclaw\cgwf-secrets\engine-token.txt`). `ENGINE_URL` unset = engine
+  tables unavailable (`GET /api/features` -> `{engine:false}`, `POST /api/rooms {engine:true}`
+  -> 503). Games live in the engine's RAM only: the machine is always on
+  (`engine/fly.toml`: no services, restart policy always); a restart loses games in progress
+  and the relay ends such tables with an honest "the rules engine restarted" result.
+- **Hidden information, twice.** The engine's `SeatView.java` is the only serialiser and never
+  emits libraries or other hands (proved by `HiddenInformationTest`, which audits every seat's
+  view at every event AND the view attached to every prompt of a scripted human seat; run with
+  `-Dforge.assets=<forge-gui>`; the CI `engine` job does this). The relay (`server/src/rooms/
+  engineTable.ts`) renders a frame the engine sent for seat N only to sockets of the user in
+  seat N; spectators get the spectator frame; `server/src/engine/engine.test.ts` proves it over
+  real sockets against a fake engine.
+- **Server pieces** (`server/src/engine/`): `client.ts` (reconnecting control socket, `rid`
+  correlation for `createGame`), `mapping.ts` (`PrintingMapper`: Forge name + Scryfall set code
+  + collector number -> `cards.id`, then name through `NameIndex`, tokens by name + P/T; cached
+  per table and persisted in `rooms.engine_state`), `view.ts` (pure: engine frame ->
+  `PlayerView` with Forge player ids -> user ids, Forge steps -> `Step`, `ViewCard.engine`
+  {power, toughness, damage, sick}, `PlayerView.engine` {phase, prompt, waitingOn, playable,
+  stops, engineDown}; prompt/answer conversion with iids), `deck.ts` (deck -> engine JSON; the
+  deck page's warnings become BLOCKING here: Forge would play an illegal deck). `LiveRoom`
+  holds an `EngineTable` when `rooms.engine = 1` (migration 0010): no reducer runs, the event
+  log holds `GameStarted` (players only), `EngineLog` (one row per engine log line),
+  `EngineAnswer` (every human answer, replayable later) and `EngineGameOver`; the classic
+  reducer refuses those types. `submit`/`undo`/`revert` are refused on engine tables.
+- **Protocol to the engine** (one frame = one JSON object; `gameId` = room id; `seat` = table
+  seat, -1 = spectator): `createGame`, `answer`, `setStops`, `resync`, `attachSeat`/`detachSeat`,
+  `concede`, `endGame`, `health`, `ping` in; `hello`, `gameCreated`, `cards` (every card at the
+  start, for printing mapping), `state`, `prompt`, `log`, `gameOver`, `error`, `pong` out. Prompt
+  kinds today: priority (play a land / cast / activate, mana paid automatically), targets,
+  attackers, blockers, choose, chooseMany, confirm, mulligan (+ bottom as chooseMany with
+  `reason: "mulligan"`). Everything Forge asks that is not modelled yet (and any prompt nobody
+  answers within `CGWF_PROMPT_TIMEOUT_MS`, default 10 min, or while a seat is marked absent) is
+  decided by Forge's AI for that seat. Full list of prompt kinds still to build: design doc 3.3.
+- **Auto-pass.** The engine only offers priority at a seat's stops (`EngineStops`: my turn
+  MAIN1, declare attackers, MAIN2, end; opponents' end step; always when the top of the stack is
+  someone else's); `{t:"stops"}` changes them (UI for that: Stage 1 M3). "End turn" answers
+  with `passUntilTurn` so the rest of the turn passes without prompts.
+- **Client.** `client/src/game/Engine.tsx` (prompt bar inside the phase strip, list sheet,
+  ability picker, mulligan overlay); `Table.tsx` engine mode: a tap on a glowing card answers
+  the open prompt, classic actions/events are hidden, life is read-only, concede goes through
+  `{t:"concede"}`; `PhaseStrip` shows "Waiting for X" and disables step buttons.
+- **Run it locally.** Engine: see `engine/README.md` (JDK 21 + Maven portable zips in
+  `C:/Openclaw/tools`, Forge clone at `C:/Openclaw/forge`); `java -jar engine/target/cgwf-engine.jar
+  serve --assets C:/Openclaw/forge/forge-gui --port 8084` with `ENGINE_TOKEN=testtoken`. Server:
+  `.env` with `ENGINE_URL=ws://localhost:8084` and `ENGINE_TOKEN=testtoken`. A second human for
+  solo testing: `node scripts/engine-bot.mjs http://localhost:8093 <code> Blair 1` (registers a
+  profile with a legal Krenko + 99 Mountains deck, sits down, answers every prompt). Note that
+  with `ENGINE_URL` in `.env` every Vitest app also connects to that engine (harmless, noisy).
+- **Bumping Forge.** Change the tag in `engine/pom.xml` (`forge.version`), `engine/Dockerfile`
+  (`FORGE_TAG`) and `.github/workflows/ci.yml`; rebuild the four modules locally (README);
+  run `mvn -Dforge.assets=... package` (the audit) and `node engine/spike/client.mjs` (four
+  precons to completion); redeploy `cgwf-engine` from `engine/` with
+  `fly deploy --remote-only --ha=false`, then `fly machine start` if it comes up stopped.
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
@@ -928,5 +993,8 @@ them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.
     availability + purchase links, deck shopping panel, Stores page. **(done)**
 10b. Table hygiene stopgap: ownership guardrails, automatic untap/draw, combat events, automatic
     eliminations, win advisories; phase strip, attack / block / damage UI, full-card zoom. **(done)**
-11. Ideas: per-event view deltas if bandwidth matters, rules-engine groundwork (stack, priority),
-    browser push notifications (see Phase 8), password reset once there is an email provider.
+11. Rules engine (Forge) tables, Stage 1: M1 engine control protocol + relay + CI **(done)**,
+    M2 engine games playable end to end in the app **(done)**, M3 four seats / stops UI / resync /
+    legality messages / docs, M4 Forge AI bot seats (if time). See `docs/FORGE-ENGINE.md`.
+12. Ideas: per-event view deltas if bandwidth matters, browser push notifications (see Phase 8),
+    password reset once there is an email provider.

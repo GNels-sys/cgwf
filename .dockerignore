@@ -9,3 +9,4 @@ client/dev-dist
 !README.md
 .github
 **/*.tsbuildinfo
+engine

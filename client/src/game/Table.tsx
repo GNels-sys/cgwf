@@ -2,7 +2,9 @@ import { useTableMotion } from "./useTableMotion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { isOut, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
+import { isOut, type EngineAnswer, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
+import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
+import { StopsPanel } from "./StopsPanel";
 import { Avatar } from "../components/Avatar";
 import { useSettings } from "../settings";
 import { anthemActions, cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
@@ -34,7 +36,15 @@ import { isOwner, useUser } from "../user";
  * personalization.
  */
 
-type Sheet = { kind: "card"; card: ViewCard } | { kind: "library" } | { kind: "player"; player: ViewPlayer } | { kind: "dice" } | { kind: "anthems"; player: ViewPlayer } | null;
+type Sheet =
+  | { kind: "card"; card: ViewCard }
+  | { kind: "library" }
+  | { kind: "player"; player: ViewPlayer }
+  | { kind: "dice" }
+  | { kind: "anthems"; player: ViewPlayer }
+  | { kind: "engineAbilities"; card: ViewCard; options: Array<{ index: number; description: string; cost: string | null; kind: string }> }
+  | { kind: "engineList" }
+  | null;
 interface CardsPanel {
   title: string;
   subtitle?: string;
@@ -112,12 +122,106 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAgents, setShowAgents] = useState(false);
+  const [showStops, setShowStops] = useState(false);
   const [mode, setMode] = useState<CombatMode | null>(null);
   const [showDamage, setShowDamage] = useState(false);
   const { user } = useUser();
   const hasAgents = room.members.some((m) => m.isAgent);
   const [dismissedEnd, setDismissedEnd] = useState(false);
   const wantRematch = useRef(false);
+
+  // ---- rules engine (engine tables) ------------------------------------------
+  const engine = view.engine ?? null;
+  const engineMode = engine !== null;
+  const prompt = engine?.prompt ?? null;
+  const [pick, setPickState] = useState<EnginePick>(NO_PICK);
+  const pickFor = useRef<number | null>(null);
+  // A new prompt starts with a fresh pick state (and closes any list sheet from the previous one).
+  useEffect(() => {
+    const id = prompt?.promptId ?? null;
+    if (pickFor.current === id) return;
+    pickFor.current = id;
+    setPickState(initialPick(prompt));
+    setSheet((s) => (s && (s.kind === "engineList" || s.kind === "engineAbilities") ? null : s));
+  }, [prompt]);
+  const setPick = useCallback((p: EnginePick) => setPickState(p), []);
+  const answerEngine = useCallback((a: EngineAnswer) => sock.send({ t: "engine", answer: a }), [sock]);
+  const engineHighlights = useMemo(() => promptHighlights(prompt), [prompt]);
+  const engineSelected = useMemo(() => {
+    const out = new Set<string>();
+    if (!prompt) return out;
+    if (pick.kind === "attack") for (const iid of Object.keys(pick.targets)) out.add(iid);
+    else if (pick.kind === "block") for (const iid of Object.keys(pick.blocks)) out.add(iid);
+    else if (pick.kind === "select" && (prompt.kind === "targets" || prompt.kind === "chooseMany")) {
+      for (const o of prompt.options) if (o.kind === "card" && pick.picked.includes(o.index)) out.add(o.iid);
+    }
+    return out;
+  }, [pick, prompt]);
+  /** Tap on an engine table: act on the open prompt if the card is one of its options, else zoom. */
+  const engineTap = useCallback(
+    (card: ViewCard) => {
+      if (!prompt) {
+        setZoom(card);
+        return;
+      }
+      switch (prompt.kind) {
+        case "priority": {
+          const options = prompt.options.filter((o) => o.iid === card.iid);
+          if (options.length === 1) answerEngine({ promptId: prompt.promptId, option: options[0]!.index });
+          else if (options.length > 1) setSheet({ kind: "engineAbilities", card, options });
+          else setZoom(card);
+          return;
+        }
+        case "targets":
+        case "chooseMany": {
+          const index = cardOptionIndex(prompt.options, card.iid);
+          if (index === null) return void setZoom(card);
+          const picked = pick.kind === "select" ? pick.picked : [];
+          const next = picked.includes(index) ? picked.filter((i) => i !== index) : prompt.max === 1 ? [index] : picked.length >= prompt.max ? picked : [...picked, index];
+          setPickState({ kind: "select", picked: next });
+          return;
+        }
+        case "choose": {
+          const index = cardOptionIndex(prompt.options, card.iid);
+          if (index === null) return void setZoom(card);
+          answerEngine({ promptId: prompt.promptId, option: index });
+          return;
+        }
+        case "attackers": {
+          const cand = prompt.candidates.find((c) => c.iid === card.iid);
+          if (!cand || pick.kind !== "attack") return void setZoom(card);
+          const targets = { ...pick.targets };
+          if (targets[card.iid]) delete targets[card.iid];
+          else {
+            const current = pick.current;
+            const allowed = current && (cand.canAttack ?? []).some((d) => refKey(d) === refKey(current)) ? current : (cand.canAttack ?? [])[0];
+            if (!allowed) return;
+            targets[card.iid] = allowed;
+          }
+          setPickState({ kind: "attack", targets, current: pick.current });
+          return;
+        }
+        case "blockers": {
+          if (pick.kind !== "block") return void setZoom(card);
+          if (prompt.attackers.some((a) => a.iid === card.iid)) {
+            setPickState({ ...pick, current: card.iid });
+            return;
+          }
+          const blocker = prompt.blockers.find((b) => b.iid === card.iid);
+          if (!blocker) return void setZoom(card);
+          const blocks = { ...pick.blocks };
+          if (blocks[card.iid]) delete blocks[card.iid];
+          else if (pick.current && (blocker.canBlock ?? []).includes(pick.current)) blocks[card.iid] = pick.current;
+          else return;
+          setPickState({ kind: "block", blocks, current: pick.current });
+          return;
+        }
+        default:
+          setZoom(card);
+      }
+    },
+    [prompt, pick, answerEngine],
+  );
 
   // Looks (playmat + sleeves) for everyone at the table.
   const looks: Looks = useMemo(() => Object.fromEntries(room.members.map((m) => [m.userId, m.look])), [room.members]);
@@ -164,6 +268,10 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
   const tapCard = useCallback(
     (card: ViewCard) => {
+      if (engineMode) {
+        engineTap(card);
+        return;
+      }
       // Combat picking: tapping one of my battlefield cards assigns it instead of opening the sheet.
       if (mode && me && card.zone.kind === "battlefield" && card.zone.owner === me) {
         if (mode.kind === "attack") {
@@ -184,7 +292,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       }
       setSheet({ kind: "card", card });
     },
-    [mode, me],
+    [mode, me, engineMode, engineTap],
   );
   const holdCard = useCallback((card: ViewCard) => setZoom(card), []);
 
@@ -217,7 +325,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
   const others = seatOrderFrom(view, me);
   const myDerived = useMemo(() => (mePlayer ? deriveFor(mePlayer, printings) : null), [mePlayer, printings]);
-  const highlighted = useMemo(() => new Set(view.pendingTriggers.map((t) => t.iid)), [view.pendingTriggers]);
+  const highlighted = useMemo(() => (engineMode ? engineHighlights : new Set(view.pendingTriggers.map((t) => t.iid))), [engineMode, engineHighlights, view.pendingTriggers]);
   // For the zoom view: derived stats + attachments of whichever battlefield the card sits on.
   const zoomExtras = useMemo(() => {
     if (!zoom || zoom.zone.kind !== "battlefield") return { derived: undefined, attachments: [] as ViewCard[] };
@@ -228,7 +336,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   }, [zoom, view, printings]);
   const isMyTurn = me === view.activePlayer;
   const ended = view.phase === "ended";
-  const canAct = Boolean(mePlayer && !mePlayer.conceded && !ended);
+  const canAct = Boolean(mePlayer && !mePlayer.conceded && !ended && !(engineMode && mePlayer.eliminated));
+  /** Classic-table actions (events) are off on engine tables. */
+  const canEdit = canAct && !engineMode;
   const isHost = me !== null && room.hostId === me;
 
   // ---- combat picking (attackers / blockers) --------------------------------
@@ -285,7 +395,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     }
     return marks;
   }, [mode, view, printings, room.members]);
-  const combatSelected = useMemo(() => new Set(mode ? Object.keys(mode.kind === "attack" ? mode.targets : mode.blocks) : []), [mode]);
+  const combatSelected = useMemo(() => (engineMode ? engineSelected : new Set(mode ? Object.keys(mode.kind === "attack" ? mode.targets : mode.blocks) : [])), [mode, engineMode, engineSelected]);
   const confirmWin = (iid: string, name: string, condition: string) =>
     setDialog({
       kind: "confirm",
@@ -308,7 +418,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
   // ---- mulligan overlay ------------------------------------------------
   const needBottom = mePlayer?.toBottom ?? 0;
-  const showMulligan = Boolean(mePlayer && !mePlayer.conceded && ((view.phase === "mulligan" && !mePlayer.kept) || needBottom > 0));
+  const showMulligan = !engineMode && Boolean(mePlayer && !mePlayer.conceded && ((view.phase === "mulligan" && !mePlayer.kept) || needBottom > 0));
 
   // ---- sheet contents ----------------------------------------------------
   let sheetView: React.ReactNode = null;
@@ -333,6 +443,20 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     } else if (sheet.kind === "anthems") {
       const p = view.players[sheet.player.id] ?? sheet.player;
       sheetView = <ActionSheet title={p.id === me ? "Anthems on your creatures" : `Anthems on ${p.name}'s creatures`} subtitle="Detected from card text; hide conditional ones, add what the parser misses" actions={anthemActions(ctx, p)} onClose={closeSheet} />;
+    } else if (sheet.kind === "engineAbilities" && prompt) {
+      sheetView = (
+        <EngineAbilitySheet
+          name={nameOf(sheet.card, printings)}
+          options={sheet.options}
+          onPick={(index) => {
+            closeSheet();
+            answerEngine({ promptId: prompt.promptId, option: index });
+          }}
+          onClose={closeSheet}
+        />
+      );
+    } else if (sheet.kind === "engineList" && prompt) {
+      sheetView = <EngineListSheet prompt={prompt} view={view} printings={printings} pick={pick} setPick={setPick} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     }
   }
 
@@ -347,7 +471,14 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     });
 
   const concede = () =>
-    setDialog({ kind: "confirm", title: "Concede the game?", body: "You stay at the table as a spectator.", confirmLabel: "Concede", danger: true, onConfirm: () => sock.dispatch({ type: "PlayerConceded", payload: { player: me! } }) });
+    setDialog({
+      kind: "confirm",
+      title: "Concede the game?",
+      body: engineMode ? "The engine records the concession at your next decision; you stay at the table as a spectator." : "You stay at the table as a spectator.",
+      confirmLabel: "Concede",
+      danger: true,
+      onConfirm: () => (engineMode ? sock.send({ t: "concede" }) : sock.dispatch({ type: "PlayerConceded", payload: { player: me! } })),
+    });
   const leave = () =>
     setDialog({
       kind: "confirm",
@@ -369,10 +500,14 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     { label: "Game log", run: () => (setShowMenu(false), setShowLog(true)) },
     { label: "Personalize", hint: "playmat, sleeves, layout", run: () => (setShowMenu(false), setShowSettings(true)) },
     ...(isOwner(user) && hasAgents ? [{ label: "Agent reasoning", hint: "what the computer opponents decided and spent", run: () => (setShowMenu(false), setShowAgents(true)) }] : []),
-    { label: "Dice, coin, random opponent", run: () => (setShowMenu(false), setSheet({ kind: "dice" })), disabled: !canAct },
-    { label: "Create tokens", run: () => (setShowMenu(false), setShowTokens(true)), disabled: !canAct },
-    { label: "Undo my last action", hint: "only while nobody else has acted", run: () => (setShowMenu(false), sock.send({ t: "undo" })), disabled: !canAct },
-    { label: "Untap all my permanents", run: () => (setShowMenu(false), sock.dispatch({ type: "UntapAll", payload: { player: me! } })), disabled: !canAct },
+    ...(engineMode
+      ? [{ label: "Stops", hint: "where the engine pauses to ask you", run: () => (setShowMenu(false), setShowStops(true)), disabled: !canAct }]
+      : [
+          { label: "Dice, coin, random opponent", run: () => (setShowMenu(false), setSheet({ kind: "dice" })), disabled: !canAct },
+          { label: "Create tokens", run: () => (setShowMenu(false), setShowTokens(true)), disabled: !canAct },
+          { label: "Undo my last action", hint: "only while nobody else has acted", run: () => (setShowMenu(false), sock.send({ t: "undo" })), disabled: !canAct },
+          { label: "Untap all my permanents", run: () => (setShowMenu(false), sock.dispatch({ type: "UntapAll", payload: { player: me! } })), disabled: !canAct },
+        ]),
     ...(ended && isHost ? [{ label: "Rematch with the same decks", hint: "new game, same seats", run: () => (setShowMenu(false), rematch()) }] : []),
     { label: "Concede", danger: true, disabled: !canAct, run: () => (setShowMenu(false), concede()) },
     { label: "Leave table", danger: true, run: () => (setShowMenu(false), leave()) },
@@ -389,7 +524,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
         <div className="table-top">
           <div className="opp-strip">{topOpponents.map((p) => renderChip(p, false))}</div>
           <div className="turn-bar">
-            {mePlayer && <ManaBank player={mePlayer} dispatch={sock.dispatch} disabled={!canAct} />}
+            {mePlayer && <ManaBank player={mePlayer} dispatch={sock.dispatch} disabled={!canEdit} />}
             <button className="btn btn-small menu-btn" onClick={() => setShowMenu(true)} aria-label="Menu">
               &#8942;
             </button>
@@ -401,15 +536,19 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           printings={printings}
           members={room.members}
           me={me}
-          canAct={canAct}
+          canAct={canEdit}
           dispatch={sock.dispatch}
           onAttack={startAttack}
           onBlock={startBlock}
           onAssignDamage={() => setShowDamage(true)}
           onZoom={holdCard}
           onConfirmWin={confirmWin}
-          busy={mode !== null}
+          busy={mode !== null || prompt !== null}
+          engine={engine}
         >
+          {engineMode && prompt && me && mePlayer && (
+            <EngineBar prompt={prompt} view={view} printings={printings} members={room.members} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} openList={() => setSheet({ kind: "engineList" })} />
+          )}
           {mode && me && (
             <CombatBar
               mode={mode}
@@ -438,8 +577,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               derived={myDerived}
               onTap={tapCard}
               onHold={holdCard}
-              draggable={canAct}
-              droppable={canAct}
+              draggable={canEdit}
+              droppable={canEdit}
               highlighted={highlighted}
               onAnthems={() => setSheet({ kind: "anthems", player: mePlayer })}
               sleeveOf={sleeveOf}
@@ -473,7 +612,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
                 <span>Cmd</span>
                 <strong>{mePlayer.command.length}</strong>
               </DropButton>
-              <button className="zone-btn is-tokens" onClick={() => setShowTokens(true)} disabled={!canAct} aria-label="Create tokens">
+              <button className="zone-btn is-tokens" onClick={() => setShowTokens(true)} disabled={!canEdit} aria-label="Create tokens">
                 <span>Token</span>
                 <strong>+</strong>
               </button>
@@ -481,12 +620,13 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
             <DropRow id="zone:hand" className="hand">
               {mePlayer.hand.cards.length === 0 && <span className="muted small">Empty hand</span>}
               {mePlayer.hand.cards.map((c) => (
-                <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={holdCard} draggable={canAct} />
+                <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={holdCard} draggable={canEdit} highlight={highlighted.has(c.iid)} selected={combatSelected.has(c.iid)} />
               ))}
             </DropRow>
             <LifeWidget
               player={mePlayer}
               mine
+              readOnly={engineMode}
               onDelta={(d) => sock.dispatch({ type: "LifeChanged", payload: { player: me!, delta: d } })}
               onBig={() => lifeBig(mePlayer)}
               onCounters={() => setSheet({ kind: "player", player: mePlayer })}
@@ -496,7 +636,12 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
         <p className="table-notice">Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards. Card data and images courtesy of Scryfall.</p>
 
-        {me && canAct && <TriggersPanel triggers={view.pendingTriggers} me={me} dispatch={sock.dispatch} />}
+        {me && canEdit && <TriggersPanel triggers={view.pendingTriggers} me={me} dispatch={sock.dispatch} />}
+        {engineMode && engine?.engineDown && (
+          <div className="toast is-warn" role="status">
+            Reconnecting to the rules engine...
+          </div>
+        )}
         {sock.error && (
           <div className="toast" role="status">
             {sock.error}
@@ -510,6 +655,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       </div>
 
       {/* ---- overlays ---- */}
+      {engineMode && prompt && me && (prompt.kind === "mulligan" || (prompt.kind === "chooseMany" && prompt.reason === "mulligan")) && (
+        <EngineMulligan prompt={prompt} view={view} printings={printings} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} />
+      )}
       {showMulligan && mePlayer && (
         <div className="mulligan">
           <div className="mulligan-box">
@@ -633,10 +781,12 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
         <LogPanel
           log={view.log}
           members={room.members}
-          canRevert={canAct}
+          canRevert={canEdit}
           onClose={() => setShowLog(false)}
           onRevert={(seq) =>
-            setDialog({
+            engineMode
+              ? undefined
+              : setDialog({
               kind: "confirm",
               title: `Rewind the game to just after #${seq}?`,
               body: "Everything after that line is undone for everyone, and the log says who rewound it.",
@@ -666,6 +816,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       )}
       {showMenu && <MenuPanel room={room} view={view} me={me} status={sock.status} onClose={() => setShowMenu(false)} actions={menuActions} />}
       {showAgents && <AgentsPanel code={room.code} onClose={() => setShowAgents(false)} />}
+      {showStops && engine && <StopsPanel stops={engine.stops} onSave={(stops) => sock.send({ t: "stops", stops })} onClose={() => setShowStops(false)} />}
     </DndContext>
   );
 }

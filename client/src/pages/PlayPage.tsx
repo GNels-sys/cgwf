@@ -12,19 +12,25 @@ function PlayHome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<MyRoomsResponse["rooms"]>([]);
+  const [engineAvailable, setEngineAvailable] = useState(false);
+  const [useEngine, setUseEngine] = useState(false);
 
   useEffect(() => {
     api.rooms
       .mine()
       .then((r) => setRecent(r.rooms))
       .catch(() => setRecent([]));
+    api
+      .features()
+      .then((f) => setEngineAvailable(f.engine))
+      .catch(() => setEngineAvailable(false));
   }, []);
 
   const create = async () => {
     setBusy(true);
     setError(null);
     try {
-      const r = await api.rooms.create();
+      const r = await api.rooms.create(useEngine && engineAvailable ? { engine: true } : {});
       navigate(`/room/${r.room.code}`);
     } catch (e) {
       setError((e as Error).message);
@@ -59,8 +65,17 @@ function PlayHome() {
           <p className="eyebrow">01 · Host a game</p>
           <h2>A table for your friends.</h2>
           <p className="muted">Choose your deck in the lobby, then share the table code.</p>
+          {engineAvailable && (
+            <label className="check-row engine-opt">
+              <input type="checkbox" checked={useEngine} onChange={(e) => setUseEngine(e.target.checked)} />
+              <span>
+                <strong>Rules engine (beta)</strong>
+                <span className="muted small">The table enforces the rules: untap, draw, mana, combat and the stack happen on their own. Decks must be legal Commander decks.</span>
+              </span>
+            </label>
+          )}
           <button className="btn btn-primary btn-big" onClick={() => void create()} disabled={busy}>
-            New table
+            {useEngine && engineAvailable ? "New engine table" : "New table"}
           </button>
         </section>
         <section className="surface play-join">

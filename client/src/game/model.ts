@@ -25,7 +25,22 @@ export function battlefieldCards(p: ViewPlayer): ViewCard[] {
 
 /** Derived P/T, keywords, attachments and anthems for one player's battlefield. */
 export function deriveFor(p: ViewPlayer, printings: Printings): DerivedBattlefield {
-  return deriveBattlefield(battlefieldCards(p), (c) => printingOf(c as ViewCard, printings), p.manualAnthems);
+  const derived = deriveBattlefield(battlefieldCards(p), (c) => printingOf(c as ViewCard, printings), p.manualAnthems);
+  // Rules-engine tables: the engine's own numbers win over the text-parsed estimate.
+  for (const c of battlefieldCards(p)) {
+    if (!c.engine) continue;
+    const d = derived.cards.get(c.iid);
+    if (!d) continue;
+    if (c.engine.power !== null) {
+      d.deltaPower = c.engine.power - (d.basePower ?? 0);
+      d.power = c.engine.power;
+    }
+    if (c.engine.toughness !== null) {
+      d.deltaToughness = c.engine.toughness - (d.baseToughness ?? 0);
+      d.toughness = c.engine.toughness;
+    }
+  }
+  return derived;
 }
 
 export function allVisibleCards(view: PlayerView): Map<string, ViewCard> {

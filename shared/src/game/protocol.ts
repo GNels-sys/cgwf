@@ -3,6 +3,7 @@ import type { AvatarColorKey, AvatarKey } from "../user.js";
 import type { Look } from "../settings.js";
 import type { EventInput, PlayerId } from "./types.js";
 import type { PlayerView } from "./view.js";
+import type { EngineAnswer, EngineStops } from "../engine.js";
 
 /**
  * Room + WebSocket protocol. The socket is opened at
@@ -44,6 +45,8 @@ export interface RoomInfo {
   nextCode: string | null;
   /** Who you are in this room (null before joining). */
   you: { userId: PlayerId; role: MemberRole; seat: number | null } | null;
+  /** Rules-engine table (Forge decides what is legal) instead of the classic manual table. */
+  engine: boolean;
 }
 
 export const ROOM_CODE_LENGTH = 6;
@@ -60,6 +63,12 @@ export type ClientMessage =
   /** Host only, once the game has ended: new table, same seats and decks, fresh seed. */
   | { t: "rematch" }
   | { t: "leave" }
+  /** Engine tables: answer the prompt the engine is waiting on (see shared/engine.ts). */
+  | { t: "engine"; answer: EngineAnswer; cid?: string }
+  /** Engine tables: change this seat's auto-pass stops. */
+  | { t: "stops"; stops: EngineStops }
+  /** Concede (any table); on engine tables the engine records it at the seat's next decision. */
+  | { t: "concede" }
   | { t: "ping" };
 
 // server -> client
@@ -69,8 +78,16 @@ export type ServerMessage =
   | { t: "error"; message: string; cid?: string }
   | { t: "pong" };
 
+export interface CreateRoomRequest {
+  /** Open a rules-engine table (only honoured when the server has an engine configured). */
+  engine?: boolean;
+}
 export interface CreateRoomResponse {
   room: RoomInfo;
+}
+/** GET /api/features: what this deployment has switched on. */
+export interface FeaturesResponse {
+  engine: boolean;
 }
 export interface RoomResponse {
   room: RoomInfo;

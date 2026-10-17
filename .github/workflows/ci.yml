@@ -19,3 +19,33 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  # The rules engine (engine/): builds Forge's four GUI-less modules at the pinned tag (cached by tag),
+  # then the bridge, and runs the hidden-information audit against Forge's card data.
+  engine:
+    runs-on: ubuntu-latest
+    env:
+      FORGE_TAG: forge-2.0.15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Cache Forge build and Maven dependencies
+        id: forge-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            forge-src
+          key: forge-${{ env.FORGE_TAG }}-${{ hashFiles('engine/pom.xml') }}
+          restore-keys: forge-${{ env.FORGE_TAG }}-
+      - name: Clone Forge at the pinned tag
+        if: steps.forge-cache.outputs.cache-hit != 'true'
+        run: git clone --depth 1 --branch "$FORGE_TAG" https://github.com/Card-Forge/forge.git forge-src
+      - name: Build Forge modules
+        if: steps.forge-cache.outputs.cache-hit != 'true'
+        run: cd forge-src && mvn -B -q -pl forge-core,forge-game,forge-ai,forge-gui -am -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true install
+      - name: Build the engine and run the hidden-information audit
+        run: cd engine && mvn -B -Dforge.assets="$GITHUB_WORKSPACE/forge-src/forge-gui" package

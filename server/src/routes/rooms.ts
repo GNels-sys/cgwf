@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
-import type { ClientMessage, CreateRoomResponse, MyRoomsResponse, RoomResponse } from "@cgwf/shared";
+import type { ClientMessage, CreateRoomRequest, CreateRoomResponse, FeaturesResponse, MyRoomsResponse, RoomResponse } from "@cgwf/shared";
+import { isEngineAnswer } from "../engine/view.js";
 import { rateLimitKey, requireUser, userFromToken } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
 import { isRoomCode, normalizeRoomCode } from "../rooms/codes.js";
@@ -31,11 +32,18 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
     return roomsManager.get(code);
   };
 
-  app.post(
+  /** What this deployment has switched on (the Play page shows the engine option only when true). */
+  app.get("/api/features", async (): Promise<FeaturesResponse> => ({ engine: roomsManager.engineAvailable() }));
+
+  app.post<{ Body: CreateRoomRequest | null }>(
     "/api/rooms",
     { preHandler: auth, config: { rateLimit: { max: 10, timeWindow: "1 hour", keyGenerator } } },
     async (req, reply): Promise<CreateRoomResponse | void> => {
-      const room = roomsManager.create(req.user!.id);
+      const wantEngine = Boolean(req.body && typeof req.body === "object" && req.body.engine);
+      if (wantEngine && !roomsManager.engineAvailable()) {
+        return reply.code(503).send({ error: roomsManager.engineConfigured() ? "the rules engine is not reachable right now; try again in a moment" : "the rules engine is not enabled on this server" });
+      }
+      const room = roomsManager.create(req.user!.id, { engine: wantEngine });
       return reply.code(201).send({ room: room.info(req.user!.id) });
     },
   );
@@ -81,6 +89,9 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
     const fail = (message: string, cid?: string) => room.send(conn, cid ? { t: "error", message, cid } : { t: "error", message });
 
     socket.on("message", (data) => {
+      void onMessage(data);
+    });
+    const onMessage = async (data: Buffer | ArrayBuffer | Buffer[]): Promise<void> => {
       if (!room.allow(conn)) return fail("slow down");
       let msg: ClientMessage;
       try {
@@ -105,9 +116,9 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
             room.broadcastRoom();
             break;
           case "start":
-            room.start(user.id);
+            await room.startAny(user.id);
             room.broadcastRoom();
-            agents?.onGameStarted(room);
+            if (!room.isEngine) agents?.onGameStarted(room);
             break;
           case "event":
             room.submit(user.id, msg.event);
@@ -124,6 +135,17 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
             agents?.onGameStarted(next);
             break;
           }
+          case "engine":
+            if (!isEngineAnswer(msg.answer)) return fail("bad engine answer", msg.cid);
+            room.engineAnswer(user.id, msg.answer);
+            break;
+          case "stops":
+            if (!msg.stops || typeof msg.stops !== "object") return fail("bad stops");
+            room.engineStops(user.id, msg.stops);
+            break;
+          case "concede":
+            room.concede(user.id);
+            break;
           case "leave":
             room.leave(user.id);
             room.broadcastRoom();
@@ -139,7 +161,7 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
           fail("something went wrong", (msg as { cid?: string }).cid);
         }
       }
-    });
+    };
 
     socket.on("close", () => room.detach(conn));
     socket.on("error", () => room.detach(conn));

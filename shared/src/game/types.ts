@@ -370,6 +370,12 @@ export type EventPayloads = {
   WinAdvisoryDismissed: { iid: string };
   /** Rewind the game to just after event `toSeq`. Applied by the replayer, not the reducer. */
   Revert: { toSeq: number; reason?: string };
+  /** Engine tables: one line of the rules engine's log (appended by the relay, never by a client). */
+  EngineLog: { engineSeq: number; turn: number; logType: string; text: string };
+  /** Engine tables: a seat's answer to a prompt, kept so the game can be replayed later. */
+  EngineAnswer: { seat: number; promptId: number; prompt: string; answer: Record<string, unknown> };
+  /** Engine tables: how the engine ended the game. */
+  EngineGameOver: { winner: PlayerId | null; endReason: string | null; turns: number };
 };
 
 export type EventType = keyof EventPayloads;
@@ -423,7 +429,13 @@ export const EVENT_TYPES = Object.keys({
   WinClaimed: 0,
   WinAdvisoryDismissed: 0,
   Revert: 0,
+  EngineLog: 0,
+  EngineAnswer: 0,
+  EngineGameOver: 0,
 } satisfies Record<EventType, 0>) as EventType[];
+
+/** Event types only the relay appends on engine tables; a client may never send them and the classic reducer refuses them. */
+export const ENGINE_ONLY_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>(["EngineLog", "EngineAnswer", "EngineGameOver"]);
 
 /** What a client sends: type + payload. The server adds seq, actor and ts. */
 export type EventInput = { [K in EventType]: { type: K; payload: EventPayloads[K] } }[EventType];
