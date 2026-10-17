@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { isOut, type EngineAnswer, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
+import { StopsPanel } from "./StopsPanel";
 import { Avatar } from "../components/Avatar";
 import { useSettings } from "../settings";
 import { anthemActions, cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
@@ -121,6 +122,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showAgents, setShowAgents] = useState(false);
+  const [showStops, setShowStops] = useState(false);
   const [mode, setMode] = useState<CombatMode | null>(null);
   const [showDamage, setShowDamage] = useState(false);
   const { user } = useUser();
@@ -499,7 +501,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     { label: "Personalize", hint: "playmat, sleeves, layout", run: () => (setShowMenu(false), setShowSettings(true)) },
     ...(isOwner(user) && hasAgents ? [{ label: "Agent reasoning", hint: "what the computer opponents decided and spent", run: () => (setShowMenu(false), setShowAgents(true)) }] : []),
     ...(engineMode
-      ? []
+      ? [{ label: "Stops", hint: "where the engine pauses to ask you", run: () => (setShowMenu(false), setShowStops(true)), disabled: !canAct }]
       : [
           { label: "Dice, coin, random opponent", run: () => (setShowMenu(false), setSheet({ kind: "dice" })), disabled: !canAct },
           { label: "Create tokens", run: () => (setShowMenu(false), setShowTokens(true)), disabled: !canAct },
@@ -814,6 +816,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       )}
       {showMenu && <MenuPanel room={room} view={view} me={me} status={sock.status} onClose={() => setShowMenu(false)} actions={menuActions} />}
       {showAgents && <AgentsPanel code={room.code} onClose={() => setShowAgents(false)} />}
+      {showStops && engine && <StopsPanel stops={engine.stops} onSave={(stops) => sock.send({ t: "stops", stops })} onClose={() => setShowStops(false)} />}
     </DndContext>
   );
 }

@@ -185,7 +185,8 @@ export function toViewCard(c: EngineCardJson, ctx: ConvertContext, printings: Ma
 }
 
 function toViewPlayer(p: EnginePlayerJson, ctx: ConvertContext, printings: Map<string, CardPrinting>): ViewPlayer | null {
-  const seat = ctx.seats.find((s) => s.playerId === p.id || s.seat === p.seat);
+  // The engine stamps the table seat on every player; Forge's player id is the fallback (older frames).
+  const seat = (typeof p.seat === "number" && p.seat >= 0 ? ctx.seats.find((s) => s.seat === p.seat) : undefined) ?? ctx.seats.find((s) => s.playerId === p.id);
   if (!seat) return null;
   const list = (cards: EngineCardJson[] | undefined) => (cards ?? []).map((c) => toViewCard(c, ctx, printings));
   const battlefield: ViewPlayer["battlefield"] = { other: [], creatures: [], enchantments: [], lands: [], artifacts: [] };

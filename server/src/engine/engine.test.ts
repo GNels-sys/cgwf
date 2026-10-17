@@ -119,7 +119,7 @@ class Client {
     for (;;) {
       const hit = this.frames.slice(from).find(pred);
       if (hit) return hit;
-      if (Date.now() - start > timeoutMs) throw new Error(`${this.name}: timed out waiting for a frame`);
+      if (Date.now() - start > timeoutMs) throw new Error(`${this.name}: timed out waiting for a frame; got ${JSON.stringify(this.frames.slice(from).map((f) => (f.t === "state" ? { viewer: f.view.viewer, players: Object.keys(f.view.players), turn: f.view.turn } : f.t)))}`);
       await new Promise((r) => setTimeout(r, 15));
     }
   }
@@ -152,6 +152,8 @@ describe("engine tables (relay to the rules engine)", () => {
   let blair: Client;
   let casey: Client;
   let code = "";
+  /** Forge player ids by seat, as the (fake) engine assigned them in gameCreated. */
+  const pid: Record<number, number> = {};
 
   const register = async (name: string, ip: string) => {
     const res = await ctx.app.inject({ method: "POST", url: "/api/me/register", payload: { displayName: name, avatar: "fox", color: "jade" }, remoteAddress: ip });
@@ -231,30 +233,34 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(seats[0]!.deck.main[0]!.count).toBe(99);
     const room = await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "playing", m);
     expect(room.room.status).toBe("playing");
-    expect(ctx.roomsManager.get(code)!.engineTable!.seatInfos().map((s) => s.playerId)).toEqual([100, 101]);
+    const infos = ctx.roomsManager.get(code)!.engineTable!.seatInfos();
+    expect(infos.map((s) => s.playerId).sort()).toEqual([100, 101]);
+    for (const s of infos) pid[s.seat] = s.playerId;
   });
 
   it("renders each seat its own frame only, and never another seat's hand", async () => {
     const gameId = ctx.roomsManager.get(code)!.id;
-    const base = { type: "state", gameId, turn: 1, phase: "MAIN1", activePlayer: 100, priorityPlayer: 100, gameOver: false, stack: [], combat: null, log: [] };
+    const A = pid[0]!;
+    const B = pid[1]!;
+    const base = { type: "state", gameId, turn: 1, phase: "MAIN1", activePlayer: A, priorityPlayer: A, gameOver: false, stack: [], combat: null, log: [] };
     const players = (viewer: number) => [
       {
-        id: 100, seat: 0, name: "Alex", isYou: viewer === 100, human: true, life: 40, poison: 0, lost: false, handCount: 2, libraryCount: 97, landsPlayedThisTurn: 0, commanderDamage: {},
-        ...(viewer === 100 ? { hand: [card(11, "Forest", "Hand", 100), card(12, "Forest", "Hand", 100)] } : {}),
-        battlefield: [card(13, "Forest", "Battlefield", 100, { tapped: true })], graveyard: [], exile: [], command: [card(14, "Atraxa, Grand Unifier", "Command", 100, { commander: true, power: 7, toughness: 7 })],
+        id: A, seat: 0, name: "Alex", isYou: viewer === A, human: true, life: 40, poison: 0, lost: false, handCount: 2, libraryCount: 97, landsPlayedThisTurn: 0, commanderDamage: {},
+        ...(viewer === A ? { hand: [card(11, "Forest", "Hand", A), card(12, "Forest", "Hand", A)] } : {}),
+        battlefield: [card(13, "Forest", "Battlefield", A, { tapped: true })], graveyard: [], exile: [], command: [card(14, "Atraxa, Grand Unifier", "Command", A, { commander: true, power: 7, toughness: 7 })],
       },
       {
-        id: 101, seat: 1, name: "Blair", isYou: viewer === 101, human: true, life: 40, poison: 0, lost: false, handCount: 3, libraryCount: 96, landsPlayedThisTurn: 0, commanderDamage: {},
-        ...(viewer === 101 ? { hand: [card(21, "Forest", "Hand", 101), card(22, "Forest", "Hand", 101), card(23, "Forest", "Hand", 101)] } : {}),
-        battlefield: [], graveyard: [], exile: [], command: [card(24, "Atraxa, Grand Unifier", "Command", 101, { commander: true, power: 7, toughness: 7 })],
+        id: B, seat: 1, name: "Blair", isYou: viewer === B, human: true, life: 40, poison: 0, lost: false, handCount: 3, libraryCount: 96, landsPlayedThisTurn: 0, commanderDamage: {},
+        ...(viewer === B ? { hand: [card(21, "Forest", "Hand", B), card(22, "Forest", "Hand", B), card(23, "Forest", "Hand", B)] } : {}),
+        battlefield: [], graveyard: [], exile: [], command: [card(24, "Atraxa, Grand Unifier", "Command", B, { commander: true, power: 7, toughness: 7 })],
       },
     ];
     // the engine tells the relay about every card once
     engine.send({ type: "cards", gameId, seat: -1, cards: [11, 12, 13, 21, 22, 23].map((id) => ({ cardId: id, owner: id < 20 ? 0 : 1, name: "Forest", set: "ONE", scryfallSet: "one", number: "276" })) });
     const ma = alex.mark();
     const mb = blair.mark();
-    engine.send({ ...base, seat: 0, viewer: 100, players: players(100) });
-    engine.send({ ...base, seat: 1, viewer: 101, players: players(101) });
+    engine.send({ ...base, seat: 0, viewer: A, players: players(A) });
+    engine.send({ ...base, seat: 1, viewer: B, players: players(B) });
     engine.send({ ...base, seat: -1, viewer: null, players: players(-1) });
 
     const full = (f: ServerMessage): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.viewer !== null && Object.keys(f.view.players).length === 2;
@@ -311,8 +317,8 @@ describe("engine tables (relay to the rules engine)", () => {
     const ma = alex.mark();
     engine.send({
       type: "prompt", gameId, seat: 0, promptId: 8, prompt: "attackers", title: "Declare attackers",
-      candidates: [card(14, "Atraxa, Grand Unifier", "Battlefield", 100, { power: 7, toughness: 7, index: 0, canAttack: [{ kind: "player", id: 101, name: "Blair" }] })],
-      defenders: [{ kind: "player", id: 101, name: "Blair", life: 40 }],
+      candidates: [card(14, "Atraxa, Grand Unifier", "Battlefield", pid[0]!, { power: 7, toughness: 7, index: 0, canAttack: [{ kind: "player", id: pid[1]!, name: "Blair" }] })],
+      defenders: [{ kind: "player", id: pid[1]!, name: "Blair", life: 40 }],
     });
     const s = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.kind === "attackers" && Object.keys(f.view.players).length === 2, ma)).view;
     const prompt = s.engine!.prompt!;
@@ -322,7 +328,7 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(prompt.candidates[0]!.canAttack![0]).toEqual({ kind: "player", player: blairId, name: "Blair" });
     alex.send({ t: "engine", answer: { promptId: 8, attacks: [{ iid: "14", defender: { kind: "player", player: blairId } }] } });
     const answer = await engine.waitFor((f) => f.type === "answer" && f.promptId === 8);
-    expect(answer.attacks).toEqual([{ cardId: 14, defender: { kind: "player", id: 101 } }]);
+    expect(answer.attacks).toEqual([{ cardId: 14, defender: { kind: "player", id: pid[1] } }]);
 
     const m2 = alex.mark();
     alex.send({ t: "event", event: { type: "LifeChanged", payload: { player: s.viewer, delta: -1 } } });

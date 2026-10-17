@@ -2255,3 +2255,7 @@
 .engine-option small { color: var(--fg-muted); }
 .engine-option .tile { flex: 0 0 auto; }
 .tile.is-sick .tile-inner::after { content: "zz"; position: absolute; top: 4px; left: 4px; font-size: 0.6rem; padding: 0 4px; border-radius: 6px; background: #0008; color: #fff; }
+.stops-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 8px; }
+.stops-col h3 { margin: 0 0 6px; font-size: 1rem; }
+.stops-col .check-row { margin: 0 0 4px; }
+@media (max-width: 520px) { .stops-grid { grid-template-columns: 1fr; } }

@@ -57,6 +57,8 @@ interface PersistedState {
 }
 
 const SPECTATOR = -1;
+/** A seat whose sockets are all gone keeps the game waiting this long before the AI takes over. */
+export const ABSENT_GRACE_MS = Number(process.env.ENGINE_ABSENT_GRACE_MS ?? 3 * 60 * 1000);
 
 export class EngineTable {
   private seats: SeatInfo[] = [];
@@ -68,6 +70,8 @@ export class EngineTable {
   private loaded = false;
   private cardsPersisted = 0;
   engineDown = false;
+  /** Seats with no socket left: the timer hands the seat to the AI when it fires (cleared on reattach). */
+  private readonly absentTimers = new Map<number, NodeJS.Timeout>();
 
   constructor(
     private readonly room: RoomPort,
@@ -191,6 +195,7 @@ export class EngineTable {
         const payload = { winner, endReason: frame.endReason == null ? null : String(frame.endReason), turns: Number(frame.turns ?? 0) };
         this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineGameOver", payload }, "ended");
         this.prompts.clear();
+        this.dispose();
         this.persist({ gameOver: payload });
         this.seq++;
         this.broadcast();
@@ -278,8 +283,38 @@ export class EngineTable {
     this.sendTo(conn);
     if (this.room.row().status === "playing") {
       this.client.trySend({ type: "resync", gameId: this.room.id, seat: seat ?? SPECTATOR });
-      if (seat !== null) this.client.trySend({ type: "attachSeat", gameId: this.room.id, seat });
+      if (seat !== null) {
+        const t = this.absentTimers.get(seat);
+        if (t) clearTimeout(t);
+        this.absentTimers.delete(seat);
+        this.client.trySend({ type: "attachSeat", gameId: this.room.id, seat });
+      }
     }
+  }
+
+  /** A socket closed: when the seat has no socket left, start the grace timer; the AI plays for it after that until it is back. */
+  onDetach(userId: string): void {
+    this.ensureLoaded();
+    const seat = this.seatOf(userId);
+    if (seat === null || this.room.row().status !== "playing") return;
+    for (const c of this.room.connections()) if (c.userId === userId) return; // another device is still here
+    if (this.absentTimers.has(seat)) return;
+    const timer = setTimeout(() => {
+      this.absentTimers.delete(seat);
+      this.client.trySend({ type: "detachSeat", gameId: this.room.id, seat });
+      const name = this.seats.find((s) => s.seat === seat)?.name ?? "A player";
+      this.log.push({ seq: this.seq + 1, actor: SYSTEM_ACTOR, text: `${name} has been away for a while; the engine's AI plays their seat until they return.`, ts: Date.now() });
+      this.seq++;
+      this.broadcast();
+    }, ABSENT_GRACE_MS);
+    timer.unref();
+    this.absentTimers.set(seat, timer);
+  }
+
+  /** Room closed or game over: forget the timers. */
+  dispose(): void {
+    for (const t of this.absentTimers.values()) clearTimeout(t);
+    this.absentTimers.clear();
   }
 
   /** Every socket at the table gets its own view (used after room-wide changes). */

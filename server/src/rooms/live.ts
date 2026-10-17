@@ -500,6 +500,7 @@ export class LiveRoom {
     this.conns.delete(conn);
     this.lastActivity = Date.now();
     this.broadcastRoom();
+    this.engineTable?.onDetach(conn.userId);
   }
 
   /** True when the socket is within its message budget. */
