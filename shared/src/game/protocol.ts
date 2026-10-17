@@ -31,6 +31,8 @@ export interface RoomMember {
   isAgent: boolean;
   /** Agents only: a decision is in flight right now. */
   thinking: boolean;
+  /** Engine tables only: why this seat's deck cannot start an engine game (empty = legal or no deck yet). */
+  deckProblems: string[];
 }
 
 export interface RoomInfo {

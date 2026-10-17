@@ -106,7 +106,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const tableRef = useRef<HTMLDivElement>(null);
   useTableMotion(tableRef, view, sock.status === "open");
   const navigate = useNavigate();
-  const { settings } = useSettings();
+  const { settings, update: updateSettings } = useSettings();
   const me = view.viewer;
   const mePlayer = me ? view.players[me] : undefined;
   const [sheet, setSheet] = useState<Sheet>(null);
@@ -816,7 +816,16 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       )}
       {showMenu && <MenuPanel room={room} view={view} me={me} status={sock.status} onClose={() => setShowMenu(false)} actions={menuActions} />}
       {showAgents && <AgentsPanel code={room.code} onClose={() => setShowAgents(false)} />}
-      {showStops && engine && <StopsPanel stops={engine.stops} onSave={(stops) => sock.send({ t: "stops", stops })} onClose={() => setShowStops(false)} />}
+      {showStops && engine && (
+        <StopsPanel
+          stops={engine.stops}
+          onSave={(stops) => {
+            sock.send({ t: "stops", stops });
+            updateSettings({ engineStops: stops }); // remembered for the next table too
+          }}
+          onClose={() => setShowStops(false)}
+        />
+      )}
     </DndContext>
   );
 }

@@ -22,6 +22,7 @@ import type { EngineClient, EngineFrame } from "../engine/client.js";
 import { deckForEngine } from "../engine/deck.js";
 import type { PrintingMapper } from "../engine/mapping.js";
 import { engineToView, toEngineAnswer, toEnginePrompt, type ConvertContext, type EngineCardJson, type EngineStateJson, type SeatInfo } from "../engine/view.js";
+import { loadSettings, saveEngineStops } from "../settings.js";
 
 /**
  * The engine side of a LiveRoom: talks to the rules engine for one table and turns its frames into
@@ -142,6 +143,12 @@ export class EngineTable {
     }
     this.seats = infos.map((i) => ({ ...i, playerId: created.players.find((p) => p.seat === i.seat)?.playerId ?? -1 }));
     this.persist();
+    // Each player's remembered stops (Personalize / the table's Stops panel) apply from the first priority.
+    for (const s of this.seats) {
+      const stops = loadSettings(this.room.handle, s.userId).engineStops;
+      this.stops.set(s.seat, stops);
+      this.client.trySend({ type: "setStops", gameId: row.id, seat: s.seat, stops });
+    }
     const payload: GameStartedPayload = { players: this.seats.map((s) => ({ id: s.userId, name: s.name, seat: s.seat })), decks: {}, startingLife: STARTING_LIFE };
     this.room.appendEngine(SYSTEM_ACTOR, { type: "GameStarted", payload }, "playing");
     this.log.push({ seq: this.seq + 1, actor: SYSTEM_ACTOR, text: "The rules engine started the game.", ts: Date.now() });
@@ -265,6 +272,7 @@ export class EngineTable {
     };
     this.stops.set(seat, clean);
     this.client.trySend({ type: "setStops", gameId: this.room.id, seat, stops: clean });
+    saveEngineStops(this.room.handle, userId, clean);
     this.sendSeat(seat);
   }
 

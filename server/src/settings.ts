@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { DEFAULT_SETTINGS, sanitizeSettings, type UserSettings } from "@cgwf/shared";
+import { DEFAULT_SETTINGS, sanitizeSettings, type EngineStops, type UserSettings } from "@cgwf/shared";
 import type { DbHandle } from "./db/index.js";
 import { roomMembers, uploads, userSettings } from "./db/schema.js";
 
@@ -16,6 +16,18 @@ export function loadSettings(handle: DbHandle, userId: string): UserSettings {
     }
   }
   return s;
+}
+
+/** Remember a player's rules-engine stops (the table sends them to the engine; this keeps them for the next game). */
+export function saveEngineStops(handle: DbHandle, userId: string, stops: EngineStops): void {
+  const current = loadSettings(handle, userId);
+  const next = sanitizeSettings({ ...current, engineStops: stops }, current);
+  const now = new Date().toISOString();
+  handle.db
+    .insert(userSettings)
+    .values({ userId, settings: next, updatedAt: now })
+    .onConflictDoUpdate({ target: userSettings.userId, set: { settings: next, updatedAt: now } })
+    .run();
 }
 
 /** May `viewer` see `owner`'s uploads? Yes for the owner and for anyone sharing a room with them. */
