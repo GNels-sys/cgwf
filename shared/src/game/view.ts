@@ -65,7 +65,14 @@ export interface PlayerView {
   players: Record<PlayerId, ViewPlayer>;
   turnOrder: PlayerId[];
   activePlayer: PlayerId;
+  /** The game's turn number (Forge's on engine tables: the source of truth). */
   turn: number;
+  /**
+   * Engine tables: the round, one pass around the table from the player who took turn 1, computed by
+   * the engine from Forge's turn order (an eliminated player's skipped turn shortens a round; an extra
+   * turn stays in its round). Absent on classic tables.
+   */
+  round?: number | null | undefined;
   step: Step;
   stack: StackItem[];
   priority: PlayerId | null;

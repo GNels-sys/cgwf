@@ -71,9 +71,13 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
       <p className="muted small">
         Friends join with the code or the link. <a href="/settings">Personalize</a> your playmat and sleeves while you wait. {sock.status !== "open" && <span className="warn">({sock.status})</span>}
       </p>
-      {room.engine && (
+      {room.engine ? (
         <p className="engine-badge">
-          <strong>Rules engine (beta).</strong> This table enforces the rules: the engine untaps, draws, pays mana, runs combat and the stack. Everyone needs a legal Commander deck (100 cards, singleton, inside the commander&apos;s colours); the host&apos;s Start button says what is wrong otherwise.
+          <strong>Rules engine (beta).</strong> This table enforces the rules: one land per turn, mana, the stack and combat, and the engine untaps and draws. Everyone needs a legal Commander deck (100 cards, singleton, inside the commander&apos;s colours); the host&apos;s Start button says what is wrong otherwise.
+        </p>
+      ) : (
+        <p className="engine-badge is-casual">
+          <strong>Casual (no rules).</strong> Nothing is enforced on this table: players move, tap and count land drops themselves, like a real kitchen table. For enforced rules, open a <em>Rules engine (beta)</em> table from Play.
         </p>
       )}
 

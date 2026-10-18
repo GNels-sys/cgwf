@@ -25,7 +25,10 @@ import java.util.Map;
  */
 public final class DeckLoader {
     public record CardRef(String name, String setCode, String number, String scryfallId, int count) { }
-    public record DeckSpec(String name, String code, List<CardRef> commanders, List<CardRef> main) { }
+    /** {@code companions}: the deck's companion (Forge looks for it in the sideboard before the game). */
+    public record DeckSpec(String name, String code, List<CardRef> commanders, List<CardRef> main, List<CardRef> companions) {
+        public DeckSpec(String name, String code, List<CardRef> commanders, List<CardRef> main) { this(name, code, commanders, main, List.of()); }
+    }
     public record Loaded(Deck deck, DeckSpec spec, int exactPrinting, int bySetOnly, int byNameOnly, List<String> missing) {
         public int resolved() { return exactPrinting + bySetOnly + byNameOnly; }
     }
@@ -38,7 +41,7 @@ public final class DeckLoader {
         DeckSpec spec = GSON.fromJson(Files.readString(json), DeckSpec.class);
         if (spec == null || spec.main() == null) throw new IOException("Not a deck file: " + json);
         return new DeckSpec(spec.name() == null ? json.getFileName().toString() : spec.name(), spec.code(),
-                spec.commanders() == null ? List.of() : spec.commanders(), spec.main());
+                spec.commanders() == null ? List.of() : spec.commanders(), spec.main(), spec.companions() == null ? List.of() : spec.companions());
     }
 
     /** A deck sent inline over the control socket (same shape as the files). */
@@ -46,7 +49,7 @@ public final class DeckLoader {
         DeckSpec spec = GSON.fromJson(json, DeckSpec.class);
         if (spec == null || spec.main() == null) throw new IllegalArgumentException("deck needs a main list");
         return new DeckSpec(spec.name() == null ? "Deck" : spec.name(), spec.code(),
-                spec.commanders() == null ? List.of() : spec.commanders(), spec.main());
+                spec.commanders() == null ? List.of() : spec.commanders(), spec.main(), spec.companions() == null ? List.of() : spec.companions());
     }
 
     public static Loaded build(DeckSpec spec) {
@@ -58,6 +61,10 @@ public final class DeckLoader {
         addAll(db, scryfallToForge, deck.getMain(), spec.main(), tally, missing);
         if (!spec.commanders().isEmpty()) {
             addAll(db, scryfallToForge, deck.getOrCreate(DeckSection.Commander), spec.commanders(), tally, missing);
+        }
+        if (spec.companions() != null && !spec.companions().isEmpty()) {
+            // Forge's Player.assignCompanion looks in the sideboard and asks the player whether to use it
+            addAll(db, scryfallToForge, deck.getOrCreate(DeckSection.Sideboard), spec.companions(), tally, missing);
         }
         return new Loaded(deck, spec, tally[0], tally[1], tally[2], missing);
     }

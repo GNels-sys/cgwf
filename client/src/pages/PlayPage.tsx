@@ -65,17 +65,26 @@ function PlayHome() {
           <p className="eyebrow">01 · Host a game</p>
           <h2>A table for your friends.</h2>
           <p className="muted">Choose your deck in the lobby, then share the table code.</p>
-          {engineAvailable && (
-            <label className="check-row engine-opt">
-              <input type="checkbox" checked={useEngine} onChange={(e) => setUseEngine(e.target.checked)} />
+          <fieldset className="table-kind" aria-label="Kind of table">
+            {engineAvailable && (
+              <label className={`table-kind-opt${useEngine ? " is-on" : ""}`}>
+                <input type="radio" name="table-kind" checked={useEngine} onChange={() => setUseEngine(true)} />
+                <span>
+                  <strong>Rules engine (beta)</strong>
+                  <span className="muted small">The rules are enforced: one land per turn, mana, the stack, combat, untap and draw happen on their own. Decks must be legal Commander decks.</span>
+                </span>
+              </label>
+            )}
+            <label className={`table-kind-opt${!useEngine || !engineAvailable ? " is-on" : ""}`}>
+              <input type="radio" name="table-kind" checked={!useEngine || !engineAvailable} onChange={() => setUseEngine(false)} />
               <span>
-                <strong>Rules engine (beta)</strong>
-                <span className="muted small">The table enforces the rules: untap, draw, mana, combat and the stack happen on their own. Decks must be legal Commander decks.</span>
+                <strong>Casual (no rules)</strong>
+                <span className="muted small">Nothing is enforced: like a real table, players move, tap and count land drops themselves. Any deck.</span>
               </span>
             </label>
-          )}
+          </fieldset>
           <button className="btn btn-primary btn-big" onClick={() => void create()} disabled={busy}>
-            {useEngine && engineAvailable ? "New engine table" : "New table"}
+            {useEngine && engineAvailable ? "New rules-engine table" : "New casual table"}
           </button>
         </section>
         <section className="surface play-join">
@@ -112,6 +121,7 @@ function PlayHome() {
               <li key={r.code}>
                 <Link to={`/room/${r.code}`} className="room-row">
                   <span className="room-code">{r.code}</span>
+                  <span className={`table-kind-tag${r.engine ? " is-engine" : ""}`}>{r.engine ? "Rules engine" : "Casual (no rules)"}</span>
                   <span className="muted small">
                     {r.status === "lobby" ? "Waiting" : r.status === "playing" ? "In progress" : "Finished"} &middot; {r.players} player{r.players === 1 ? "" : "s"} &middot; host {r.hostName}
                   </span>

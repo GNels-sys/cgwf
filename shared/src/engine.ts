@@ -99,7 +99,8 @@ export type EnginePrompt =
   | { kind: "chooseMany"; promptId: number; title: string; min: number; max: number; source: string | null; options: EngineOption[]; reason?: string }
   /** Yes/no: optional costs ("pay 2 life?"), "you may" triggers, replacement effects, coin calls. `options` are the two button labels. */
   | { kind: "confirm"; promptId: number; title: string; detail: string | null; mode: string | null; options: string[]; source: string | null; card: EngineOptionCard | null }
-  | { kind: "mulligan"; promptId: number; title: string; cardsToReturn: number; hand: EngineOptionCard[] }
+  /** `serumPowder`: iids of Serum Powders in the hand; answering with one exiles the hand and draws that many, then asks again. */
+  | { kind: "mulligan"; promptId: number; title: string; cardsToReturn: number; hand: EngineOptionCard[]; serumPowder?: string[] }
   /** X, "choose a number", how many times to pay. `values` when only listed values are legal. */
   | { kind: "number"; promptId: number; title: string; source: string | null; min: number; max: number; values: number[] | null }
   /** Scry / surveil / "put them back in any order" / trigger order. With `buckets`, each item also goes into one of them. */
@@ -121,6 +122,7 @@ export type EngineAnswer =
   | { promptId: number; blocks: Array<{ blockerIid: string; attackerIid: string }> }
   | { promptId: number; confirm: boolean }
   | { promptId: number; keep: boolean }
+  | { promptId: number; serumPowder: string }
   | { promptId: number; value: number }
   /** `order` lists item indices first-to-last; `buckets` maps an item index to a bucket name (items left out take the default). */
   | { promptId: number; order: number[]; buckets?: Record<string, string> }
@@ -183,6 +185,8 @@ export interface EngineDeck {
   name: string;
   commanders: EngineDeckCard[];
   main: EngineDeckCard[];
+  /** The companion board: Forge offers it before the game when the deck meets its restriction. */
+  companions?: EngineDeckCard[];
 }
 
 /** Reasons a deck cannot start an engine game (blocking, unlike the classic table's warnings). */

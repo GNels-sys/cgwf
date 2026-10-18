@@ -16,6 +16,7 @@ import forge.game.event.GameEventGameFinished;
 import forge.game.event.GameEventGameOutcome;
 import forge.game.event.GameEventGameStarted;
 import forge.game.event.GameEventPlayerPriority;
+import forge.game.event.GameEventTurnBegan;
 import forge.game.event.GameEventTurnPhase;
 import forge.game.player.Player;
 import forge.game.zone.ZoneType;
@@ -56,6 +57,8 @@ public final class GameSession {
     private int logSent;
     private volatile boolean over;
     private boolean cardsSent;
+    /** Rounds for people (Forge's turn stays the truth): see RoundTracker. */
+    private final RoundTracker rounds = new RoundTracker();
 
     public GameSession(String gameId, long seed, List<SeatSpec> specs, long promptTimeoutMs, Consumer<JsonObject> out) {
         this.gameId = gameId;
@@ -87,7 +90,11 @@ public final class GameSession {
             seatByPlayer.put(p, seat);
         }
         for (BridgeSession s : humans.values()) {
-            s.setViewBuilder(p -> SeatView.build(game, p, this::seatOf));
+            s.setViewBuilder(p -> {
+                JsonObject v = SeatView.build(game, p, this::seatOf);
+                v.addProperty("round", rounds.round());
+                return v;
+            });
             s.setBeforeAsk(this::flushIfDirty);
         }
         game.subscribeToEvents(this);
@@ -219,6 +226,12 @@ public final class GameSession {
 
     @Subscribe
     public void onEvent(GameEvent e) {
+        if (e instanceof GameEventTurnBegan tb) {
+            List<Player> order = game.getRegisteredPlayers();
+            int idx = -1;
+            for (int i = 0; i < order.size(); i++) if (tb.turnOwner() != null && order.get(i).getId() == tb.turnOwner().getId()) idx = i;
+            rounds.onTurn(tb.turnNumber(), idx, order.size());
+        }
         if (e instanceof GameEventGameStarted && !cardsSent) sendCards();
         boolean force = e instanceof GameEventPlayerPriority || e instanceof GameEventTurnPhase
                 || e instanceof GameEventGameFinished || e instanceof GameEventGameOutcome || e instanceof GameEventGameStarted;
@@ -238,10 +251,12 @@ public final class GameSession {
         for (Map.Entry<Integer, Player> e : playerBySeat.entrySet()) {
             if (!humans.containsKey(e.getKey())) continue;
             JsonObject view = SeatView.build(game, e.getValue(), this::seatOf);
+            view.addProperty("round", rounds.round());
             lastState.put(e.getKey(), view.toString());
             emit(view, e.getKey());
         }
         JsonObject spectator = SeatView.build(game, null, this::seatOf);
+        spectator.addProperty("round", rounds.round());
         lastState.put(SPECTATOR, spectator.toString());
         emit(spectator, SPECTATOR);
         streamLog();
@@ -276,6 +291,7 @@ public final class GameSession {
             j.addProperty("type", "log");
             j.addProperty("seq", i + 1);
             j.addProperty("turn", game.getPhaseHandler().getTurn());
+            j.addProperty("round", rounds.round());
             j.addProperty("logType", e.type().name());
             j.addProperty("text", e.message());
             emit(j, SPECTATOR);

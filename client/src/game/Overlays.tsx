@@ -145,9 +145,12 @@ export function ActiveBoard({ view, printings, members, me, sleeveOf, onTap, onH
       <header className="active-board-head">
         {member && <Avatar avatar={member.avatar} color={member.color} size={28} />}
         <div className="active-board-title">
-          <strong style={{ color: colorOf(members, player.id) }}>{mine ? "Your turn" : `${player.name}'s turn`}</strong>
+          <strong style={{ color: colorOf(members, player.id) }}>
+            {view.round ? `Round ${view.round} · ` : ""}
+            {mine ? "Your turn" : `${player.name}'s turn`}
+          </strong>
           <span className="muted small">
-            Turn {view.turn} - {STEP_LABELS[view.step]}
+            {STEP_LABELS[view.step]} · Game turn {view.turn}
           </span>
         </div>
         <button className="sheet-close" onClick={onMinimize} aria-label="Minimise the active board">
@@ -201,9 +204,10 @@ export function GameLog({ log, members, printings, onCard, onMinimize }: { log: 
         {log.length === 0 && <li className="muted small">Nothing has happened yet.</li>}
         {log.map((l, i) => {
           const turn = /^Turn \d+/.test(l.text);
+          const round = /^Round \d+ begins$/.test(l.text);
           const color = colorOfActor(l.actor);
           return (
-            <li key={`${l.seq}-${i}`} className={`game-log-line${turn ? " is-turn" : ""}`}>
+            <li key={`${l.seq}-${i}`} className={`game-log-line${turn ? " is-turn" : ""}${round ? " is-round" : ""}`}>
               <span className="log-dot" style={color ? { background: color } : undefined} aria-hidden="true" />
               <span className="game-log-text">
                 <LinkedText text={l.text} matcher={matcher} onCard={onCard} />

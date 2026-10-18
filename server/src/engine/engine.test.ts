@@ -381,6 +381,18 @@ describe("engine tables (relay to the rules engine)", () => {
     alex.send({ t: "engine", answer: { promptId: 20, confirm: false } });
     expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 20)).toMatchObject({ seat: 0, confirm: false });
 
+    // mulligan with Serum Powder: the prompt names the powders by iid; the answer goes back as a Forge card id
+    m = alex.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 19, prompt: "mulligan", title: "Keep this hand?", cardsToReturn: 0, hand: [card(11, "Forest", "Hand", pid[0]!), card(12, "Forest", "Hand", pid[0]!)], serumPowder: [12] });
+    const mull = await promptOf("mulligan", m);
+    if (mull.kind !== "mulligan") throw new Error("unreachable");
+    expect(mull.serumPowder).toEqual(["12"]);
+    const badPowder = alex.mark();
+    alex.send({ t: "engine", answer: { promptId: 19, serumPowder: "not-a-card" } as never });
+    expect(await alex.errorSince(badPowder)).toMatch(/answer|engine/i);
+    alex.send({ t: "engine", answer: { promptId: 19, serumPowder: "12" } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 19)).toMatchObject({ seat: 0, serumPowder: 12 });
+
     // number (X)
     m = alex.mark();
     engine.send({ type: "prompt", gameId, seat: 0, promptId: 21, prompt: "number", title: "Choose X for Fireball", source: "Fireball", min: 0, max: 4 });
@@ -472,6 +484,36 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(top.targets).toEqual([{ kind: "stack", id: "8", name: "Rhystic Study", iid: "62" }]);
     expect(v.stack[1]!.targets).toEqual([{ kind: "player", player: v.viewer }]);
     expect(v.stack[1]!.controller).not.toBe(v.viewer);
+  });
+
+  it("announces each round in the log before its first turn line and shows the round in the view", async () => {
+    const gameId = ctx.roomsManager.get(code)!.id;
+    const A = pid[0]!;
+    const B = pid[1]!;
+    const player = (id: number, seat: number, name: string, viewer: number) => ({
+      id, seat, name, isYou: viewer === id, human: true, life: 40, poison: 0, lost: false, handCount: 1, libraryCount: 97, landsPlayedThisTurn: 0, commanderDamage: {},
+      battlefield: [], graveyard: [], exile: [], command: [],
+    });
+    const ma = alex.mark();
+    // round numbers ride on the engine's log frames; "Round N begins" goes in once, before the TURN line
+    const turnLine = (turn: number, round: number, who: string) => engine.send({ type: "log", gameId, seat: -1, seq: 900 + turn, turn, round, logType: "TURN", text: `Turn ${turn} (${who})` });
+    turnLine(20, 7, "Alex");
+    engine.send({ type: "log", gameId, seat: -1, seq: 950, turn: 20, round: 7, logType: "LAND", text: "Alex played Forest (11)" });
+    turnLine(21, 7, "Blair");
+    turnLine(22, 8, "Alex");
+    engine.send({ type: "state", gameId, seat: 0, viewer: A, turn: 22, round: 8, phase: "MAIN1", activePlayer: A, priorityPlayer: A, gameOver: false, stack: [], combat: null, log: [], players: [player(A, 0, "Alex", A), player(B, 1, "Blair", A)] });
+    const v = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.round === 8, ma)).view;
+    expect(v.turn).toBe(22);
+    const texts = v.log.map((l) => l.text);
+    const at = (t: string) => texts.lastIndexOf(t);
+    expect(at("Round 7 begins")).toBeGreaterThan(-1);
+    expect(at("Round 7 begins")).toBe(at("Turn 20 (Alex)") - 1);
+    expect(texts.filter((t) => t === "Round 7 begins")).toHaveLength(1);
+    expect(at("Round 8 begins")).toBe(at("Turn 22 (Alex)") - 1);
+    expect(at("Turn 21 (Blair)")).toBeLessThan(at("Round 8 begins"));
+    // persisted like any engine log line (a reloaded relay rebuilds the log and does not announce the round twice)
+    const rows = ctx.handle.sqlite.prepare("select payload from room_events where room_id = ? and type = 'EngineLog'").all(gameId) as Array<{ payload: string }>;
+    expect(rows.map((r) => JSON.parse(r.payload).text).filter((t: string) => /^Round [78] begins$/.test(t))).toEqual(["Round 7 begins", "Round 8 begins"]);
   });
 
   it("relays hold-priority and the auto-pass setting, and mirrors them in the seat's view", async () => {

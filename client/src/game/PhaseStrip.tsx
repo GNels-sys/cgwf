@@ -202,8 +202,16 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
       <div className="phase-row">
         <div className="phase-turn" style={member ? ({ "--who": AVATAR_COLORS[member.color] } as React.CSSProperties) : undefined}>
           {member && <Avatar avatar={member.avatar} color={member.color} size={22} />}
+          {!engineMode && (
+            <span className="table-kind-tag" title="Casual table: nothing is enforced; players apply the rules themselves">
+              Casual
+            </span>
+          )}
           <span className="phase-turn-text">
-            <strong>T{view.turn}</strong> {view.phase === "mulligan" ? "Mulligans" : view.phase === "ended" ? (view.winner ? `${view.players[view.winner]?.name} wins` : "Game over") : isMyTurn ? "Your turn" : `${active?.name ?? ""}'s turn`}
+            {engineMode && view.round ? <strong>Round {view.round}</strong> : <strong>T{view.turn}</strong>}
+            {engineMode && view.round ? " · " : " "}
+            {view.phase === "mulligan" ? "Mulligans" : view.phase === "ended" ? (view.winner ? `${view.players[view.winner]?.name} wins` : "Game over") : isMyTurn ? "Your turn" : `${active?.name ?? ""}'s turn`}
+            {engineMode && view.round ? <small className="phase-gameturn" title="Forge's game turn number">Game turn {view.turn}</small> : null}
           </span>
         </div>
         {playing && (

@@ -5,6 +5,7 @@ import cgwf.engine.bridge.BridgeLobbyPlayer;
 import cgwf.engine.bridge.BridgeSession;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import forge.StaticData;
 import forge.card.ColorSet;
 import forge.card.MagicColor;
 import forge.deck.DeckSection;
@@ -16,6 +17,7 @@ import forge.game.card.CardCollectionView;
 import forge.card.mana.ManaCost;
 import forge.card.mana.ManaCostParser;
 import forge.game.cost.Cost;
+import forge.game.phase.PhaseType;
 import forge.game.player.Player;
 import forge.game.player.PlayerActionConfirmMode;
 import forge.game.player.PlayerController.BinaryChoiceType;
@@ -62,6 +64,8 @@ class PromptRoundTripTest {
     private static final Deque<Function<JsonObject, JsonObject>> script = new ArrayDeque<>();
     private static final List<JsonObject> prompts = new ArrayList<>();
     private static final List<JsonObject> errors = new ArrayList<>();
+    /** Hidden-information problems found in each prompt's view, checked against the live game when the prompt went out. */
+    private static final List<String> viewLeaks = new ArrayList<>();
 
     @BeforeAll
     static void boot() throws Exception {
@@ -78,6 +82,9 @@ class PromptRoundTripTest {
             String type = frame.has("type") ? frame.get("type").getAsString() : "";
             if (type.equals("prompt")) {
                 prompts.add(frame);
+                if (game != null && me != null && frame.has("view") && frame.get("view").isJsonObject()) {
+                    for (String leak : HiddenInfoAudit.check(game, me, frame.getAsJsonObject("view"))) viewLeaks.add("prompt " + frame.get("promptId") + ": " + leak);
+                }
                 Function<JsonObject, JsonObject> f = script.pollFirst();
                 JsonObject answer = f == null ? new JsonObject() : f.apply(frame);
                 answer.add("promptId", frame.get("promptId"));
@@ -153,6 +160,77 @@ class PromptRoundTripTest {
     }
 
     private static Card hand(int i) { return me.getCardsIn(ZoneType.Hand).get(i); }
+
+    // ------------------------------------------------------------------ one land per turn (Forge's own land play)
+
+    /** One priority decision through the real controller: the land options offered, and (if asked) the ability chosen. */
+    private static List<Integer> landOptionsThenMaybePlay(Integer playCardId) {
+        int before = prompts.size();
+        List<Integer> lands = new ArrayList<>();
+        script.add(p -> {
+            JsonObject a = new JsonObject();
+            for (var e : p.getAsJsonArray("options")) {
+                JsonObject o = e.getAsJsonObject();
+                if (!"land".equals(o.get("kind").getAsString())) continue;
+                lands.add(o.get("cardId").getAsInt());
+                if (playCardId != null && o.get("cardId").getAsInt() == playCardId) a.addProperty("option", o.get("index").getAsInt());
+            }
+            return a; // no "option" = pass
+        });
+        List<SpellAbility> chosen = ctl.chooseSpellAbilityToPlay();
+        if (prompts.size() == before) script.pollLast(); // nothing to play: the seat auto-passed without a prompt
+        if (chosen != null && !chosen.isEmpty()) ctl.playChosenSpellAbility(chosen.get(0)); // what Forge's priority loop does next
+        return lands;
+    }
+
+    @Test
+    void landDropsFollowForgesLimitAndExplorationGrantsOneMore() {
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, me, 5);
+        me.setLandsPlayedThisTurn(0);
+        // fresh cards straight into hand (libraries stay untouched for the final view audit)
+        List<Card> lands = new ArrayList<>();
+        PaperCard mountain = StaticData.instance().getCommonCards().getCard("Mountain");
+        for (int i = 0; i < 3; i++) {
+            Card c = Card.fromPaperCard(mountain, me);
+            me.getZone(ZoneType.Hand).add(c);
+            lands.add(c);
+        }
+        Card exploration = null;
+        try {
+            // the first land of the turn is offered and played through Forge's land ability
+            List<Integer> offered = landOptionsThenMaybePlay(lands.get(0).getId());
+            assertTrue(offered.contains(lands.get(0).getId()), "a land in hand is offered on my main phase");
+            assertTrue(lands.get(0).isInZone(ZoneType.Battlefield), "the chosen land was played");
+            assertEquals(1, me.getLandsPlayedThisTurn(), "Forge counted the land drop");
+            // a second land is not offered (no prompt at all when nothing else is playable, or a prompt without lands)
+            assertEquals(List.of(), landOptionsThenMaybePlay(null), "no second land drop");
+            // Exploration: "You may play an additional land on each of your turns."
+            PaperCard pc = StaticData.instance().getCommonCards().getCard("Exploration");
+            assertNotNull(pc, "Forge knows Exploration");
+            exploration = Card.fromPaperCard(pc, me);
+            me.getZone(ZoneType.Battlefield).add(exploration);
+            game.getAction().checkStaticAbilities();
+            assertEquals(2, me.getMaxLandPlays(), "Exploration grants one more land play");
+            offered = landOptionsThenMaybePlay(lands.get(1).getId());
+            assertTrue(offered.contains(lands.get(1).getId()), "with Exploration the second land is offered");
+            assertTrue(lands.get(1).isInZone(ZoneType.Battlefield));
+            assertEquals(2, me.getLandsPlayedThisTurn());
+            assertEquals(List.of(), landOptionsThenMaybePlay(null), "and a third is not");
+            assertTrue(lands.get(2).isInZone(ZoneType.Hand), "the third land stayed in hand");
+        } finally {
+            // put everything back: later tests audit the views against the live zones
+            if (exploration != null) {
+                me.getZone(ZoneType.Battlefield).remove(exploration);
+                game.getAction().checkStaticAbilities();
+            }
+            for (Card c : lands) {
+                Card live = game.getCardState(c);
+                if (live.getZone() != null) live.getZone().remove(live);
+            }
+            me.setLandsPlayedThisTurn(0);
+            me.getManaPool().clearPool(false);
+        }
+    }
 
     // ------------------------------------------------------------------ "Pay with" (Stage 2 M5)
 
@@ -509,9 +587,8 @@ class PromptRoundTripTest {
     @Test
     void zEveryPromptSoFarCarriedAPromptIdAndNoLibraryInItsView() {
         assertTrue(prompts.size() > 10);
-        for (JsonObject p : prompts) {
-            assertTrue(p.get("promptId").getAsInt() > 0);
-            assertEquals(List.of(), HiddenInfoAudit.check(game, me, p.getAsJsonObject("view")), "prompt view leak");
-        }
+        for (JsonObject p : prompts) assertTrue(p.get("promptId").getAsInt() > 0);
+        // each view was audited against the game as it stood when the prompt went out (tests move cards between zones)
+        assertEquals(List.of(), viewLeaks, "prompt view leak");
     }
 }
