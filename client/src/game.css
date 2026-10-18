@@ -2259,3 +2259,44 @@
 .stops-col h3 { margin: 0 0 6px; font-size: 1rem; }
 .stops-col .check-row { margin: 0 0 4px; }
 @media (max-width: 520px) { .stops-grid { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------------- Rules-engine prompt sheets (Stage 2) */
+.engine-sheet { width: min(100%, 540px); }
+.engine-confirm { display: flex; gap: 14px; align-items: stretch; }
+.engine-confirm-img { width: min(40vw, 180px); aspect-ratio: 63 / 88; border-radius: 4.5% / 3.5%; flex: 0 0 auto; object-fit: cover; box-shadow: 0 6px 20px #0006; }
+.engine-confirm-noimg { width: min(40vw, 160px); aspect-ratio: 63 / 88; border-radius: 10px; border: 1px dashed var(--border); display: grid; place-items: center; padding: 8px; text-align: center; color: var(--fg-muted); }
+.engine-confirm-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.engine-confirm-text h2 { margin: 0; font: 500 1.15rem var(--font-display); line-height: 1.25; }
+.engine-confirm-text p { margin: 0; }
+.engine-confirm .actions { margin-top: auto; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.engine-confirm .actions .btn { min-height: 44px; }
+@media (orientation: portrait) and (max-width: 600px) {
+  .engine-confirm { flex-direction: column; align-items: center; text-align: center; }
+  .engine-confirm .actions { justify-content: center; }
+}
+.engine-stepper { display: flex; align-items: center; gap: 10px; justify-content: center; }
+.engine-stepper .btn { min-width: 48px; min-height: 48px; font-size: 1.3rem; }
+.engine-stepper input { width: 84px; text-align: center; font: 600 1.4rem var(--font-display); background: var(--bg-elev-2); color: var(--fg); border: 1px solid var(--border); border-radius: 8px; padding: 6px; }
+.engine-quick { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.engine-rows { display: flex; flex-direction: column; gap: 6px; max-height: 55dvh; overflow: auto; }
+.engine-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elev-2); color: var(--fg); font: inherit; text-align: left; min-height: 52px; }
+button.engine-row { cursor: pointer; width: 100%; }
+.engine-row.is-dim { opacity: 0.6; }
+.engine-row.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.engine-row .tile, .engine-row-img { flex: 0 0 auto; }
+.engine-row-img { width: 44px; aspect-ratio: 63 / 88; border-radius: 4px; object-fit: cover; }
+.engine-row-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.engine-row-text small { color: var(--fg-muted); font-size: 0.74rem; }
+.engine-pos { color: var(--accent); }
+.engine-row-ctl { display: flex; gap: 4px; align-items: center; flex: 0 0 auto; }
+.engine-row-ctl .btn { min-width: 40px; min-height: 40px; padding: 0; }
+.engine-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; flex: 0 0 auto; }
+.engine-seg button { border: 0; background: transparent; color: var(--fg-muted); min-height: 36px; padding: 0 10px; font: inherit; font-size: 0.8rem; cursor: pointer; }
+.engine-seg button.is-on { background: var(--accent); color: var(--accent-ink); }
+.engine-amount { min-width: 28px; text-align: center; font: 600 1.1rem var(--font-display); }
+.engine-remaining { text-align: center; margin: 8px 0 0; font-weight: 500; }
+.engine-suggest { display: flex; flex-direction: column; gap: 4px; max-height: 40dvh; overflow: auto; margin-top: 8px; }
+.engine-options .engine-row-img { width: 36px; }
+@supports ((backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px))) {
+  .engine-row { background: color-mix(in srgb, var(--bg-elev-2) 70%, transparent); }
+}

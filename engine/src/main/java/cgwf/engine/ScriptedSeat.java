@@ -12,7 +12,8 @@ import java.util.List;
  * A very simple human: the same policy as spike/client.mjs, in Java, so tests can drive a
  * BridgeController without a socket. Plays a land when offered, casts the cheapest spell (at
  * most two per step), attacks the lowest-life opponent with everything, blocks what it can
- * survive, takes the first option otherwise, always keeps.
+ * survive, takes the first option otherwise, always keeps, says yes to every question, picks the
+ * smallest number, keeps the engine's order and names "Forest".
  */
 public final class ScriptedSeat {
     private ScriptedSeat() { }
@@ -123,6 +124,34 @@ public final class ScriptedSeat {
             }
             case "confirm" -> a.addProperty("confirm", true);
             case "mulligan" -> a.addProperty("keep", true);
+            case "number" -> {
+                // the smallest legal value (cheap X, no surprises); one of `values` when the engine lists them
+                if (prompt.has("values") && prompt.get("values").isJsonArray() && prompt.getAsJsonArray("values").size() > 0) a.add("value", prompt.getAsJsonArray("values").get(0));
+                else a.addProperty("value", prompt.get("min").getAsInt());
+            }
+            case "order" -> {
+                JsonArray order = new JsonArray();
+                int n = prompt.getAsJsonArray("items").size();
+                for (int i = 0; i < n; i++) order.add(i); // keep the order the engine listed
+                a.add("order", order);
+                a.add("buckets", new JsonObject()); // everything in the default bucket
+            }
+            case "assign" -> {
+                JsonArray amounts = new JsonArray();
+                int n = prompt.getAsJsonArray("targets").size();
+                int total = prompt.get("total").getAsInt();
+                for (int i = 0; i < n; i++) amounts.add(i == 0 ? total : 0); // everything on the first target
+                a.add("amounts", amounts);
+            }
+            case "mode" -> {
+                int min = Math.max(1, prompt.get("min").getAsInt());
+                int max = Math.max(min, prompt.get("max").getAsInt());
+                JsonArray modes = new JsonArray();
+                int n = prompt.getAsJsonArray("modes").size();
+                for (int i = 0; i < Math.min(Math.min(min, max), n); i++) modes.add(i);
+                a.add("modes", modes);
+            }
+            case "text" -> a.addProperty("text", "Forest");
             default -> { }
         }
         return a;

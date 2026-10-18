@@ -63,7 +63,18 @@ export interface EngineOptionText {
   label: string;
 }
 
-export type EngineOption = EngineOptionCard | EngineOptionPlayer | EngineOptionText;
+/** A spell or ability on the stack (counterspells target these). */
+export interface EngineOptionSpell {
+  kind: "spell";
+  index: number;
+  label: string;
+  /** The source card's iid, when the engine told us. */
+  iid: string | null;
+  /** The engine's stack-instance id, when the item is on the stack right now. */
+  stackId: number | null;
+}
+
+export type EngineOption = EngineOptionCard | EngineOptionPlayer | EngineOptionText | EngineOptionSpell;
 
 export type EngineEntityRef = { kind: "player"; player: PlayerId; name?: string; life?: number } | { kind: "card"; iid: string; name?: string | null; controller?: PlayerId | null };
 
@@ -81,13 +92,24 @@ export interface EnginePlayable {
 
 export type EnginePrompt =
   | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean }
-  | { kind: "targets"; promptId: number; title: string; ability: string; min: number; max: number; options: EngineOption[] }
+  | { kind: "targets"; promptId: number; title: string; ability: string; source: string | null; min: number; max: number; options: EngineOption[] }
   | { kind: "attackers"; promptId: number; title: string; candidates: EngineOptionCard[]; defenders: EngineEntityRef[] }
   | { kind: "blockers"; promptId: number; title: string; attackers: EngineOptionCard[]; blockers: EngineOptionCard[] }
   | { kind: "choose"; promptId: number; title: string; optional: boolean; source: string | null; options: EngineOption[] }
   | { kind: "chooseMany"; promptId: number; title: string; min: number; max: number; source: string | null; options: EngineOption[]; reason?: string }
-  | { kind: "confirm"; promptId: number; title: string; options: string[]; source: string | null; card: EngineOptionCard | null }
-  | { kind: "mulligan"; promptId: number; title: string; cardsToReturn: number; hand: EngineOptionCard[] };
+  /** Yes/no: optional costs ("pay 2 life?"), "you may" triggers, replacement effects, coin calls. `options` are the two button labels. */
+  | { kind: "confirm"; promptId: number; title: string; detail: string | null; mode: string | null; options: string[]; source: string | null; card: EngineOptionCard | null }
+  | { kind: "mulligan"; promptId: number; title: string; cardsToReturn: number; hand: EngineOptionCard[] }
+  /** X, "choose a number", how many times to pay. `values` when only listed values are legal. */
+  | { kind: "number"; promptId: number; title: string; source: string | null; min: number; max: number; values: number[] | null }
+  /** Scry / surveil / "put them back in any order" / trigger order. With `buckets`, each item also goes into one of them. */
+  | { kind: "order"; promptId: number; title: string; source: string | null; note: string | null; items: EngineOption[]; buckets: string[] | null; defaultBucket: string | null }
+  /** Split `total` (combat damage, divided damage) among `targets`; `lethal` (by option index) is the engine's hint. */
+  | { kind: "assign"; promptId: number; title: string; source: string | null; total: number; card: EngineOptionCard | null; targets: EngineOption[]; lethal: Record<number, number> }
+  /** Modal spells: pick between min and max of the modes. */
+  | { kind: "mode"; promptId: number; title: string; source: string | null; min: number; max: number; allowRepeat: boolean; modes: Array<{ index: number; text: string }> }
+  /** Free text (a card name); the engine validates and asks again when it does not know the name. */
+  | { kind: "text"; promptId: number; title: string; source: string | null; freeText: boolean; hint: string | null };
 
 export type EnginePromptKind = EnginePrompt["kind"];
 
@@ -98,7 +120,14 @@ export type EngineAnswer =
   | { promptId: number; attacks: Array<{ iid: string; defender: EngineEntityRef }> }
   | { promptId: number; blocks: Array<{ blockerIid: string; attackerIid: string }> }
   | { promptId: number; confirm: boolean }
-  | { promptId: number; keep: boolean };
+  | { promptId: number; keep: boolean }
+  | { promptId: number; value: number }
+  /** `order` lists item indices first-to-last; `buckets` maps an item index to a bucket name (items left out take the default). */
+  | { promptId: number; order: number[]; buckets?: Record<string, string> }
+  /** Positional amounts, one per target, adding up to the prompt's total. */
+  | { promptId: number; amounts: number[] }
+  | { promptId: number; modes: number[] }
+  | { promptId: number; text: string };
 
 /** Arena-style stops: steps at which the engine offers priority instead of passing for the seat. */
 export interface EngineStops {

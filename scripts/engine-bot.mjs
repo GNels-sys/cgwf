@@ -86,6 +86,11 @@ function answerFor(p, view) {
     case "chooseMany": return { promptId: id, options: p.options.slice(0, p.min).map((o) => o.index) };
     case "confirm": return { promptId: id, confirm: true };
     case "mulligan": return { promptId: id, keep: true };
+    case "number": return { promptId: id, value: p.values?.length ? p.values[0] : p.min };
+    case "order": return { promptId: id, order: p.items.map((o) => o.index), buckets: {} };
+    case "assign": return { promptId: id, amounts: p.targets.map((_, i) => (i === 0 ? p.total : 0)) };
+    case "mode": return { promptId: id, modes: p.modes.slice(0, Math.max(1, p.min)).map((m) => m.index) };
+    case "text": return { promptId: id, text: "Forest" };
     default: return null;
   }
 }
