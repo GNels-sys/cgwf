@@ -966,8 +966,23 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   a confirm prompt with the card and "If you don't: ..." first, then Forge's
   `payCostDuringAbilityResolve`. "You may" triggers ask at resolution (`confirmTrigger`);
   replacement effects, static applications, coin calls and tap/untap choices are confirms with
-  two labelled buttons. Not asked yet: divide-shield,
-  redirect targets (Spellskite), bidding, Un-set dice/sprockets.
+  two labelled buttons. Everything else Forge can ask a player was audited on 2026-10-18 (next
+  bullet); only Un-set Attractions/Contraptions and mana payment details stay with Forge's AI.
+- **No decision is silently Forge's AI (audit 2026-10-18).** `BridgeController` extends Forge's
+  `PlayerControllerAi`, so a `PlayerController` method it does not override is decided by the AI.
+  Every one was compared with Forge's desktop `PlayerControllerHuman`; the table with each method's
+  decision, frequency and verdict is `docs/FORGE-ENGINE.md` section 16. Routed in this audit: new
+  targets for copies and redirects (`chooseNewTargetsFor`, and copies now go through Forge's human
+  copy path), casting choice from effects / alternative additional costs (`getAbilityToPlay`),
+  convoke/improvise, votes, coin-flip calls, dice (ignore / reroll / modify / swap), "one of each"
+  digs, splice, Spellskite's target pick, prevention-shield splits, Assist (whom to ask; how much of
+  someone else's spell you pay), dungeon choice, Room doors, life bids; an illegal trample split or
+  "discard a land or two cards" answer is asked again instead of going to the AI. Pending (batch 2):
+  `reveal` / `notifyOfValue` as per-seat notices. **Guard:** `BridgeCoverageTest` (reflection, no
+  assets) fails when a `PlayerController` method is neither overridden nor in its `ALLOWED` map
+  (verdict + reason per entry) and on stale entries; after a Forge bump, read the human controller's
+  version of each new method and route it or allow-list it with a doc row. The targets prompt
+  carries `cancelLabel` ("Keep current targets" when Cancel keeps the old targets).
 - **Permanent tests.** `engine/src/test/.../PromptRoundTripTest` drives every prompt kind through
   the real controller against a hand-built game (needs `-Dforge.assets`): prompt shape, answer,
   return value, re-ask on illegal answers, "no question when the rules leave no choice";

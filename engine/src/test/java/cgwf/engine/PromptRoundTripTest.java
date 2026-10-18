@@ -584,6 +584,224 @@ class PromptRoundTripTest {
         assertEquals(1, candidates.size());
     }
 
+    // ------------------------------------------------------------------ decisions that used to be inherited from Forge's AI (2026-10-18 audit)
+
+    private static Card fresh(String name, ZoneType zone) {
+        Card c = Card.fromPaperCard(StaticData.instance().getCommonCards().getCard(name), me);
+        me.getZone(zone).add(c);
+        return c;
+    }
+
+    private static void drop(Card... cards) {
+        for (Card c : cards) {
+            Card live = game.getCardState(c);
+            if (live != null && live.getZone() != null) live.getZone().remove(live);
+        }
+    }
+
+    private static int optionIndexOfPlayer(JsonObject p, Player who) {
+        JsonArray opts = p.getAsJsonArray("options");
+        for (int i = 0; i < opts.size(); i++) {
+            JsonObject o = opts.get(i).getAsJsonObject();
+            if (o.has("playerId") && o.get("playerId").getAsInt() == who.getId()) return i;
+            if (o.has("kind") && "player".equals(o.get("kind").getAsString()) && o.has("id") && o.get("id").getAsInt() == who.getId()) return i;
+        }
+        throw new AssertionError("player " + who.getName() + " is not among the options: " + opts);
+    }
+
+    @Test
+    void inheritedVoteIsTheHumansChoice() {
+        int before = prompts.size();
+        script.add(p -> answer("option", optionIndexOfPlayer(p, opp)));
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        try {
+            List<Object> options = new ArrayList<>(List.of(me, opp));
+            Object vote = ctl.vote(bolt.getFirstSpellAbility(), "vote", options, com.google.common.collect.ArrayListMultimap.create(), me, false);
+            assertEquals(before + 1, prompts.size(), "the vote is asked, not decided by Forge's AI");
+            assertEquals("choose", next("choose").get("prompt").getAsString());
+            assertEquals(opp, vote);
+        } finally { drop(bolt); }
+    }
+
+    @Test
+    void inheritedCoinFlipCallsAreTheHumans() {
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        try {
+            script.add(p -> answer("option", 1));
+            assertFalse(ctl.chooseFlipResult(bolt.getFirstSpellAbility(), me, true), "option 1 = tails");
+            JsonObject p = next("confirm");
+            assertEquals("Heads", p.getAsJsonArray("options").get(0).getAsString());
+            script.add(q -> answer("option", 0));
+            assertTrue(ctl.chooseFlipResult(bolt.getFirstSpellAbility(), me, false), "keep the winning flip");
+            assertEquals("Win the flip", next("confirm").getAsJsonArray("options").get(0).getAsString());
+        } finally { drop(bolt); }
+    }
+
+    @Test
+    void inheritedConvokeTapsWhatTheHumanPicks() {
+        List<Card> creatures = new ArrayList<>();
+        for (Card c : me.getCardsIn(ZoneType.Battlefield)) if (c.isCreature() && !c.isTapped()) creatures.add(c);
+        assertTrue(creatures.size() >= 2, "the test seat has creatures out");
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        try {
+            int before = prompts.size();
+            script.add(p -> answer("options", ints(0)));
+            Map<Card, forge.card.mana.ManaCostShard> map = ctl.chooseCardsForConvokeOrImprovise(bolt.getFirstSpellAbility(),
+                    new ManaCost(new ManaCostParser("3")), new CardCollection(creatures), false, true, null);
+            assertEquals(before + 1, prompts.size(), "convoke is asked");
+            JsonObject p = next("chooseMany");
+            assertEquals("convoke", p.get("reason").getAsString());
+            assertEquals(1, map.size(), "only the picked creature convokes");
+            assertTrue(map.containsKey(creatures.get(0)));
+            // none = pay with mana
+            script.add(q -> answer("options", ints()));
+            assertTrue(ctl.chooseCardsForConvokeOrImprovise(bolt.getFirstSpellAbility(), new ManaCost(new ManaCostParser("3")),
+                    new CardCollection(creatures), false, true, null).isEmpty());
+        } finally { drop(bolt); }
+    }
+
+    @Test
+    void inheritedConvokeShardsUseColoursFirst() {
+        // a green creature pays the {G}, the colourless one the generic
+        Card elf = Card.fromPaperCard(StaticData.instance().getCommonCards().getCard("Llanowar Elves"), me);
+        Card golem = Card.fromPaperCard(StaticData.instance().getCommonCards().getCard("Stone Golem"), me);
+        Map<Card, forge.card.mana.ManaCostShard> m = BridgeController.convokeShards(List.of(golem, elf), new ManaCost(new ManaCostParser("1 G")), false);
+        assertNotNull(m);
+        assertEquals(forge.card.mana.ManaCostShard.GREEN, m.get(elf));
+        assertEquals(forge.card.mana.ManaCostShard.GENERIC, m.get(golem));
+        Card golem2 = Card.fromPaperCard(StaticData.instance().getCommonCards().getCard("Stone Golem"), me);
+        assertNull(BridgeController.convokeShards(List.of(golem, elf, golem2), new ManaCost(new ManaCostParser("1 G")), false), "more cards than the cost cannot all pay");
+    }
+
+    @Test
+    void inheritedNewTargetsForACopyAreTheHumans() {
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        try {
+            SpellAbility original = bolt.getFirstSpellAbility();
+            original.setActivatingPlayer(me);
+            original.resetTargets();
+            original.getTargets().add(opp);
+            SpellAbility copy = forge.game.card.CardFactory.copySpellAbilityAndPossiblyHost(original, original, me);
+            copy.setMayChooseNewTargets(true);
+            assertTrue(copy.isCopied());
+            int before = prompts.size();
+            script.add(p -> answer("options", ints(optionIndexOfPlayer(p, me))));
+            ctl.orderAndPlaySimultaneousSa(new ArrayList<>(List.of(copy)));
+            assertEquals(before + 1, prompts.size(), "the copy's new targets are asked (Forge's AI used to pick them)");
+            JsonObject p = next("targets");
+            assertTrue(p.get("title").getAsString().startsWith("Choose new targets for Lightning Bolt"), p.get("title").getAsString());
+            assertEquals("Keep current targets", p.get("cancelLabel").getAsString());
+            assertEquals(1, game.getStack().size(), "the copy is on the stack");
+            assertTrue(game.getStack().peekAbility().getTargets().contains(me), "aimed where the human chose");
+            // Cancel keeps the targets as they were
+            game.getStack().reset();
+            SpellAbility copy2 = forge.game.card.CardFactory.copySpellAbilityAndPossiblyHost(original, original, me);
+            copy2.setMayChooseNewTargets(true);
+            script.add(q -> answer("cancel", true));
+            ctl.orderAndPlaySimultaneousSa(new ArrayList<>(List.of(copy2)));
+            assertTrue(game.getStack().peekAbility().getTargets().contains(opp), "kept the current target");
+        } finally {
+            game.getStack().reset();
+            drop(bolt);
+        }
+    }
+
+    @Test
+    void inheritedRedirectAsksForTheSameNumberOfTargets() {
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        try {
+            SpellAbility sa = bolt.getFirstSpellAbility();
+            sa.setActivatingPlayer(me);
+            sa.resetTargets();
+            sa.getTargets().add(opp);
+            // two targets for a one-target spell: asked again, then a legal answer
+            script.add(p -> answer("options", ints(0, 1)));
+            script.add(p -> answer("options", ints(optionIndexOfPlayer(p, me))));
+            forge.game.spellability.TargetChoices tc = ctl.chooseNewTargetsFor(sa, null, false);
+            assertNotNull(tc);
+            assertTrue(tc.contains(me));
+            assertEquals(1, next("targets").get("max").getAsInt());
+        } finally { drop(bolt); }
+    }
+
+    @Test
+    void inheritedCastingChoiceBetweenSeveralSpellsIsTheHumans() {
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        Card shock = fresh("Shock", ZoneType.Hand);
+        try {
+            List<SpellAbility> sas = List.of(bolt.getFirstSpellAbility(), shock.getFirstSpellAbility());
+            script.add(p -> answer("option", 1));
+            assertEquals(shock.getFirstSpellAbility(), ctl.getAbilityToPlay(bolt, sas, null));
+            assertTrue(next("choose").get("title").getAsString().startsWith("How do you want to cast"));
+        } finally { drop(bolt, shock); }
+    }
+
+    @Test
+    void inheritedDiceChoicesAreTheHumans() {
+        script.add(p -> answer("option", 1));
+        assertEquals(5, ctl.chooseRollToIgnore(List.of(3, 5)));
+        script.add(p -> answer("options", ints(0, 2)));
+        assertEquals(List.of(2, 4), ctl.chooseDiceToReroll(List.of(2, 6, 4)));
+        script.add(p -> new JsonObject()); // no option = none
+        assertNull(ctl.chooseRollToModify(List.of(1, 2)));
+        assertEquals("chooseMany", prompts.get(prompts.size() - 2).get("prompt").getAsString());
+    }
+
+    @Test
+    void inheritedPreventionShieldIsDividedByTheHuman() {
+        Card source = me.getCardsIn(ZoneType.Battlefield).get(0);
+        Map<GameEntity, Integer> affected = new java.util.LinkedHashMap<>();
+        affected.put(me, 3);
+        affected.put(source, 2);
+        script.add(p -> answer("amounts", ints(1, 2)));
+        Map<GameEntity, Integer> out = ctl.divideShield(source, affected, 3);
+        JsonObject p = next("assign");
+        assertEquals(3, p.get("total").getAsInt());
+        assertEquals(1, out.get(me));
+        assertEquals(2, out.get(source));
+    }
+
+    @Test
+    void inheritedOneOfEachGroupIsPickedPerGroup() {
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        Card shock = fresh("Shock", ZoneType.Hand);
+        try {
+            Map<String, CardCollection> groups = new java.util.LinkedHashMap<>();
+            groups.put("Instant", new CardCollection(List.of(bolt, shock)));
+            groups.put("Red", new CardCollection(List.of(bolt, shock)));
+            int before = prompts.size();
+            script.add(p -> answer("options", ints(1)));
+            script.add(p -> answer("options", ints(0)));
+            CardCollection got = ctl.chooseCardsForEffectMultiple(groups, bolt.getFirstSpellAbility(), "Put into your hand", false);
+            assertEquals(before + 2, prompts.size(), "one question per group");
+            assertEquals(2, got.size());
+            assertTrue(got.contains(bolt) && got.contains(shock), "a card picked for one group is not offered again");
+        } finally { drop(bolt, shock); }
+    }
+
+    @Test
+    void inheritedBidsAssistAndDungeonChoicesAreTheHumans() {
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        try {
+            SpellAbility sa = bolt.getFirstSpellAbility();
+            sa.setActivatingPlayer(opp);
+            script.add(p -> answer("option", 1));
+            assertFalse(ctl.confirmBidAction(sa, PlayerActionConfirmMode.BidLife, "Bid 3 life?", 3, opp));
+            assertEquals("Stop bidding", next("confirm").getAsJsonArray("options").get(1).getAsString());
+            // Assist: the human decides how much of an opponent's spell to pay; 0 = nothing is tapped
+            script.add(p -> answer("value", 0));
+            forge.game.mana.ManaCostBeingPaid cost = new forge.game.mana.ManaCostBeingPaid(new ManaCost(new ManaCostParser("3")));
+            assertTrue(ctl.helpPayForAssistSpell(cost, sa, 3, 3));
+            assertEquals("number", next("number").get("prompt").getAsString());
+            assertEquals(3, cost.getGenericManaAmount(), "nothing was paid");
+            // venture: which dungeon (any two faces do for the question)
+            List<forge.card.ICardFace> faces = List.of(StaticData.instance().getCommonCards().getFaceByName("Mountain"),
+                    StaticData.instance().getCommonCards().getFaceByName("Forest"));
+            script.add(p -> answer("option", 1));
+            assertEquals("Forest", ctl.chooseSingleCardFace(sa, faces, "Choose a dungeon").getName());
+        } finally { drop(bolt); }
+    }
+
     @Test
     void zEveryPromptSoFarCarriedAPromptIdAndNoLibraryInItsView() {
         assertTrue(prompts.size() > 10);

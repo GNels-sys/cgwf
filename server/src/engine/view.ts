@@ -438,7 +438,7 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
       return { kind: "priority", promptId, title, options: opts, phase: (raw.phase as EnginePhase) ?? null, myTurn: Boolean(raw.myTurn), stackEmpty: Boolean(raw.stackEmpty), stackTopMine: Boolean(raw.stackTopMine), holding: Boolean(raw.holding) };
     }
     case "targets":
-      return { kind: "targets", promptId, title, ability: String(raw.ability ?? ""), source: str(raw.source), min: Number(raw.min ?? 1), max: Number(raw.max ?? 1), options: options(raw.options, ctx) };
+      return { kind: "targets", promptId, title, ability: String(raw.ability ?? ""), source: str(raw.source), min: Number(raw.min ?? 1), max: Number(raw.max ?? 1), options: options(raw.options, ctx), cancelLabel: str(raw.cancelLabel) };
     case "attackers": {
       const defenders = Array.isArray(raw.defenders) ? (raw.defenders as RawEntityRef[]).map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null) : [];
       return { kind: "attackers", promptId, title, candidates: cardsOnly(raw.candidates, ctx), defenders };

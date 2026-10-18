@@ -353,3 +353,105 @@ The control protocol and the relay: `createGame`/`attachSeat`/`answer`/`resync` 
 browser socket, and printing mapping. That gives a human a playable (ugly) engine game through
 the real app within the first week and surfaces every integration problem early; the pickers and
 stops come after.
+
+## 16. Inherited decisions (audit, 2026-10-18)
+
+`BridgeController` extends Forge's `PlayerControllerAi`, so any `PlayerController` method it does not
+override is answered by Forge's AI for the human seat. The audit listed every non-static, non-private
+method Forge 2.0.15's `PlayerController` declares (reflection; 79 were not overridden when it started) and
+compared each with Forge's own desktop `forge.player.PlayerControllerHuman` (forge-gui), which is the
+reference for what a human is asked.
+
+Verdicts: **(a)** route to the human with an existing prompt kind; **(b)** route with a new message kind;
+**(c)** legitimately automatic (no player choice exists in a CGwF game, or `PlayerControllerHuman` also
+decides it without asking); **(d)** deliberately left to Forge's AI, with the reason. "How often" is for a
+four-player Commander game.
+
+**Counts (the 79 inherited at the start):** (a) 19, all routed in this audit; (b) 3, pending (batch 2);
+(c) 50; (d) 7. Three more AI fallbacks were found inside methods the bridge already overrode and are fixed
+too (second table).
+
+**The guard.** `engine/src/test/java/cgwf/engine/BridgeCoverageTest.java` (plain reflection, no Forge
+assets, runs in CI) fails when a `PlayerController` method is neither declared by `BridgeController` nor in
+its `ALLOWED` map, where every entry carries its verdict and reason; it also fails on stale entries (a method
+Forge removed, or one the bridge now overrides). After a Forge bump: run it, and for each new method read
+`PlayerControllerHuman`'s version, then override it in the bridge or add an allow-list entry and a row here.
+
+### 16.1 Routed to the human (a)
+
+Every one falls back to Forge's AI only when the prompt times out or the seat is absent, as everywhere else.
+Tests: `PromptRoundTripTest.inherited*` (each fails on the old bridge: no prompt was ever sent).
+
+| Method | Decision | How often | Human reference | Now |
+| --- | --- | --- | --- | --- |
+| `chooseNewTargetsFor` | New targets for a copy that "may choose new targets" (Twincast, Reverberate, storm, Dualcaster, Lithoform Engine) and "change the target" effects (Redirect, Deflecting Swat, Bolt Bend) | Common | `TargetSelection` with the old number of targets; optional keeps the old ones | targets prompt, same count, Cancel = "Keep current targets"; a divided spell keeps its division |
+| `orderAndPlaySimultaneousSa` (copies branch) | Copies were handed to the AI's `chooseNewTargetsForCopy` | Common | copies go on the stack, then `setupNewTargets(player)` | the bridge does the same, so the question above reaches the human |
+| `getAbilityToPlay` | Which spell of a card to cast from an effect (cascade/discover into a split, adventure or MDFC card, "you may cast"), and which of several additional costs ("sacrifice a creature or pay 3 life") | Common | ability menu | choose (text) |
+| `chooseCardsForConvokeOrImprovise` | Which untapped creatures / artifacts to tap for convoke, improvise, waterbend | Occasional | `InputSelectCardsForConvokeOrImprovise` | chooseMany (reason `convoke`, none = pay with mana); each card pays a shard of its colour first, as Forge's input |
+| `vote` | Council's dilemma / will of the council (Expropriate, Council's Judgment, Tivit, Kharn) | Occasional | entity or ability choice | choose, with the running tally in the title |
+| `chooseFlipResult` | Call heads or tails; Krark's Thumb: which flip to keep | Occasional | Heads/Tails or Win/Lose the flip | confirm with those two labels |
+| `chooseRollToIgnore` | Roll two, ignore one (advantage) | Occasional | list | choose |
+| `chooseDiceToReroll` | Which dice to reroll (Wyll, Pixie Guide-style) | Occasional | many | chooseMany (reason `reroll`) |
+| `chooseRollToModify` | Which roll a modifier applies to | Rare | optional list | choose, optional |
+| `chooseRollToSwap` / `chooseRollSwapValue` | Swap a roll with power/toughness (Unfinity-era die cards) | Rare | optional list | choose, optional |
+| `chooseCardsForEffectMultiple` | "Put one of each ... into your hand" (DigMultiple) | Occasional | one pick per group | one chooseMany per group (a card picked once is not offered again) |
+| `chooseCardsForSplice` | Splice onto Arcane | Rare | many | chooseMany (reason `splice`) |
+| `chooseTarget` | Spellskite-style "change a target of target spell": which target | Rare | list of target + spell | choose (text) |
+| `divideShield` | Split one prevention shield across several damage events | Rare | `assignGenericAmount` | assign |
+| `choosePlayerToAssistPayment` | Assist: whom to ask for help | Rare | optional player choice | choose, optional |
+| `helpPayForAssistSpell` | Assist: how much of SOMEONE ELSE's spell you pay (the AI used to tap the human's lands for it) | Rare | a number, then mana payment | number; the mana is paid automatically (owner's option 1); no answer = pay nothing |
+| `chooseSingleCardFace` (list) | Venture into the dungeon: which dungeon | Occasional (AFR commanders, Acererak, Nadaar) | list | choose (text) |
+| `chooseSingleCardState` | Rooms: which door to unlock / lock | Occasional | list | choose (text) |
+| `confirmBidAction` | Bid life (Illicit Auction, Mages' Contest) | Rare | yes/no | confirm "Bid higher" / "Stop bidding" |
+
+### 16.2 AI fallbacks inside methods already overridden (fixed)
+
+| Method | Before | Now |
+| --- | --- | --- |
+| `orderAndPlaySimultaneousSa` | copied spells went through the AI path, which picked their new targets | Forge's human copy path (above) |
+| `assignCombatDamage` | an illegal trample split ("lethal to every blocker first") handed the assignment to the AI | asked again, up to three times |
+| `chooseCardsToDiscardUnlessType` | an illegal pick ("a land, or two cards") handed it to the AI | asked again, up to three times |
+
+Still deliberate inside overrides: `chooseCardsToDiscardFrom` for ANOTHER player's hand chooses only from
+cards shown to the chooser; Forge only calls it that way after a reveal or look, so the bridge falls back to
+the AI only for hidden cards (two Forge cards, Mind Spike-style "you choose" without a reveal), rather than
+put hidden identities into a prompt. `chooseColorAllowColorless` with one colour, `orderMoveToZoneList` for
+zones where order is meaningless, and a mode answer illegal three times are AI or automatic by design.
+
+### 16.3 New message kind needed (b): batch 2
+
+| Method | Decision | How often | Human reference | Plan |
+| --- | --- | --- | --- | --- |
+| `reveal(CardCollectionView, ZoneType, Player, String, boolean)` | Cards revealed to this seat (tutors that reveal, "reveal the top card", an opponent's revealed hand) | Common | dialog showing the cards | per-seat notice frame with the cards, shown as a dismissable sheet |
+| `reveal(List<CardView>, ...)` | The same, by card views | Common | dialog | same notice |
+| `notifyOfValue` | Forge tells the seat a value (chosen colour, number, vote, "X chose Y") | Common | message box | same notice, text only |
+
+None of these is a decision (the AI version only skips showing them), but the human seat currently learns
+some of it only from the log.
+
+### 16.4 Legitimately automatic (c)
+
+| Method(s) | Why |
+| --- | --- |
+| `getGame`, `getMatch`, `getPlayer`, `getLobbyPlayer`, `getAnteResult`, `isGuiPlayer`, `tempShowCards`, `endTempShowCards`, `autoPassCancel`, `awaitNextInput`, `cancelAwaitNextInput`, `resetAtEndOfTurn`, `isOrderedZone`, `orderedMoveToTopOfLibrary` | accessors, UI hooks and AI bookkeeping; no decision |
+| `complainCardsCantPlayWell`, `revealAISkipCards`, `revealUnsupported` | messages about an AI's own deck or unsupported cards (decks are checked before the game) |
+| `getFullControl`, `isFullControl` | Forge's "full control" flags are empty, the same default as Forge's human: Forge then skips the same optional questions for humans |
+| `canPlayUnlimitedLands`, `cheatShuffle` | developer / AI cheats, off (`GameRules.allowCheatShuffle` false) |
+| `addKeywordCost`, `chooseBinary` (3 args), `chooseCardsToDiscardFrom` (5 args), `chooseSingleEntityForEffect` (2 overloads), `chooseSomeType` (3 args), `confirmAction` (2 overloads), `getAbilityToPlay` (2 args), `getCostDecisionMaker` (3 args), `payManaCost` (5 args), `chooseSector` (2 args), `chooseSprocket` (1 arg), `reveal` (4 final overloads) | final or default overloads that only delegate to a method the bridge overrides or that has its own row |
+| `chooseNumberForCostReduction` | `PlayerControllerHuman` returns the maximum unless full control is on |
+| `chooseSingleStaticAbility` | only the cost-reduction order calls it; the human controller takes the first unless full control is on |
+| `orderCosts` | the human controller keeps Forge's order unless full control is on |
+| `chooseSingleCardFace` (predicate) | only the human controller's own name picker calls it; the bridge's `chooseCardName` replaces that picker |
+| `orderBlockers`, `orderBlocker`, `orderAttackers` | damage assignment order is gone from the rules (Foundations); `GameRules.orderCombatants` is false, so Forge never calls them; damage itself is `assignCombatDamage` (routed) |
+| `sideboard` | between games of a match only; CGwF plays one game |
+| `chooseCardsYouWonToAddToDeck`, `revealAnte` | ante, not played |
+| `choosePDRollToIgnore` | planar die, Planechase not enabled |
+| `chooseStartingHand` | only Backup Plan (a Conspiracy card, never in a deck) makes extra opening hands |
+
+### 16.5 Deliberately left to Forge's AI (d)
+
+| Method | Reason |
+| --- | --- |
+| `applyManaToCost`, `chooseManaFromPool`, `specifyManaCombo` | mana payment is automatic by the owner's choice (Stage 2 M5, option 1); "Pay with" steers which sources are tapped first |
+| `chooseSector` (3 args), `chooseSprocket` (2 args), `chooseContraptionsToCrank` | Un-set Attractions and Contraptions; not Commander-legal |
+| `isAI` | stays true. Forge branches on it only for engine-internal paths: library searches pick one card at a time (still asked of the human), the 999-actions-in-one-priority loop guard, AI-unplayable cards left out of random pools (Booster Tutor-style "random card" effects), sideboarding, Camouflage. False would send Forge down GUI-only paths with no GUI attached |

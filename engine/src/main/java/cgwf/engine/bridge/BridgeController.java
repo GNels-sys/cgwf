@@ -1,6 +1,7 @@
 package cgwf.engine.bridge;
 
 import cgwf.engine.SeatView;
+import com.google.common.collect.ListMultimap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -16,6 +17,7 @@ import forge.card.ColorSet;
 import forge.card.ICardFace;
 import forge.card.MagicColor;
 import forge.card.mana.ManaCost;
+import forge.card.mana.ManaCostShard;
 import forge.game.Game;
 import forge.game.ability.ApiType;
 import forge.game.GameLogEntryType;
@@ -25,6 +27,7 @@ import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
 import forge.game.card.CardLists;
+import forge.game.card.CardState;
 import forge.game.card.CardUtil;
 import forge.game.card.CounterType;
 import forge.game.combat.Combat;
@@ -35,6 +38,8 @@ import forge.game.cost.CostPart;
 import forge.game.cost.CostPartMana;
 import forge.game.cost.CostPartWithList;
 import forge.game.mana.ManaConversionMatrix;
+import forge.game.mana.ManaCostBeingPaid;
+import forge.game.ability.effects.RollDiceEffect;
 import forge.game.keyword.Keyword;
 import forge.game.keyword.KeywordInterface;
 import forge.game.phase.PhaseHandler;
@@ -49,11 +54,14 @@ import forge.game.spellability.OptionalCostValue;
 import forge.game.spellability.AbilityManaPart;
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityStackInstance;
+import forge.game.spellability.TargetChoices;
 import forge.game.trigger.WrappedAbility;
 import forge.game.zone.MagicStack;
 import forge.game.zone.ZoneType;
+import forge.util.ITriggerEvent;
 import forge.util.collect.FCollectionView;
 import org.apache.commons.lang3.tuple.ImmutablePair;
+import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -538,20 +546,22 @@ public final class BridgeController extends PlayerControllerAi {
             lethal.put(b, Math.max(0, lethalDamage(b, attacker, damageDealt)));
         }
         if (trample) targets.add(defender);
-        List<Integer> amounts = assign("Assign " + attacker.getName() + "'s " + damageDealt + " damage", attacker.getName(), attacker, targets, damageDealt, lethal);
-        if (amounts == null) return super.assignCombatDamage(attacker, blockers, remaining, damageDealt, defender, overrideOrder);
-        if (trample) {
-            // the defender may only take what is left after lethal damage to every blocker
-            int toDefender = amounts.get(targets.size() - 1);
-            if (toDefender > 0) {
+        List<Integer> amounts = null;
+        for (int attempt = 0; attempt < ATTEMPTS && amounts == null; attempt++) {
+            amounts = assign("Assign " + attacker.getName() + "'s " + damageDealt + " damage", attacker.getName(), attacker, targets, damageDealt, lethal);
+            if (amounts == null) return super.assignCombatDamage(attacker, blockers, remaining, damageDealt, defender, overrideOrder);
+            if (trample && amounts.get(targets.size() - 1) > 0) {
+                // the defender may only take what is left after lethal damage to every blocker
                 for (int i = 0; i < blockers.size(); i++) {
                     if (amounts.get(i) < lethal.getOrDefault(blockers.get(i), 0)) {
-                        session.sendError("every blocker needs lethal damage before the rest tramples over; the AI assigned it");
-                        return super.assignCombatDamage(attacker, blockers, remaining, damageDealt, defender, overrideOrder);
+                        session.sendError("every blocker needs lethal damage before the rest tramples over");
+                        amounts = null;
+                        break;
                     }
                 }
             }
         }
+        if (amounts == null) return super.assignCombatDamage(attacker, blockers, remaining, damageDealt, defender, overrideOrder);
         Map<Card, Integer> map = new HashMap<>();
         for (int i = 0; i < blockers.size(); i++) if (amounts.get(i) > 0) map.put(blockers.get(i), amounts.get(i));
         if (trample && amounts.get(targets.size() - 1) > 0) map.put(null, amounts.get(targets.size() - 1));
@@ -876,9 +886,15 @@ public final class BridgeController extends PlayerControllerAi {
             if (sa.isTrigger() && !sa.isCopied()) {
                 PlaySpellAbility.playSpellAbility(this, player, sa);
             } else {
-                List<SpellAbility> one = new ArrayList<>(1);
-                one.add(sa);
-                super.orderAndPlaySimultaneousSa(one); // a single item: no ordering question, Forge's handling of copies
+                // as PlayerControllerHuman: a copy goes on the stack and, when it may, its controller chooses new targets
+                if (sa.isCopied()) {
+                    if (sa.isSpell()) {
+                        if (!sa.getHostCard().isInZone(ZoneType.Stack)) sa.setHostCard(game.getAction().moveToStack(sa.getHostCard(), sa));
+                        else game.getStackZone().add(sa.getHostCard());
+                    }
+                    if (sa.isMayChooseNewTargets()) sa.setupNewTargets(player);
+                }
+                game.getStack().add(sa);
             }
         }
     }
@@ -1141,11 +1157,13 @@ public final class BridgeController extends PlayerControllerAi {
         if (autopilot()) return super.chooseCardsToDiscardUnlessType(num, hand, uTypes, sa);
         String types = String.join(" or ", uTypes);
         List<Card> all = new ArrayList<>(hand);
-        List<Card> chosen = chooseCards("Discard a " + types + " card, or " + num + " other cards", sourceOf(sa), all, 1, Math.max(1, num), "discard");
-        if (chosen == null) return super.chooseCardsToDiscardUnlessType(num, hand, uTypes, sa);
-        if (chosen.size() == 1 && CardLists.getValidCards(new CardCollection(chosen), uTypes, player, sa.getHostCard(), sa).size() == 1) return new CardCollection(chosen);
-        if (chosen.size() == num) return new CardCollection(chosen);
-        session.sendError("choose one " + types + " card or " + num + " cards; the AI chose");
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            List<Card> chosen = chooseCards("Discard a " + types + " card, or " + num + " other cards", sourceOf(sa), all, 1, Math.max(1, num), "discard");
+            if (chosen == null) break;
+            if (chosen.size() == 1 && CardLists.getValidCards(new CardCollection(chosen), uTypes, player, sa.getHostCard(), sa).size() == 1) return new CardCollection(chosen);
+            if (chosen.size() == Math.min(num, all.size())) return new CardCollection(chosen);
+            session.sendError("choose one " + types + " card or " + num + " cards");
+        }
         return super.chooseCardsToDiscardUnlessType(num, hand, uTypes, sa);
     }
 
@@ -1250,6 +1268,318 @@ public final class BridgeController extends PlayerControllerAi {
         for (Card c : hand) cards.add(c);
         List<Card> chosen = chooseCards("Put " + cardsToReturn + " card(s) on the bottom of your library", null, cards, cardsToReturn, cardsToReturn, "mulligan");
         return chosen == null ? super.tuckCardsViaMulligan(hand, cardsToReturn) : new CardCollection(chosen);
+    }
+
+    // ------------------------------------------------------------------ decisions found by the 2026-10-18 audit
+    // Each of these used to be inherited from PlayerControllerAi, so Forge's AI decided them for the human seat.
+    // The reference for every question is Forge's own desktop PlayerControllerHuman (see docs/FORGE-ENGINE.md,
+    // "Inherited decisions"); BridgeCoverageTest fails if a PlayerController method is neither overridden here nor
+    // in its allow-list.
+
+    /** Casting from an effect (cascade into a split or adventure card, "you may cast", discover) or picking one of several additional costs. */
+    @Override
+    public SpellAbility getAbilityToPlay(Card hostCard, List<SpellAbility> abilities, ITriggerEvent triggerEvent) {
+        if (autopilot() || abilities == null || abilities.size() <= 1) return super.getAbilityToPlay(hostCard, abilities, triggerEvent);
+        List<String> labels = new ArrayList<>();
+        for (SpellAbility s : abilities) labels.add(describeSa(s));
+        Integer i = chooseText("How do you want to cast " + hostCard.getName() + "?", hostCard.getName(), labels, false);
+        return i == null || i < 0 ? super.getAbilityToPlay(hostCard, abilities, triggerEvent) : abilities.get(i);
+    }
+
+    /**
+     * New targets: a copy that "may choose new targets" (Twincast, storm, Reverberate) and "change the target(s)"
+     * effects (Redirect, Deflecting Swat, Bolt Bend). As PlayerControllerHuman: the same number of targets as
+     * before, through the targets prompt; Cancel keeps the current targets.
+     */
+    @Override
+    public TargetChoices chooseNewTargetsFor(SpellAbility ability, Predicate<GameObject> filter, boolean optional) {
+        if (autopilot()) return super.chooseNewTargetsFor(ability, filter, optional);
+        SpellAbility sa = ability.isWrapper() ? ((WrappedAbility) ability).getWrappedAbility() : ability;
+        if (!sa.usesTargeting()) return null;
+        TargetChoices old = sa.getTargets();
+        int count = Math.max(1, old.size());
+        List<GameObject> oldTargets = new ArrayList<>();
+        for (GameObject o : old) oldTargets.add(o);
+        List<Integer> divided = new ArrayList<>();
+        if (sa.isDividedAsYouChoose()) for (GameObject o : oldTargets) { Integer v = old.getDividedValue(o); divided.add(v == null ? 0 : v); }
+        sa.clearTargets();
+        List<GameObject> candidates = targetCandidates(sa);
+        if (filter != null) candidates.removeIf(o -> !filter.test(o));
+        if (candidates.size() < count) { sa.setTargets(old); return null; }
+        List<String> current = new ArrayList<>();
+        for (GameObject o : oldTargets) current.add(o instanceof Card c ? c.getName() : o.toString());
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            JsonObject p = prompt("targets", "Choose new targets for " + sa.getHostCard().getName() + (current.isEmpty() ? "" : " (now: " + String.join(", ", current) + ")"));
+            p.addProperty("ability", sa.toString());
+            p.addProperty("source", sourceOf(sa));
+            p.addProperty("min", count);
+            p.addProperty("max", count);
+            p.addProperty("cancelLabel", "Keep current targets");
+            p.add("options", objectsJson(candidates));
+            JsonObject a = session.ask(p);
+            if (a == null) { sa.setTargets(old); return super.chooseNewTargetsFor(ability, filter, optional); }
+            if (isTrue(a, "cancel")) { sa.setTargets(old); return null; }
+            sa.resetTargets();
+            for (int idx : indices(a, "options")) if (idx >= 0 && idx < candidates.size()) sa.getTargets().add(candidates.get(idx));
+            if (sa.getTargets().size() == count && sa.isTargetNumberValid()) {
+                if (sa.isDividedAsYouChoose()) {
+                    // the division does not change: each new target takes the amount of the one it replaces, in order
+                    int i = 0;
+                    for (GameObject o : sa.getTargets()) {
+                        if (o instanceof GameEntity e) sa.addDividedAllocation(e, i < divided.size() ? divided.get(i) : 0);
+                        i++;
+                    }
+                }
+                return sa.getTargets();
+            }
+            session.sendError("choose " + count + (count == 1 ? " target" : " targets"));
+        }
+        sa.setTargets(old);
+        return null;
+    }
+
+    /** Spellskite-style "change a target of target spell to this": which target, when the spell has several. */
+    @Override
+    public Pair<SpellAbilityStackInstance, GameObject> chooseTarget(SpellAbility sa, List<Pair<SpellAbilityStackInstance, GameObject>> allTargets) {
+        if (autopilot() || allTargets == null || allTargets.size() < 2) return super.chooseTarget(sa, allTargets);
+        List<String> labels = new ArrayList<>();
+        for (Pair<SpellAbilityStackInstance, GameObject> t : allTargets) {
+            GameObject o = t.getRight();
+            labels.add((o instanceof Card c ? c.getName() : String.valueOf(o)) + " - " + t.getLeft().getSourceCard().getName());
+        }
+        Integer i = chooseText("Which target do you change?", sourceOf(sa), labels, false);
+        return i == null || i < 0 ? super.chooseTarget(sa, allTargets) : allTargets.get(i);
+    }
+
+    /** Council's dilemma / will of the council (Expropriate, Council's Judgment, Tivit): this seat's vote. */
+    @Override
+    public Object vote(SpellAbility sa, String prompt, List<Object> options, ListMultimap<Object, Player> votes, Player forPlayer, boolean optional) {
+        if (autopilot() || options == null || options.isEmpty()) return super.vote(sa, prompt, options, votes, forPlayer, optional);
+        StringBuilder title = new StringBuilder(forPlayer != null && forPlayer != player ? "Vote for " + forPlayer.getName() : "Your vote");
+        if (votes != null && !votes.isEmpty()) {
+            List<String> tally = new ArrayList<>();
+            for (Object k : votes.keySet()) tally.add(voteLabel(k) + " " + votes.get(k).size());
+            title.append(" (so far: ").append(String.join(", ", tally)).append(")");
+        }
+        boolean entities = true;
+        for (Object o : options) if (!(o instanceof GameEntity)) entities = false;
+        Integer i;
+        if (entities) {
+            List<GameObject> objs = new ArrayList<>();
+            for (Object o : options) objs.add((GameObject) o);
+            i = chooseIndex(title.toString(), sourceOf(sa), objs, optional);
+        } else {
+            List<String> labels = new ArrayList<>();
+            for (Object o : options) labels.add(voteLabel(o));
+            i = chooseText(title.toString(), sourceOf(sa), labels, optional);
+        }
+        if (i == null) return super.vote(sa, prompt, options, votes, forPlayer, optional);
+        return i < 0 ? null : options.get(i);
+    }
+
+    private static String voteLabel(Object o) {
+        if (o instanceof SpellAbility s) return describeSa(s);
+        if (o instanceof Card c) return c.getName();
+        return String.valueOf(o);
+    }
+
+    /** "Call it" / Krark's Thumb: heads or tails, or which of two flips to keep. */
+    @Override
+    public boolean chooseFlipResult(SpellAbility sa, Player flipper, boolean call) {
+        if (autopilot()) return super.chooseFlipResult(sa, flipper, call);
+        List<String> labels = call ? List.of("Heads", "Tails") : List.of("Win the flip", "Lose the flip");
+        Card host = sa == null ? null : sa.getHostCard();
+        Boolean r = confirm(call ? "Call the coin flip" : "Choose the result of the flip", null, host, labels, host == null ? null : host.getName(), "flip");
+        return r != null ? r : super.chooseFlipResult(sa, flipper, call);
+    }
+
+    /** Convoke, improvise, waterbend: which untapped creatures / artifacts to tap toward the cost. */
+    @Override
+    public Map<Card, ManaCostShard> chooseCardsForConvokeOrImprovise(SpellAbility sa, ManaCost manaCost, CardCollectionView untappedCards, boolean artifacts, boolean creatures, Integer maxReduction) {
+        if (autopilot() || untappedCards == null || untappedCards.isEmpty() || manaCost == null || manaCost.getCMC() <= 0)
+            return super.chooseCardsForConvokeOrImprovise(sa, manaCost, untappedCards, artifacts, creatures, maxReduction);
+        String what = artifacts && creatures ? "Waterbend" : creatures ? "Convoke" : "Improvise";
+        String kind = artifacts && creatures ? "artifacts and creatures" : creatures ? "creatures" : "artifacts";
+        List<Card> cards = new ArrayList<>(untappedCards);
+        int max = Math.min(manaCost.getCMC(), cards.size());
+        if (maxReduction != null) max = Math.min(max, maxReduction);
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            List<Card> chosen = chooseCards(what + ": tap " + kind + " to help pay " + manaCost + " (none = pay with mana)", sourceOf(sa), cards, 0, max, "convoke");
+            if (chosen == null) return super.chooseCardsForConvokeOrImprovise(sa, manaCost, untappedCards, artifacts, creatures, maxReduction);
+            Map<Card, ManaCostShard> out = convokeShards(chosen, manaCost, artifacts);
+            if (out != null) return out;
+            session.sendError("those cards cannot all pay toward " + manaCost);
+        }
+        return super.chooseCardsForConvokeOrImprovise(sa, manaCost, untappedCards, artifacts, creatures, maxReduction);
+    }
+
+    /** As Forge's convoke input: each card pays a shard of one of its colours if one is still unpaid, else generic. */
+    public static Map<Card, ManaCostShard> convokeShards(List<Card> chosen, ManaCost manaCost, boolean artifacts) {
+        ManaCostBeingPaid remaining = new ManaCostBeingPaid(manaCost);
+        List<Card> ordered = new ArrayList<>(chosen);
+        // fewest colours first, so a mono-coloured creature takes its coloured shard before a flexible one does
+        ordered.sort((x, y) -> Integer.compare(x.getColor().countColors(), y.getColor().countColors()));
+        Map<Card, ManaCostShard> out = new LinkedHashMap<>();
+        for (Card c : ordered) {
+            ManaCostShard shard = null;
+            if (artifacts) {
+                shard = remaining.payManaViaConvoke(ManaCostShard.COLORLESS.getColorMask());
+            } else {
+                byte colours = c.getColor().getColor();
+                byte useful = (byte) (colours & remaining.getUnpaidColors());
+                for (byte b : MagicColor.WUBRG) {
+                    if ((useful & b) != 0) { shard = remaining.payManaViaConvoke(b); if (shard != null) break; }
+                }
+                if (shard == null) shard = remaining.payManaViaConvoke(colours == 0 ? ManaCostShard.COLORLESS.getColorMask() : firstColour(colours));
+            }
+            if (shard == null) return null;
+            out.put(c, shard);
+        }
+        return out;
+    }
+
+    private static byte firstColour(byte colours) {
+        for (byte b : MagicColor.WUBRG) if ((colours & b) != 0) return b;
+        return colours;
+    }
+
+    /** "Put one of each ... into your hand" (DigMultiple): one pick per group, as PlayerControllerHuman. */
+    @Override
+    public CardCollection chooseCardsForEffectMultiple(Map<String, CardCollection> validMap, SpellAbility sa, String title, boolean isOptional) {
+        if (autopilot()) return super.chooseCardsForEffectMultiple(validMap, sa, title, isOptional);
+        CardCollection result = new CardCollection();
+        for (Map.Entry<String, CardCollection> e : validMap.entrySet()) {
+            CardCollection pool = new CardCollection(e.getValue());
+            pool.removeAll(result);
+            if (pool.isEmpty()) continue;
+            List<Card> one = chooseCards(title + " (" + e.getKey() + ")", sourceOf(sa), new ArrayList<>(pool), isOptional ? 0 : 1, 1, null);
+            if (one == null) return super.chooseCardsForEffectMultiple(validMap, sa, title, isOptional);
+            result.addAll(one);
+        }
+        return result;
+    }
+
+    /** Splice onto Arcane: which cards from hand to reveal and splice. */
+    @Override
+    public List<Card> chooseCardsForSplice(SpellAbility sa, List<Card> cards) {
+        if (autopilot() || cards == null || cards.isEmpty()) return super.chooseCardsForSplice(sa, cards);
+        List<Card> chosen = chooseCards("Splice onto " + sa.getHostCard().getName() + ": which cards?", sourceOf(sa), new ArrayList<>(cards), 0, cards.size(), "splice");
+        return chosen == null ? super.chooseCardsForSplice(sa, cards) : chosen;
+    }
+
+    // dice (Commander has plenty: Wyll, Pixie Guide, The Deck of Many Things): the human picks, as in PlayerControllerHuman
+
+    private static List<String> rollLabels(List<?> rolls) {
+        List<String> labels = new ArrayList<>();
+        for (int i = 0; i < rolls.size(); i++) labels.add("Die " + (i + 1) + ": " + rolls.get(i));
+        return labels;
+    }
+
+    @Override
+    public Integer chooseRollToIgnore(List<Integer> rolls) {
+        if (autopilot() || rolls == null || rolls.size() <= 1) return super.chooseRollToIgnore(rolls);
+        Integer i = chooseText("Which roll do you ignore?", null, rollLabels(rolls), false);
+        return i == null || i < 0 ? super.chooseRollToIgnore(rolls) : rolls.get(i);
+    }
+
+    @Override
+    public List<Integer> chooseDiceToReroll(List<Integer> rolls) {
+        if (autopilot() || rolls == null || rolls.isEmpty()) return super.chooseDiceToReroll(rolls);
+        List<Integer> picks = chooseManyText("Choose dice to reroll", null, rollLabels(rolls), 0, rolls.size(), "reroll");
+        if (picks == null) return super.chooseDiceToReroll(rolls);
+        List<Integer> out = new ArrayList<>();
+        for (int i : picks) out.add(rolls.get(i));
+        return out;
+    }
+
+    @Override
+    public Integer chooseRollToModify(List<Integer> rolls) {
+        if (autopilot() || rolls == null || rolls.isEmpty()) return super.chooseRollToModify(rolls);
+        Integer i = chooseText("Choose a roll to modify (or none)", null, rollLabels(rolls), true);
+        return i == null ? super.chooseRollToModify(rolls) : i < 0 ? null : rolls.get(i);
+    }
+
+    @Override
+    public RollDiceEffect.DieRollResult chooseRollToSwap(List<RollDiceEffect.DieRollResult> rolls) {
+        if (autopilot() || rolls == null || rolls.isEmpty()) return super.chooseRollToSwap(rolls);
+        Integer i = chooseText("Choose a roll to swap (or none)", null, rollLabels(rolls), true);
+        return i == null ? super.chooseRollToSwap(rolls) : i < 0 ? null : rolls.get(i);
+    }
+
+    @Override
+    public String chooseRollSwapValue(List<String> swapChoices, Integer currentResult, int power, int toughness) {
+        if (autopilot() || swapChoices == null || swapChoices.isEmpty()) return super.chooseRollSwapValue(swapChoices, currentResult, power, toughness);
+        Integer i = chooseText("Swap the roll of " + currentResult + " with power " + power + " or toughness " + toughness + "? (or neither)", null, swapChoices, true);
+        return i == null ? super.chooseRollSwapValue(swapChoices, currentResult, power, toughness) : i < 0 ? null : swapChoices.get(i);
+    }
+
+    /** Assist (another player helps pay a spell's generic mana): whom to ask. */
+    @Override
+    public Player choosePlayerToAssistPayment(FCollectionView<Player> optionList, SpellAbility sa, String title, int max) {
+        if (autopilot() || optionList == null || optionList.isEmpty()) return super.choosePlayerToAssistPayment(optionList, sa, title, max);
+        return chooseSingleEntityForEffect(optionList, null, sa, title == null || title.isBlank() ? "Ask a player to help pay (Assist), or nobody" : title, true, null, null);
+    }
+
+    /** Assist, the helper's side: how much of SOMEONE ELSE's spell this seat pays. The AI must never spend a human's mana here. */
+    @Override
+    public boolean helpPayForAssistSpell(ManaCostBeingPaid cost, SpellAbility sa, int max, int requested) {
+        if (autopilot()) return super.helpPayForAssistSpell(cost, sa, max, requested);
+        Integer n = number(sa.getActivatingPlayer().getName() + " asks for help paying for " + sa.getHostCard().getName() + " (Assist, up to " + max + "). How much do you pay?", sourceOf(sa), 0, max, null);
+        int willPay = n == null ? 0 : n; // nobody answered: help with nothing (spending a human's mana is never automatic)
+        if (willPay <= 0) return true;
+        ManaCostBeingPaid assist = new ManaCostBeingPaid(ManaCost.get(willPay));
+        if (!ComputerUtilMana.canPayManaCost(assist, sa, player, false)) {
+            session.sendError("you cannot pay " + willPay + " right now");
+            return true;
+        }
+        ComputerUtilMana.payManaCost(assist, sa, player, false);
+        cost.decreaseGenericMana(willPay);
+        game.getGameLog().add(GameLogEntryType.MANA, player.getName() + " helps pay " + willPay + " for " + sa.getHostCard().getName() + ".");
+        return true;
+    }
+
+    /** Venture into the dungeon: which dungeon. */
+    @Override
+    public ICardFace chooseSingleCardFace(SpellAbility sa, List<ICardFace> faces, String message) {
+        if (autopilot() || faces == null || faces.size() <= 1) return super.chooseSingleCardFace(sa, faces, message);
+        List<String> labels = new ArrayList<>();
+        for (ICardFace f : faces) labels.add(f.getName());
+        Integer i = chooseText(message == null || message.isBlank() ? "Choose one" : message, sourceOf(sa), labels, false);
+        return i == null || i < 0 ? super.chooseSingleCardFace(sa, faces, message) : faces.get(i);
+    }
+
+    /** Rooms: which door to unlock or lock. */
+    @Override
+    public CardState chooseSingleCardState(SpellAbility sa, List<CardState> states, String message, Map<String, Object> params) {
+        if (autopilot() || states == null || states.size() <= 1) return super.chooseSingleCardState(sa, states, message, params);
+        List<String> labels = new ArrayList<>();
+        for (CardState st : states) labels.add(st.getName());
+        Integer i = chooseText(message == null || message.isBlank() ? "Choose one" : message, sourceOf(sa), labels, false);
+        return i == null || i < 0 ? super.chooseSingleCardState(sa, states, message, params) : states.get(i);
+    }
+
+    /** Bidding life (Illicit Auction, Mages' Contest): bid one more, or stop. */
+    @Override
+    public boolean confirmBidAction(SpellAbility sa, PlayerActionConfirmMode bidlife, String string, int bid, Player winner) {
+        if (autopilot()) return super.confirmBidAction(sa, bidlife, string, bid, winner);
+        Card host = sa == null ? null : sa.getHostCard();
+        Boolean r = confirm(string + " (highest bidder: " + winner.getName() + ")", null, host, List.of("Bid higher", "Stop bidding"), host == null ? null : host.getName(), "bid");
+        return r != null ? r : super.confirmBidAction(sa, bidlife, string, bid, winner);
+    }
+
+    /** A prevention shield that covers several damage events at once: how much is prevented where. */
+    @Override
+    public Map<GameEntity, Integer> divideShield(Card effectSource, Map<GameEntity, Integer> affected, int shieldAmount) {
+        if (autopilot() || affected == null || affected.size() <= 1) return super.divideShield(effectSource, affected, shieldAmount);
+        List<GameEntity> targets = new ArrayList<>(affected.keySet());
+        int incoming = 0;
+        for (int v : affected.values()) incoming += v;
+        int total = Math.min(shieldAmount, incoming);
+        List<Integer> amounts = assign("Prevent " + total + " damage: divide it", effectSource == null ? null : effectSource.getName(), effectSource, targets, total, null);
+        if (amounts == null) return super.divideShield(effectSource, affected, shieldAmount);
+        Map<GameEntity, Integer> out = new HashMap<>();
+        for (int i = 0; i < targets.size(); i++) if (amounts.get(i) > 0) out.put(targets.get(i), Math.min(amounts.get(i), affected.get(targets.get(i))));
+        return out;
     }
 
     // ------------------------------------------------------------------ the generic prompts
