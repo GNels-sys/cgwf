@@ -14,7 +14,7 @@ const { buildApp } = await import("../app.js");
 const { AgentManager } = await import("./manager.js");
 const { ScriptedLlm, textBlock, toolUse } = await import("./llm.js");
 const { config } = await import("../config.js");
-const { users, agentRuns, agentDecisions } = await import("../db/schema.js");
+const { users, rooms, agentRuns, agentDecisions } = await import("../db/schema.js");
 const fixture = fileURLToPath(new URL("../scryfall/fixtures/cards.sample.json", import.meta.url));
 
 const LIST = "Commander\n1 Atraxa, Praetors' Voice\n\nDeck\n1 Sol Ring\n1 Arcane Signet\n1 Lightning Bolt\n1 Lotus Cobra\n1 Scute Swarm\n1 Tireless Tracker\n1 Glorious Anthem\n1 Rancor\n1 Lightning Greaves\n10 Forest\n";
@@ -107,6 +107,11 @@ describe("computer opponents play through the normal event path", () => {
     const final = await ctx.app.inject({ method: "POST", url: `/api/rooms/${code}/agents`, headers: auth(), payload: { count: 2, bracket: 2 } });
     const agentIds = (final.json() as { agents: Array<{ userId: string }> }).agents.map((a) => a.userId);
 
+    // The deal is seeded by the room: pin it, so the agents' hands are the same on every run. (With a
+    // random seed about one run in nine dealt an agent a hand outside its keep rule, which added a
+    // legitimate third "mulligan" decision and failed the counts below.)
+    ctx.handle.db.update(rooms).set({ seed: "5eed000000000000000000000000c0de" }).where(eq(rooms.id, room.id)).run();
+    room.refreshRow();
     room.start(ownerId);
     ctx.agents.onGameStarted(room);
     // Agents keep their hands by rule; the owner keeps too.
