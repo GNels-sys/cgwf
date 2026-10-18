@@ -2395,6 +2395,22 @@ button.engine-row { cursor: pointer; width: 100%; }
   .corner-right { max-width: min(58vw, 260px); }
   .corner-right .stack-panel { width: min(58vw, 260px); }
 }
+/* The Stack column (Stack panel + log toasts) routes around open panels so their minimise buttons stay
+   reachable. Pure CSS against the table area (no measured sizes): the column has a definite box
+   (top + bottom), the Stack panel is capped to it and scrolls inside. */
+.corner-right { bottom: 6px; }
+.corner-right .stack-panel { max-width: 100%; max-height: min(46dvh, 100%); }
+/* the log minimised = its arrow tab on the right edge: keep the column clear of it */
+.table-mid.side-panels:not(.has-log) .corner-right { right: 44px; }
+@media (orientation: landscape) {
+  .table-mid.has-log .corner-right { right: calc(min(34%, 360px) + 6px); max-width: min(44vw, 300px, calc(100% - min(34%, 360px) - 12px)); }
+  .table-mid.has-board .corner-right { max-width: min(44vw, 300px, calc(100% - min(58%, 460px) - 56px)); }
+}
+@media (orientation: portrait) {
+  /* below the board's header, above the log's header */
+  .table-mid.has-board .corner-right { top: 52px; }
+  .table-mid.has-log .corner-right { bottom: calc(50% + 6px); }
+}
 
 /* ---------------------------------------------------------------- "Pay with" source picker (Stage 2 M5) */
 .pay-with { display: flex; flex-direction: column; gap: 10px; }
