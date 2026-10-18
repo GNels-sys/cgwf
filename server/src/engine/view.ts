@@ -15,6 +15,7 @@ import {
   type PlayerId,
   type PlayerView,
   type StackItem,
+  type StackTargetRef,
   type Step,
   type ViewCard,
   type ViewPlayer,
@@ -97,7 +98,16 @@ export interface EngineStateJson {
   winner?: string | null;
   endReason?: string | null;
   players: EnginePlayerJson[];
-  stack: Array<{ id: number; description: string; sourceCardId?: number; sourceName?: string; activatingPlayer: number | null }>;
+  stack: Array<{
+    id: number;
+    description: string;
+    kind?: "spell" | "ability" | "trigger";
+    sourceCardId?: number;
+    sourceName?: string;
+    card?: EngineCardJson;
+    activatingPlayer: number | null;
+    targets?: Array<{ kind: "card" | "player" | "stack"; id: number; name?: string | null; cardId?: number }>;
+  }>;
   combat: { attackingPlayer: number; attackers: Array<{ cardId: number; defender?: { kind: "player" | "card"; id: number }; blockedBy: number[] }> } | null;
   log: Array<{ type: string; text: string }>;
 }
@@ -260,12 +270,29 @@ export function engineToView(s: EngineStateJson, ctx: ConvertContext): { view: P
     .map((x) => x.userId)
     .filter((id) => players[id]);
   const active = userOf(ctx.seats, s.activePlayer) ?? turnOrder[0] ?? "";
-  const stack: StackItem[] = s.stack.map((si) => ({
-    id: String(si.id),
-    controller: userOf(ctx.seats, si.activatingPlayer) ?? active,
-    sourceIid: si.sourceCardId === undefined ? null : String(si.sourceCardId),
-    description: si.description,
-  }));
+  const stack: StackItem[] = s.stack.map((si) => {
+    const printing = si.card && si.card.name ? ctx.printingOf(si.card) : null;
+    if (printing) printings.set(printing.id, printing);
+    const targets: StackTargetRef[] = [];
+    for (const t of si.targets ?? []) {
+      if (t.kind === "card") targets.push({ kind: "card", iid: String(t.id), name: t.name ?? null });
+      else if (t.kind === "player") {
+        const player = userOf(ctx.seats, t.id);
+        if (player) targets.push({ kind: "player", player });
+      } else targets.push({ kind: "stack", id: String(t.id), name: t.name ?? null, iid: t.cardId === undefined ? null : String(t.cardId) });
+    }
+    const item: StackItem = {
+      id: String(si.id),
+      controller: userOf(ctx.seats, si.activatingPlayer) ?? active,
+      sourceIid: si.sourceCardId === undefined ? null : String(si.sourceCardId),
+      description: cleanDescription(si.description),
+      kind: si.kind ?? "spell",
+      name: si.sourceName ?? si.card?.name ?? null,
+      printingId: printing?.id ?? null,
+      targets,
+    };
+    return item;
+  });
   let winner: PlayerId | null = null;
   if (s.gameOver && s.winner) {
     const w = ctx.seats.find((x) => x.name === s.winner);
@@ -367,6 +394,11 @@ function cardsOnly(raw: unknown, ctx: ConvertContext): EngineOptionCard[] {
 }
 
 /** Engine `prompt` frame -> EnginePrompt for the browser. */
+/** Forge's stack text names cards with their internal ids ("Shock (108) deals 2 damage"); players never see those ids. */
+function cleanDescription(text: string): string {
+  return String(text ?? "").replace(/ \((\d+)\)/g, "").trim();
+}
+
 function str(v: unknown): string | null {
   return v === null || v === undefined ? null : String(v);
 }

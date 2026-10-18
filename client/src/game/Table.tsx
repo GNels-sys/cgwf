@@ -5,6 +5,7 @@ import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSenso
 import { isOut, type EngineAnswer, type EngineOption, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
 import { EnginePromptSheet, SHEET_PROMPT_KINDS } from "./EnginePrompts";
+import { InteractionStack, StackPanel, isInteraction } from "./StackPanel";
 import { StopsPanel } from "./StopsPanel";
 import { Avatar } from "../components/Avatar";
 import { useSettings } from "../settings";
@@ -161,6 +162,23 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   }, [prompt]); // eslint-disable-line react-hooks/exhaustive-deps
   const setPick = useCallback((p: EnginePick) => setPickState(p), []);
   const answerEngine = useCallback((a: EngineAnswer) => sock.send({ t: "engine", answer: a }), [sock]);
+  // The Interaction Stack window opens on its own whenever a new chain forms (a response on top of
+  // something, or a spell aimed at a stack item) and stays until the stack empties or the player tucks it away.
+  const chain = engineMode && isInteraction(view.stack);
+  const [chainMin, setChainMin] = useState(false);
+  const chainTop = view.stack[0]?.id ?? null;
+  const chainSeen = useRef<string | null>(null);
+  useEffect(() => {
+    if (!chain) {
+      chainSeen.current = null;
+      setChainMin(false);
+      return;
+    }
+    if (chainSeen.current !== chainTop) {
+      chainSeen.current = chainTop;
+      setChainMin(false);
+    }
+  }, [chain, chainTop]);
   const engineHighlights = useMemo(() => promptHighlights(prompt), [prompt]);
   const engineSelected = useMemo(() => {
     const out = new Set<string>();
@@ -587,6 +605,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
         {/* ---- middle: my battlefield on my playmat ---- */}
         <div className={`table-mid mat ${myMat.className}${mode ? " is-picking" : ""}`} style={myMat.style}>
+          {engineMode && view.stack.length > 0 && <StackPanel stack={view.stack} view={view} printings={printings} members={room.members} onZoom={holdCard} chain={chain} onOpenChain={() => setChainMin(false)} />}
           {mePlayer && myDerived ? (
             <Battlefield
               player={mePlayer}
@@ -672,6 +691,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       </div>
 
       {/* ---- overlays ---- */}
+      {chain && !chainMin && !(prompt && prompt.kind !== "priority") && (
+        <InteractionStack stack={view.stack} view={view} printings={printings} members={room.members} onZoom={holdCard} prompt={prompt} me={me} answer={answerEngine} onMinimize={() => setChainMin(true)} />
+      )}
       {engineMode && prompt && me && (prompt.kind === "mulligan" || (prompt.kind === "chooseMany" && prompt.reason === "mulligan")) && (
         <EngineMulligan prompt={prompt} view={view} printings={printings} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} />
       )}

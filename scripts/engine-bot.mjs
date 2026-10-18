@@ -15,7 +15,12 @@ if (!CODE) {
   process.exit(2);
 }
 const WS_BASE = BASE.replace(/^http/, "ws");
-const LIST = `1 Krenko, Mob Boss\n\n99 Mountain\n`;
+// BOT_RESPOND=1 gives the bot two instants and makes it cast ONLY in response (to test the stack UI);
+// BOT_DELAY_MS slows its answers while something is on the stack so a human can watch.
+const RESPOND = process.env.BOT_RESPOND === "1";
+const DELAY = Number(process.env.BOT_DELAY_MS ?? 0) || 0;
+const INSTANTS = ["Lightning Bolt", "Shock", "Lightning Strike", "Searing Spear", "Burst Lightning", "Skewer the Critics", "Play with Fire", "Fire Prophecy", "Galvanic Blast", "Magma Spray", "Wild Slash", "Abrade", "Fiery Impulse", "Spikefield Hazard", "Volcanic Hammer", "Incinerate", "Searing Blood", "Flame Slash", "Chain Lightning", "Rift Bolt"];
+const LIST = RESPOND ? `1 Krenko, Mob Boss\n\n${INSTANTS.map((n) => `1 ${n}`).join("\n")}\n${99 - INSTANTS.length} Mountain\n` : `1 Krenko, Mob Boss\n\n99 Mountain\n`;
 
 async function api(path, { token, method, json } = {}) {
   const headers = { Accept: "application/json" };
@@ -49,7 +54,7 @@ function answerFor(p, view) {
       if (land) { stats.lands++; return { promptId: id, option: land.index }; }
       const key = `${view.turn}:${view.step}`;
       const n = castPerStep.get(key) ?? 0;
-      if (n < 2 && p.stackEmpty) {
+      if (n < 2 && (RESPOND ? !p.stackEmpty && !p.stackTopMine : p.stackEmpty)) {
         const spells = p.options.filter((o) => o.kind === "spell").sort((a, b) => (a.cost ?? "").length - (b.cost ?? "").length);
         if (spells.length) { castPerStep.set(key, n + 1); stats.spells++; return { promptId: id, option: spells[0].index }; }
       }
@@ -122,7 +127,8 @@ ws.on("message", (data) => {
   lastPrompt = prompt.promptId;
   stats.prompts[prompt.kind] = (stats.prompts[prompt.kind] ?? 0) + 1;
   const answer = answerFor(prompt, view);
-  if (answer) setTimeout(() => send({ t: "engine", answer }), 150);
+  const slow = DELAY > 0 && prompt.kind === "priority" && !prompt.stackEmpty;
+  if (answer) setTimeout(() => send({ t: "engine", answer }), slow ? DELAY : 150);
 });
 ws.on("close", () => process.exit(0));
 ws.on("error", (e) => {
