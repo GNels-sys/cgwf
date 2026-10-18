@@ -75,6 +75,7 @@ export class EngineTable {
   engineDown = false;
   /** Seats with no socket left: the timer hands the seat to the AI when it fires (cleared on reattach). */
   private readonly absentTimers = new Map<number, NodeJS.Timeout>();
+  private disposed = false;
 
   constructor(
     private readonly room: RoomPort,
@@ -100,6 +101,14 @@ export class EngineTable {
       if (ev.type === "EngineLog") this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text: ev.payload.text, ts: ev.ts });
     }
     this.seq = this.room.loadedEvents().length;
+    // Loaded mid-game (the relay restarted, or the room was evicted while the engine kept playing): the
+    // engine may be waiting on a seat whose socket died with the old process and will not come back.
+    // Give every seat that is not connected right now the usual grace, then hand it to the AI.
+    if (this.room.row().status === "playing") {
+      const online = new Set<string>();
+      for (const c of this.room.connections()) online.add(c.userId);
+      for (const s of this.seats) if (!online.has(s.userId)) this.armAbsent(s.seat);
+    }
   }
 
   private persist(extra?: Partial<PersistedState>): void {
@@ -309,7 +318,11 @@ export class EngineTable {
     const seat = this.seatOf(userId);
     if (seat === null || this.room.row().status !== "playing") return;
     for (const c of this.room.connections()) if (c.userId === userId) return; // another device is still here
-    if (this.absentTimers.has(seat)) return;
+    this.armAbsent(seat);
+  }
+
+  private armAbsent(seat: number): void {
+    if (this.disposed || this.absentTimers.has(seat)) return;
     const timer = setTimeout(() => {
       this.absentTimers.delete(seat);
       this.client.trySend({ type: "detachSeat", gameId: this.room.id, seat });
@@ -322,8 +335,9 @@ export class EngineTable {
     this.absentTimers.set(seat, timer);
   }
 
-  /** Room closed or game over: forget the timers. */
+  /** Room closed, evicted or game over: forget the timers, and never arm another (a late socket close may still call in). */
   dispose(): void {
+    this.disposed = true;
     for (const t of this.absentTimers.values()) clearTimeout(t);
     this.absentTimers.clear();
   }

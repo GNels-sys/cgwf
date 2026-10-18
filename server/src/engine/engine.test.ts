@@ -9,6 +9,7 @@ import type { CardPrinting, RegisterResponse, ServerMessage } from "@cgwf/shared
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cgwf-engine-"));
 process.env.DATA_DIR = tmp;
 process.env.SKIP_AUTO_INGEST = "1";
+process.env.ENGINE_ABSENT_GRACE_MS = "300"; // short grace so the reload test runs in well under a second
 
 const { buildApp } = await import("../app.js");
 const fixture = fileURLToPath(new URL("../scryfall/fixtures/cards.sample.json", import.meta.url));
@@ -436,6 +437,32 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 26)).toMatchObject({ options: [0] });
   });
 
+  it("describes the stack with kinds, printings and targets, including one stack item aimed at another", async () => {
+    const gameId = ctx.roomsManager.get(code)!.id;
+    const A = pid[0]!;
+    const B = pid[1]!;
+    const player = (id: number, seat: number, name: string, viewer: number) => ({
+      id, seat, name, isYou: viewer === id, human: true, life: 40, poison: 0, lost: false, handCount: 1, libraryCount: 97, landsPlayedThisTurn: 0, commanderDamage: {},
+      battlefield: [], graveyard: [], exile: [], command: [],
+    });
+    const stack = [
+      { id: 9, description: "Counterspell - counter target spell", kind: "spell", sourceCardId: 61, sourceName: "Forest", card: card(61, "Forest", "Stack", A), activatingPlayer: A, targets: [{ kind: "stack", id: 8, name: "Rhystic Study", cardId: 62 }] },
+      { id: 8, description: "Rhystic Study", kind: "spell", sourceCardId: 62, sourceName: "Forest", card: card(62, "Forest", "Stack", B), activatingPlayer: B, targets: [{ kind: "player", id: A, name: "Alex" }] },
+    ];
+    const base = { type: "state", gameId, turn: 3, phase: "MAIN1", activePlayer: B, priorityPlayer: B, gameOver: false, stack, combat: null, log: [] };
+    const ma = alex.mark();
+    engine.send({ ...base, seat: 0, viewer: A, players: [player(A, 0, "Alex", A), player(B, 1, "Blair", A)] });
+    const v = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.stack.length === 2, ma)).view;
+    const top = v.stack[0]!;
+    expect(top.kind).toBe("spell");
+    expect(top.name).toBe("Forest");
+    expect(top.printingId).toBe(FOREST);
+    expect(top.sourceIid).toBe("61");
+    expect(top.targets).toEqual([{ kind: "stack", id: "8", name: "Rhystic Study", iid: "62" }]);
+    expect(v.stack[1]!.targets).toEqual([{ kind: "player", player: v.viewer }]);
+    expect(v.stack[1]!.controller).not.toBe(v.viewer);
+  });
+
   it("seats a Phase 7 bot user as a Forge AI seat in createGame", async () => {
     const { users, decks, deckCards, roomMembers } = await import("../db/schema.js");
     const res = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(alex.token), payload: { engine: true } });
@@ -460,6 +487,47 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(seats.find((s) => s.seat === 0)?.kind).toBe("human");
     await host.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "playing", m);
     await host.close();
+  });
+
+  it("after a reload mid-game, a seat nobody holds is handed to the AI once the grace is over", async () => {
+    const room = ctx.roomsManager.get(code)!;
+    const gameId = room.id;
+    // Everyone's socket goes away and the room falls out of memory, as after a relay restart.
+    await alex.close();
+    await blair.close();
+    if (casey.ws && casey.ws.readyState === WebSocket.OPEN) await casey.close();
+    await new Promise((r) => setTimeout(r, 100)); // let the close handlers run
+    expect(room.connectionCount).toBe(0);
+    (room as unknown as { lastActivity: number }).lastActivity = 0;
+    (ctx.roomsManager as unknown as { sweep(): void }).sweep();
+    expect(ctx.roomsManager.get(code)).not.toBe(room);
+    const before = engine.received.length;
+    // Alex comes back; Blair does not. The relay asks the engine to resync and the (fake) engine answers with fresh frames.
+    const A = pid[0]!;
+    const B = pid[1]!;
+    const player = (id: number, seat: number, name: string, viewer: number | null) => ({
+      id, seat, name, isYou: viewer === id, human: true, life: 40, poison: 0, lost: false, handCount: 1, libraryCount: 97, landsPlayedThisTurn: 0, commanderDamage: {},
+      battlefield: [], graveyard: [], exile: [], command: [],
+    });
+    const frame = (seat: number, viewer: number | null) => ({ type: "state", gameId, seat, viewer, turn: 4, phase: "MAIN1", activePlayer: A, priorityPlayer: B, gameOver: false, stack: [], combat: null, log: [], players: [player(A, 0, "Alex", viewer), player(B, 1, "Blair", viewer)] });
+    alex = new Client("alex", alex.token);
+    await alex.connect(port, code);
+    await engine.waitFor((f) => engine.received.indexOf(f) >= before && f.type === "resync" && f.seat === 0, 2000);
+    engine.send(frame(0, A));
+    engine.send(frame(1, B));
+    engine.send(frame(-1, null));
+    await alex.stateSince(0);
+    const detached = await engine.waitFor((f) => engine.received.indexOf(f) >= before && f.type === "detachSeat" && f.gameId === gameId && f.seat === 1, 2000);
+    expect(detached.seat).toBe(1);
+    await new Promise((r) => setTimeout(r, 400));
+    expect(engine.received.slice(before).filter((f) => f.gameId === gameId && (f.type === "detachSeat" || f.type === "attachSeat" || f.type === "resync")).map((f) => `${f.type}:${f.seat}`)).toEqual(["resync:0", "attachSeat:0", "detachSeat:1"]);
+    // the table told everyone
+    const s = await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.log.some((l) => /away for a while/.test(l.text)), 0, 2000);
+    expect(s.view.log.at(-1)?.text).toMatch(/Blair has been away/);
+    // Blair returns: the seat is theirs again
+    blair = new Client("blair", blair.token);
+    await blair.connect(port, code);
+    await engine.waitFor((f) => engine.received.indexOf(f) >= before && f.type === "attachSeat" && f.seat === 1, 2000);
   });
 
   it("ends the table when the engine reports game over, and survives a spectator joining late", async () => {

@@ -612,7 +612,10 @@ export class RoomManager {
   private sweep(): void {
     const cutoff = Date.now() - IDLE_EVICT_MS;
     for (const [id, room] of this.live) {
-      if (room.connectionCount === 0 && room.lastActivity < cutoff) this.live.delete(id);
+      if (room.connectionCount === 0 && room.lastActivity < cutoff) {
+        room.engineTable?.dispose(); // its absent-seat timers must not fire for a room that is gone
+        this.live.delete(id);
+      }
     }
   }
 

@@ -228,6 +228,7 @@
   display: grid;
   grid-template-rows: 1fr;
   min-height: 0;
+  position: relative;
 }
 .bf-row {
   display: flex;
@@ -2299,4 +2300,46 @@ button.engine-row { cursor: pointer; width: 100%; }
 .engine-options .engine-row-img { width: 36px; }
 @supports ((backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px))) {
   .engine-row { background: color-mix(in srgb, var(--bg-elev-2) 70%, transparent); }
+}
+
+/* ---------------------------------------------------------------- Stack panel + Interaction Stack (Stage 2 M2) */
+.stack-panel { position: absolute; top: 6px; right: 6px; z-index: 30; width: min(44vw, 300px); max-height: 46dvh; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; background: var(--glass, var(--bg-elev)); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 10px 30px #0006; overflow: hidden; }
+.stack-panel-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.stack-panel-head strong { font: 500 0.95rem var(--font-display); }
+.stack-open { margin-left: auto; min-height: 30px; border-color: var(--accent); color: var(--accent); }
+.stack-list { display: flex; flex-direction: column; gap: 4px; padding: 6px; overflow: auto; }
+.stack-item { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border: 1px solid transparent; border-radius: 8px; background: color-mix(in srgb, var(--bg-elev-2) 55%, transparent); color: var(--fg); font: inherit; text-align: left; cursor: pointer; min-height: 44px; width: 100%; }
+.stack-item.is-targeted { border-color: var(--accent); }
+.stack-item.is-big { padding: 8px 10px; }
+.stack-thumb { width: 30px; aspect-ratio: 63 / 88; border-radius: 3px; object-fit: cover; flex: 0 0 auto; }
+.stack-item.is-big .stack-thumb { width: 54px; border-radius: 5px; }
+.stack-thumb.is-blank { background: var(--bg-elev-2); border: 1px dashed var(--border); }
+.stack-item-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+.stack-item-name { font-weight: 500; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stack-item.is-big .stack-item-name { font-size: 1rem; white-space: normal; }
+.stack-item-meta, .stack-item-targets, .stack-item-desc { font-size: 0.74rem; color: var(--fg-muted); }
+.stack-item-targets { color: var(--accent); }
+.stack-item-desc { margin-top: 2px; white-space: normal; }
+.stack-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.interaction-backdrop { position: fixed; inset: 0; z-index: 55; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.25); padding: 12px; }
+.interaction { width: min(100%, 520px); max-height: 92dvh; display: flex; flex-direction: column; border: 2px solid var(--accent); border-radius: 16px; background: var(--glass-strong, var(--glass, var(--bg-elev))); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 0 0 1px #0008, 0 18px 60px #000a, inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent); overflow: hidden; }
+.interaction-head { display: flex; align-items: flex-start; gap: 10px; padding: 10px 14px 6px; position: relative; padding-right: 48px; }
+.interaction-head h2 { margin: 0; font: 500 1.2rem var(--font-display); color: var(--accent); }
+.interaction-head p { margin: 2px 0 0; }
+.interaction-head .sheet-close { top: 4px; right: 6px; }
+.interaction-chain { list-style: none; margin: 0; padding: 4px 12px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+.interaction-step { display: flex; flex-direction: column; gap: 4px; }
+.interaction-arrow { align-self: center; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); }
+.interaction-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
+.interaction-foot .actions { display: flex; gap: 8px; margin-left: auto; }
+.interaction-foot .btn { min-height: 44px; }
+@media (orientation: landscape) and (max-height: 460px) {
+  .interaction { max-height: 96dvh; }
+  .interaction-head { padding-top: 6px; }
+  .interaction-head h2 { font-size: 1.05rem; }
+  .stack-item.is-big .stack-thumb { width: 40px; }
+  .stack-panel { width: min(40vw, 260px); max-height: 50dvh; }
+}
+@media (orientation: portrait) {
+  .stack-panel { width: min(58vw, 260px); }
 }

@@ -230,11 +230,21 @@ export const STEP_LABELS: Record<Step, string> = {
 };
 
 /** Reserved for a later rules engine: nothing is ever pushed in v1. */
+/** What a stack item points at (engine tables): a card, a player or another stack item. */
+export type StackTargetRef = { kind: "card"; iid: string; name: string | null } | { kind: "player"; player: PlayerId } | { kind: "stack"; id: string; name: string | null; iid: string | null };
+
 export interface StackItem {
   id: string;
   controller: PlayerId;
   sourceIid: string | null;
   description: string;
+  /** Engine tables: spell, activated ability or triggered ability. */
+  kind?: "spell" | "ability" | "trigger";
+  /** Engine tables: the source card's name and printing (stack items are public). */
+  name?: string | null;
+  printingId?: string | null;
+  /** Engine tables: what it targets, in order. */
+  targets?: StackTargetRef[];
 }
 
 export type GamePhase = "mulligan" | "playing" | "ended";

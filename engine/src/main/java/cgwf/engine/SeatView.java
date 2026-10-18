@@ -64,7 +64,7 @@ public final class SeatView {
         JsonArray players = new JsonArray();
         for (Player p : game.getRegisteredPlayers()) players.add(player(p, viewer, seatOf)); // registered = includes eliminated seats
         o.add("players", players);
-        o.add("stack", stack(game));
+        o.add("stack", stack(game, viewer));
         o.add("combat", combat(game.getCombat()));
         o.add("log", log(game));
         return o;
@@ -182,18 +182,66 @@ public final class SeatView {
         return j;
     }
 
-    private static JsonArray stack(Game game) {
+    /**
+     * The stack, top first. Spells and abilities on the stack are public information, so every
+     * item carries its source card's identity (for the thumbnail) and its targets: cards, players
+     * and other stack items (a counterspell "targeting" the spell below it).
+     */
+    private static JsonArray stack(Game game, Player viewer) {
         JsonArray a = new JsonArray();
         for (SpellAbilityStackInstance si : game.getStack()) {
             JsonObject j = new JsonObject();
             j.addProperty("id", si.getId());
             j.addProperty("description", si.getStackDescription());
+            j.addProperty("kind", si.isSpell() ? "spell" : si.isTrigger() ? "trigger" : "ability");
             Card src = si.getSourceCard();
-            if (src != null) {
+            if (src != null && (identityVisible(src, viewer) || src.isInZone(forge.game.zone.ZoneType.Stack))) {
                 j.addProperty("sourceCardId", src.getId());
                 j.addProperty("sourceName", src.getName());
+                JsonObject cj = card(src, viewer);
+                if (!cj.has("name") && !src.isFaceDown()) addIdentity(cj, src);
+                j.add("card", cj);
             }
             j.addProperty("activatingPlayer", si.getActivatingPlayer() == null ? null : si.getActivatingPlayer().getId());
+            JsonArray targets = new JsonArray();
+            for (SpellAbilityStackInstance sub = si; sub != null; sub = sub.getSubInstance()) {
+                forge.game.spellability.TargetChoices tc = sub.getTargetChoices();
+                if (tc == null) continue;
+                for (Card c : tc.getTargetCards()) {
+                    // Forge sometimes routes a hidden-zone card (a searched-for land mid-resolution) through
+                    // the target list; those stay hidden exactly like everywhere else in the view.
+                    if (!identityVisible(c, viewer)) continue;
+                    JsonObject t = new JsonObject();
+                    t.addProperty("kind", "card");
+                    t.addProperty("id", c.getId());
+                    t.addProperty("name", c.getName());
+                    targets.add(t);
+                }
+                for (Player p : tc.getTargetPlayers()) {
+                    JsonObject t = new JsonObject();
+                    t.addProperty("kind", "player");
+                    t.addProperty("id", p.getId());
+                    t.addProperty("name", p.getName());
+                    targets.add(t);
+                }
+                for (forge.game.spellability.SpellAbility tsa : tc.getTargetSpells()) {
+                    SpellAbilityStackInstance hit = null;
+                    for (SpellAbilityStackInstance other : game.getStack()) {
+                        if (other == si) continue;
+                        for (SpellAbilityStackInstance o = other; o != null && hit == null; o = o.getSubInstance()) {
+                            if (o.getSpellAbility() == tsa || o.getSpellAbility() == tsa.getRootAbility()) hit = other;
+                        }
+                        if (hit != null) break;
+                    }
+                    JsonObject t = new JsonObject();
+                    t.addProperty("kind", "stack");
+                    t.addProperty("id", hit == null ? -1 : hit.getId());
+                    t.addProperty("name", hit == null ? (tsa.getHostCard() == null ? null : tsa.getHostCard().getName()) : hit.getStackDescription());
+                    if (hit != null && hit.getSourceCard() != null) t.addProperty("cardId", hit.getSourceCard().getId());
+                    targets.add(t);
+                }
+            }
+            j.add("targets", targets);
             a.add(j);
         }
         return a;

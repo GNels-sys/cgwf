@@ -973,6 +973,21 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   return value, re-ask on illegal answers, "no question when the rules leave no choice";
   `HiddenInformationTest` still audits every prompt's view. `server/src/engine/engine.test.ts`
   round-trips each kind through the relay to the seat's socket and back.
+- **The stack on screen (Stage 2 M2).** `SeatView.stack()` describes every stack item (public
+  information): kind spell | ability | trigger, the source card with its identity (so the relay
+  resolves a printing and ships it with the frame), and `targets` (cards, players, and other
+  stack items by stack id, found by matching the targeted SpellAbility against the stack). The
+  relay maps that onto `StackItem.kind/name/printingId/targets` (`StackTargetRef`, engine tables
+  only; the classic reducer never fills the stack). Client (`client/src/game/StackPanel.tsx`):
+  a compact frosted **Stack panel** top-right whenever the stack is not empty (newest on top:
+  thumbnail, name, controller dot, "targeting ..."; tap = read the card through CardZoom with a
+  synthesised ViewCard, since stack cards are in no zone of the view); when a chain forms (two
+  or more items, or an item aimed at a stack item) the centred gold-framed **Interaction Stack**
+  window opens on its own with the chain ("on top of" connectors, targeted items outlined),
+  Respond (back to the board) / Let it resolve (passes priority) for the player with priority,
+  "Waiting for X" otherwise; the x minimises it to an "Interaction" button in the panel, and it
+  re-opens when a new item lands on top. Land plays never use the stack, so they never appear.
+  Prompt sheets other than priority take precedence over the window.
 - **Client sheets** (`client/src/game/EnginePrompts.tsx`): confirm (card image + question + two
   buttons), number (stepper + quick values), order (rows with up/down and a Top/Bottom or
   Top/Graveyard segment), assign (per-target -/+ with lethal hints and a "Lethal first" fill),
@@ -1044,7 +1059,7 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
     resync / legality messages / docs **(done)**, M4 Forge AI bot seats **(done)**. See `docs/FORGE-ENGINE.md`.
 11b. Stage 2: S2-M1 every common prompt reaches the human (confirm with the card, numbers/X,
     ordering, damage assignment, modes, card names, cost choices; casting via Forge's human flow)
-    **(done)**; S2-M2 Stack panel + Interaction Stack; S2-M3 stops row + auto-pass when nothing
-    to do; S2-M4 Active Board overlay + Game Log panel with toasts.
+    **(done)**; S2-M2 Stack panel + Interaction Stack **(done)**; S2-M3 stops row + auto-pass
+    when nothing to do; S2-M4 Active Board overlay + Game Log panel with toasts.
 12. Ideas: per-event view deltas if bandwidth matters, browser push notifications (see Phase 8),
     password reset once there is an email provider.
