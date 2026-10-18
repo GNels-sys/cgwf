@@ -285,7 +285,7 @@ export function engineToView(s: EngineStateJson, ctx: ConvertContext): { view: P
       id: String(si.id),
       controller: userOf(ctx.seats, si.activatingPlayer) ?? active,
       sourceIid: si.sourceCardId === undefined ? null : String(si.sourceCardId),
-      description: cleanDescription(si.description),
+      description: cleanEngineText(si.description),
       kind: si.kind ?? "spell",
       name: si.sourceName ?? si.card?.name ?? null,
       printingId: printing?.id ?? null,
@@ -395,8 +395,11 @@ function cardsOnly(raw: unknown, ctx: ConvertContext): EngineOptionCard[] {
 
 /** Engine `prompt` frame -> EnginePrompt for the browser. */
 /** Forge's stack text names cards with their internal ids ("Shock (108) deals 2 damage"); players never see those ids. */
-function cleanDescription(text: string): string {
-  return String(text ?? "").replace(/ \((\d+)\)/g, "").trim();
+export function cleanEngineText(text: string): string {
+  return String(text ?? "")
+    .replace(/ \((\d+)\)/g, "")
+    .replace(/\[([^\]]+)\]/g, "$1") // "targeting [Blair]"
+    .trim();
 }
 
 function str(v: unknown): string | null {

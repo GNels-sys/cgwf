@@ -1012,6 +1012,24 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   "Hold" in the strip (`{t:"hold", turn}`, engine frame `hold`) holds priority for one turn:
   every priority stops and nothing auto-passes (it also cancels an "End turn"); the engine drops
   it when the turn is over and the relay mirrors it in `EngineInfo.holdTurn`.
+- **Active Board + Game Log (Stage 2 M4, `client/src/game/Overlays.tsx`).** Two frosted overlays
+  on top of the board, never a page change. The **Active Board** on the LEFT edge follows the
+  turn: whose turn and which step, hand count, untapped lands and creatures, life, that player's
+  latest log line, and their battlefield (the `Battlefield` component in compact mode) with the
+  cards named in that line highlighted; it opens on its own when an opponent's turn begins,
+  closes when yours does (your board is the table), and minimises to a "Board" arrow tab. The
+  **Game Log** on the RIGHT third lists the sentence log with every card name tappable (the
+  `nameMatcher` regex over the printings this client has seen, longest name first, split-card
+  faces too; a tap opens CardZoom on a synthesised public card, "named in the game log") and
+  minimises to a "Log" tab; while minimised new lines arrive as toasts top-right under the Stack
+  panel (`LogToasts`: at most three, ~5 s each, step/turn lines skipped, `aria-live`). Layout:
+  at phone landscape the two are never open together (opening one closes the other; when the
+  board closes it hands the log back if it took its place); portrait stacks them (board top
+  half, log bottom half). The relay strips Forge's internal ids and target brackets from log
+  lines (`cleanEngineText`: "Shock (108)" -> "Shock", "[Blair]" -> "Blair"). `isStepLine` is
+  the shared "this line only announces a step" test. `CGWF_DEBUG_PRIORITY=1` on the engine
+  prints every priority decision (stops, legal plays per card) to stderr: use it before
+  suspecting the stops ("it skipped my stop" has so far always been "nothing was castable").
 - **Absent seats.** When a seated player's last socket closes during a game the relay waits
   `ENGINE_ABSENT_GRACE_MS` (3 min), then tells the engine `detachSeat`: Forge's AI plays that seat
   (a log line says so) until a socket is back (`attachSeat` + `resync`). Reloading the page
@@ -1071,7 +1089,7 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
 11b. Stage 2: S2-M1 every common prompt reaches the human (confirm with the card, numbers/X,
     ordering, damage assignment, modes, card names, cost choices; casting via Forge's human flow)
     **(done)**; S2-M2 Stack panel + Interaction Stack **(done)**; S2-M3 stops row + auto-pass
-    when nothing to do + hold **(done)**; S2-M4 Active Board overlay + Game Log panel with toasts;
-    S2-M5 manual mana (owner's option 1: automatic, long-press "Pay with" source picker).
+    when nothing to do + hold **(done)**; S2-M4 Active Board overlay + Game Log panel with toasts
+    **(done)**; S2-M5 manual mana (owner's option 1: automatic, long-press "Pay with" source picker).
 12. Ideas: per-event view deltas if bandwidth matters, browser push notifications (see Phase 8),
     password reset once there is an email provider.

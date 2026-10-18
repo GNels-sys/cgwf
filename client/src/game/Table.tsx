@@ -6,6 +6,7 @@ import { isOut, type EngineAnswer, type EngineOption, type PlayerView, type Room
 import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
 import { EnginePromptSheet, SHEET_PROMPT_KINDS } from "./EnginePrompts";
 import { InteractionStack, StackPanel, isInteraction } from "./StackPanel";
+import { ActiveBoard, EdgeTab, GameLog, LogToasts, printingAsCard } from "./Overlays";
 import { StopsPanel, toggleStop } from "./StopsPanel";
 import { Avatar } from "../components/Avatar";
 import { useSettings } from "../settings";
@@ -166,6 +167,46 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   // something, or a spell aimed at a stack item) and stays until the stack empties or the player tucks it away.
   const chain = engineMode && isInteraction(view.stack);
   const [chainMin, setChainMin] = useState(false);
+  // Active Board (left edge) follows the turn around the table; the Game Log lives on the right third.
+  // At phone landscape only one of them is open at a time (the other is an arrow tab); portrait stacks them.
+  const [landscape, setLandscape] = useState(() => (typeof window !== "undefined" ? window.matchMedia("(orientation: landscape)").matches : true));
+  useEffect(() => {
+    const mq = window.matchMedia("(orientation: landscape)");
+    const on = () => setLandscape(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [logOpen, setLogOpen] = useState(true);
+  const logClosedByBoard = useRef(false);
+  const openBoard = useCallback(() => {
+    setBoardOpen(true);
+    if (landscape)
+      setLogOpen((open) => {
+        if (open) logClosedByBoard.current = true;
+        return false;
+      });
+  }, [landscape]);
+  // closing the board gives the log back when the board had taken its place
+  const closeBoard = useCallback(() => {
+    setBoardOpen(false);
+    if (logClosedByBoard.current) {
+      logClosedByBoard.current = false;
+      setLogOpen(true);
+    }
+  }, []);
+  const openLog = useCallback(() => {
+    setLogOpen(true);
+    if (landscape) setBoardOpen(false);
+  }, [landscape]);
+  const activeSeen = useRef<string | null>(null);
+  useEffect(() => {
+    if (!engineMode || view.phase !== "playing") return;
+    if (activeSeen.current === view.activePlayer) return;
+    activeSeen.current = view.activePlayer;
+    if (view.activePlayer !== me) openBoard();
+    else closeBoard(); // your own board is the table itself
+  }, [engineMode, view.phase, view.activePlayer, me, openBoard, closeBoard]);
   const chainTop = view.stack[0]?.id ?? null;
   const chainSeen = useRef<string | null>(null);
   useEffect(() => {
@@ -615,7 +656,16 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
 
         {/* ---- middle: my battlefield on my playmat ---- */}
         <div className={`table-mid mat ${myMat.className}${mode ? " is-picking" : ""}`} style={myMat.style}>
-          {engineMode && view.stack.length > 0 && <StackPanel stack={view.stack} view={view} printings={printings} members={room.members} onZoom={holdCard} chain={chain} onOpenChain={() => setChainMin(false)} />}
+          {engineMode && (
+            <div className="corner-right">
+              {view.stack.length > 0 && <StackPanel stack={view.stack} view={view} printings={printings} members={room.members} onZoom={holdCard} chain={chain} onOpenChain={() => setChainMin(false)} />}
+              <LogToasts log={view.log} active={!logOpen} printings={printings} onCard={(p) => setZoom(printingAsCard(p, me ?? view.turnOrder[0] ?? ""))} />
+            </div>
+          )}
+          {engineMode && boardOpen && <ActiveBoard view={view} printings={printings} members={room.members} me={me} sleeveOf={sleeveOf} onTap={tapCard} onHold={holdCard} onMinimize={closeBoard} />}
+          {engineMode && !boardOpen && view.phase === "playing" && <EdgeTab side="left" label="Board" onClick={openBoard} />}
+          {engineMode && logOpen && <GameLog log={view.log} members={room.members} printings={printings} onCard={(p) => setZoom(printingAsCard(p, me ?? view.turnOrder[0] ?? ""))} onMinimize={() => setLogOpen(false)} />}
+          {engineMode && !logOpen && <EdgeTab side="right" label="Log" onClick={openLog} />}
           {mePlayer && myDerived ? (
             <Battlefield
               player={mePlayer}

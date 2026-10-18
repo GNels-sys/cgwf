@@ -47,7 +47,7 @@ export function CardZoom({
   const counters = Object.entries(card.counters);
   const owner = view?.players[card.owner]?.name;
   const controller = view?.players[card.zone.owner]?.name;
-  const where = `${card.zone.kind === "battlefield" ? `battlefield (${card.zone.row ?? "other"})` : card.zone.kind}${controller ? `, ${controller}` : ""}${owner && owner !== controller ? ` (owned by ${owner})` : ""}`;
+  const where = card.iid.startsWith("printing:") ? "named in the game log" : card.iid.startsWith("stack:") ? "on the stack" : `${card.zone.kind === "battlefield" ? `battlefield (${card.zone.row ?? "other"})` : card.zone.kind}${controller ? `, ${controller}` : ""}${owner && owner !== controller ? ` (owned by ${owner})` : ""}`;
   const status = [card.tapped ? "tapped" : null, card.faceDown ? "face down" : null, card.isToken ? "token" : null, card.isCommander ? "commander" : null].filter(Boolean).join(", ");
 
   return (
