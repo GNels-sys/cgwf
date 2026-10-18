@@ -476,6 +476,11 @@ export function EngineMulligan({ prompt, view, printings, me, pick, setPick, ans
             })}
           </div>
           <div className="actions">
+            {prompt.serumPowder?.[0] && (
+              <button className="btn" disabled={busy} title="Exile your whole hand and draw that many cards, then decide again" onClick={() => (setBusy(true), answer({ promptId: prompt.promptId, serumPowder: prompt.serumPowder![0]! }))}>
+                Use Serum Powder
+              </button>
+            )}
             <button className="btn" disabled={busy} onClick={() => (setBusy(true), answer({ promptId: prompt.promptId, keep: false }))}>
               Mulligan
             </button>

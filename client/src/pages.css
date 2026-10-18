@@ -1542,3 +1542,13 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
 .check-row { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 12px; cursor: pointer; }
 .check-row input { width: 22px; height: 22px; margin-top: 2px; flex: 0 0 auto; }
 .check-row > span { display: flex; flex-direction: column; gap: 2px; }
+
+/* ---------------------------------------------------------------- table kind: Rules engine vs Casual (no rules) */
+.table-kind { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.table-kind-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; background: var(--bg-elev); }
+.table-kind-opt.is-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.table-kind-opt input { width: 20px; height: 20px; margin-top: 2px; flex: 0 0 auto; accent-color: var(--accent); }
+.table-kind-opt > span { display: flex; flex-direction: column; gap: 2px; }
+.table-kind-tag { display: inline-block; flex: none; padding: 1px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 0.72rem; line-height: 1.5; letter-spacing: 0.04em; color: var(--fg-muted); white-space: nowrap; }
+.table-kind-tag.is-engine { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.engine-badge.is-casual { border-style: dashed; }

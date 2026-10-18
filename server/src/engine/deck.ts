@@ -19,11 +19,12 @@ export function deckForEngine(handle: DbHandle, userId: string, deckId: string):
     .where(eq(deckCards.deckId, deck.id))
     .orderBy(deckCards.position)
     .all();
-  const out: EngineDeck = { name: deck.name, commanders: [], main: [] };
+  const out: EngineDeck = { name: deck.name, commanders: [], main: [], companions: [] };
   for (const r of rows) {
     const entry = { name: r.card.name, setCode: r.card.set, number: r.card.collectorNumber, scryfallId: r.card.id, count: r.dc.quantity };
     if (r.dc.board === "commander") out.commanders.push(entry);
     else if (r.dc.board === "main") out.main.push(entry);
+    else if (r.dc.board === "companion") out.companions!.push(entry);
   }
   const problems = deckWarnings(rows.map((r) => ({ row: r.card, quantity: r.dc.quantity, board: r.dc.board as Board }))).map((w) => w.message);
   return { deck: out, problems };

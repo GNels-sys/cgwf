@@ -2431,3 +2431,8 @@ button.engine-row { cursor: pointer; width: 100%; }
 .pay-with-order { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--bg); font-size: 0.7rem; line-height: 18px; text-align: center; font-weight: 600; }
 .pay-with-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .pay-with-actions .btn { min-height: 44px; }
+
+/* ---------------------------------------------------------------- rounds (engine tables) */
+.phase-gameturn { margin-left: 6px; font-size: 0.7rem; color: var(--fg-muted); white-space: nowrap; }
+.game-log-line.is-round { margin-top: 10px; padding: 4px 0 2px; border-top: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); font: 500 0.82rem var(--font-display); letter-spacing: 0.04em; }
+.game-log-line.is-round + .game-log-line.is-turn { margin-top: 2px; border-top: 0; padding-top: 0; }

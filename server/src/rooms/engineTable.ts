@@ -63,6 +63,9 @@ const SPECTATOR = -1;
 /** A seat whose sockets are all gone keeps the game waiting this long before the AI takes over. */
 export const ABSENT_GRACE_MS = Number(process.env.ENGINE_ABSENT_GRACE_MS ?? 3 * 60 * 1000);
 
+/** The relay's own log line for a new round (see the engine's RoundTracker). */
+const ROUND_LINE = /^Round (\d+) begins$/;
+
 export class EngineTable {
   private seats: SeatInfo[] = [];
   private readonly lastState = new Map<number, EngineStateJson>();
@@ -77,6 +80,8 @@ export class EngineTable {
   engineDown = false;
   /** Seats with no socket left: the timer hands the seat to the AI when it fires (cleared on reattach). */
   private readonly absentTimers = new Map<number, NodeJS.Timeout>();
+  /** The last round announced in the log ("Round N begins"), restored from the event log on load. */
+  private roundLogged = 0;
   private disposed = false;
 
   constructor(
@@ -100,7 +105,10 @@ export class EngineTable {
       }
     }
     for (const ev of this.room.loadedEvents()) {
-      if (ev.type === "EngineLog") this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text: cleanEngineText(ev.payload.text), ts: ev.ts });
+      if (ev.type !== "EngineLog") continue;
+      this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text: cleanEngineText(ev.payload.text), ts: ev.ts });
+      const round = ROUND_LINE.exec(ev.payload.text);
+      if (round) this.roundLogged = Math.max(this.roundLogged, Number(round[1]));
     }
     this.seq = this.room.loadedEvents().length;
     // Loaded mid-game (the relay restarted, or the room was evicted while the engine kept playing): the
@@ -207,6 +215,15 @@ export class EngineTable {
       }
       case "log": {
         const text = cleanEngineText(String(frame.text ?? "")); // Forge names cards with internal ids: "Shock (108)"
+        // The first turn of a new round: "Round N begins" goes in just before Forge's "Turn T (player)" line.
+        const round = typeof frame.round === "number" ? frame.round : 0;
+        if (String(frame.logType ?? "") === "TURN" && round > this.roundLogged) {
+          this.roundLogged = round;
+          const rt = `Round ${round} begins`;
+          const rev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineLog", payload: { engineSeq: 0, turn: Number(frame.turn ?? 0), logType: "ROUND", text: rt } });
+          this.log.push({ seq: rev.seq, actor: SYSTEM_ACTOR, text: rt, ts: rev.ts });
+          this.seq = rev.seq;
+        }
         const ev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineLog", payload: { engineSeq: Number(frame.seq ?? 0), turn: Number(frame.turn ?? 0), logType: String(frame.logType ?? ""), text } });
         this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text, ts: ev.ts });
         this.seq = ev.seq;

@@ -733,7 +733,7 @@ export class RoomManager {
       .all();
     return rows.map((r) => {
       const players = this.handle.db.select({ userId: roomMembers.userId }).from(roomMembers).where(and(eq(roomMembers.roomId, r.room.id), eq(roomMembers.role, "player"))).all().length;
-      return { code: r.room.code, status: r.room.status as RoomStatus, players, updatedAt: r.room.updatedAt, hostName: r.host.displayName };
+      return { code: r.room.code, status: r.room.status as RoomStatus, players, updatedAt: r.room.updatedAt, hostName: r.host.displayName, engine: Boolean(r.room.engine) };
     });
   }
 

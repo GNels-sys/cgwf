@@ -1061,6 +1061,46 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   the shared "this line only announces a step" test. `CGWF_DEBUG_PRIORITY=1` on the engine
   prints every priority decision (stops, legal plays per card) to stderr: use it before
   suspecting the stops ("it skipped my stop" has so far always been "nothing was castable").
+- **Land drops (checked 2026-10-18).** The only way to play a land on an engine table is Forge's own
+  land ability: the priority list comes from `legalAbilities()` (Forge's `LandAbility.canPlay` ->
+  `Player.canPlayLand`, which compares lands played this turn with `getMaxLandPlays()`), and the
+  bridge plays the pick exactly as Forge's AI controller does (`sa.canPlay()` again, then
+  `sa.resolve()`, which counts the drop). Extra drops exist only when a card raises Forge's maximum
+  (Exploration, Azusa, Dryad of the Ilysian Grove); "put a land onto the battlefield" effects are
+  ordinary effects, not land plays. The relay refuses classic events on engine tables, so nothing
+  else can move a card. Test: `PromptRoundTripTest.landDropsFollowForgesLimitAndExplorationGrantsOneMore`.
+  The owner's "two lands in a turn" came from a Casual table (FHWK6D), where nothing is enforced;
+  the Play page now asks "Rules engine (beta)" vs "Casual (no rules)" explicitly, the recent-table
+  list and the lobby name the kind, and the phase strip shows a "Casual" tag on classic tables.
+- **Rounds (2026-10-18).** Forge's game turn stays the source of truth. A round is one pass around
+  the table starting with the player who took turn 1: a new round begins when the turn goes to a
+  player who sits earlier in Forge's player order (counted from that first player) than whoever had
+  the previous turn. That is 1 + floor((turn - 1) / players still in at the start of the round)
+  while nobody leaves or takes an extra turn, and stays right when they do (an eliminated player's
+  skipped turn shortens the round; an extra turn stays in its round). Computed in the engine
+  (`RoundTracker`, fed by `GameEventTurnBegan`), sent as `round` on every state, prompt-view and log
+  frame; the relay maps it to `PlayerView.round` and writes a persisted "Round N begins" EngineLog
+  line just before the round's first "Turn T (player)" line (restored on reload, never twice). The
+  phase strip shows "Round N · <player>'s turn" with "Game turn T" small; the Active Board header
+  "Round N · <player>'s turn", "<step> · Game turn T". Tests: `RoundTrackerTest`, relay
+  "announces each round".
+- **Opening hand and pregame (2026-10-18).** Forge's `MayEffectFromOpeningHand` cards (Leyline of the
+  Void, Gemstone Caverns: never for the starting player, luck counter, exiles a card from hand;
+  Chancellors' reveals with their delayed triggers) reach the human as one chooseMany
+  (`reason: "openingHand"`, "From your opening hand: use which of these before the game begins?",
+  each label "Card: what it does"); each action is logged when Forge actually plays it ("X uses
+  Leyline of the Void from their opening hand.": an earlier pick may exile a later card, which Forge
+  then skips). Serum Powder is implemented by the bridge (Forge has it only in its desktop UI): the
+  mulligan prompt carries `serumPowder` (iids of the powders in hand), the overlay shows "Use Serum
+  Powder", the answer `{serumPowder: iid}` exiles the hand and draws that many, logs it, and asks
+  again. Companions: the deck's `companion` board travels as `EngineDeck.companions` -> Forge's
+  sideboard; `Player.assignCompanion` offers it through `chooseSingleEntityForEffect`, which the
+  bridge makes non-optional for the companion (Forge has no null check there; an unused revealed
+  companion is harmless) and logs ("X reveals Y as their companion."). Colour identity of the
+  companion is not checked (Forge does not either). None of these is answered by the AI unless the
+  seat is absent or the prompt times out. Test: `PregameTest` (a real Match.startGame with a scripted
+  human: Serum Powder, opening-hand prompt, Leyline, Gemstone with its luck counter, the Chancellor's
+  first-upkeep Goblin, the companion).
 - **Absent seats.** When a seated player's last socket closes during a game the relay waits
   `ENGINE_ABSENT_GRACE_MS` (3 min), then tells the engine `detachSeat`: Forge's AI plays that seat
   (a log line says so) until a socket is back (`attachSeat` + `resync`). Reloading the page

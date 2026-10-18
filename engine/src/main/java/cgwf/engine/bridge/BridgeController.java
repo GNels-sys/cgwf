@@ -17,6 +17,8 @@ import forge.card.ICardFace;
 import forge.card.MagicColor;
 import forge.card.mana.ManaCost;
 import forge.game.Game;
+import forge.game.ability.ApiType;
+import forge.game.GameLogEntryType;
 import forge.game.GameEntity;
 import forge.game.GameObject;
 import forge.game.card.Card;
@@ -330,6 +332,9 @@ public final class BridgeController extends PlayerControllerAi {
 
     @Override
     public void playSpellAbilityNoStack(SpellAbility effectSA, boolean canSetupTargets) {
+        if (openingHandPicks.remove(effectSA) && effectSA.getHostCard() != null) {
+            game.getGameLog().add(GameLogEntryType.INFORMATION, player.getName() + " uses " + effectSA.getHostCard().getName() + " from their opening hand.");
+        }
         if (autopilot()) { super.playSpellAbilityNoStack(effectSA, canSetupTargets); return; }
         PlaySpellAbility.playSpellAbilityNoStack(this, player, effectSA, !canSetupTargets);
     }
@@ -856,6 +861,19 @@ public final class BridgeController extends PlayerControllerAi {
         return out;
     }
 
+    /** Opening-hand actions the seat picked and Forge has not played yet (Forge skips any whose card left the hand). */
+    private final java.util.Set<SpellAbility> openingHandPicks = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+
+    /** "Leyline of the Void: begin the game with it on the battlefield" style labels for opening-hand actions. */
+    private static String openingHandLabel(SpellAbility sa) {
+        Card host = sa.getHostCard();
+        String name = host == null ? "" : host.getName();
+        String d = sa.getDescription();
+        if (d == null || d.isBlank()) d = sa.toUnsuppressedString();
+        d = d.replace("CARDNAME", name).replace("NICKNAME", name).trim();
+        return name.isEmpty() ? d : name + ": " + d;
+    }
+
     private static String describeSa(SpellAbility sa) {
         String host = sa.getHostCard() == null ? "" : sa.getHostCard().getName() + ": ";
         String d = sa.isWrapper() ? ((WrappedAbility) sa).getWrappedAbility().toUnsuppressedString() : sa.toUnsuppressedString();
@@ -1024,9 +1042,14 @@ public final class BridgeController extends PlayerControllerAi {
         List<T> opts = new ArrayList<>();
         for (T t : optionList) opts.add(t);
         if (opts.isEmpty()) return null;
-        Integer i = chooseIndex(title, sourceOf(sa), new ArrayList<GameObject>(opts), isOptional);
+        // Forge's Player.assignCompanion moves whatever comes back to the command zone without a null check,
+        // so the companion question is never optional here (a revealed companion that is never used is harmless).
+        boolean companion = sa != null && sa.getApi() == ApiType.CompanionChoose;
+        Integer i = chooseIndex(companion ? "Reveal your companion (it starts outside the game; {3}: put it into your hand)" : title, sourceOf(sa), new ArrayList<GameObject>(opts), isOptional && !companion);
         if (i == null) return super.chooseSingleEntityForEffect(optionList, null, sa, title, isOptional, targetedPlayer, params);
-        return i < 0 ? (isOptional ? null : opts.get(0)) : opts.get(i);
+        T picked = i < 0 ? (isOptional && !companion ? null : opts.get(0)) : opts.get(i);
+        if (companion && picked instanceof Card c) game.getGameLog().add(GameLogEntryType.INFORMATION, player.getName() + " reveals " + c.getName() + " as their companion.");
+        return picked;
     }
 
     @Override
@@ -1150,11 +1173,13 @@ public final class BridgeController extends PlayerControllerAi {
     public List<SpellAbility> chooseSaToActivateFromOpeningHand(List<SpellAbility> usableFromOpeningHand) {
         if (autopilot() || usableFromOpeningHand == null || usableFromOpeningHand.isEmpty()) return super.chooseSaToActivateFromOpeningHand(usableFromOpeningHand);
         List<String> labels = new ArrayList<>();
-        for (SpellAbility s : usableFromOpeningHand) labels.add(describeSa(s));
-        List<Integer> picks = chooseManyText("Put these onto the battlefield from your opening hand?", null, labels, 0, labels.size(), "openingHand");
+        for (SpellAbility s : usableFromOpeningHand) labels.add(openingHandLabel(s));
+        // Rule 103.6: each player in turn order may take these actions; the order picked is the order they happen.
+        List<Integer> picks = chooseManyText("From your opening hand: use which of these before the game begins?", null, labels, 0, labels.size(), "openingHand");
         if (picks == null) return super.chooseSaToActivateFromOpeningHand(usableFromOpeningHand);
         List<SpellAbility> out = new ArrayList<>();
         for (int i : picks) out.add(usableFromOpeningHand.get(i));
+        openingHandPicks.addAll(out); // logged when Forge actually plays each one (an earlier pick may exile a later card)
         return out;
     }
 
@@ -1163,12 +1188,37 @@ public final class BridgeController extends PlayerControllerAi {
     @Override
     public boolean mulliganKeepHand(Player firstPlayer, int cardsToReturn) {
         if (autopilot()) return super.mulliganKeepHand(firstPlayer, cardsToReturn);
-        JsonObject p = prompt("mulligan", "Keep this hand?");
-        p.addProperty("cardsToReturn", cardsToReturn);
-        p.add("hand", objectsJson(new ArrayList<>(player.getCardsIn(ZoneType.Hand))));
-        JsonObject a = session.ask(p);
-        if (a == null) return super.mulliganKeepHand(firstPlayer, cardsToReturn);
+        JsonObject a;
+        while (true) {
+            JsonObject p = prompt("mulligan", "Keep this hand?");
+            p.addProperty("cardsToReturn", cardsToReturn);
+            List<Card> hand = new ArrayList<>(player.getCardsIn(ZoneType.Hand));
+            p.add("hand", objectsJson(hand));
+            // Serum Powder: "Any time you could mulligan and Serum Powder is in your hand, you may exile all the cards
+            // from your hand, then draw that many cards." Forge implements it only in its desktop UI, so the bridge does.
+            JsonArray powders = new JsonArray();
+            for (Card c : hand) if ("Serum Powder".equals(c.getName())) powders.add(c.getId());
+            if (powders.size() > 0) p.add("serumPowder", powders);
+            a = session.ask(p);
+            if (a == null) return super.mulliganKeepHand(firstPlayer, cardsToReturn);
+            if (!a.has("serumPowder") || a.get("serumPowder").isJsonNull()) break;
+            Card powder = byId(hand, a.get("serumPowder").getAsInt());
+            if (powder == null || !"Serum Powder".equals(powder.getName())) {
+                session.sendError("that is not a Serum Powder in your hand");
+                continue;
+            }
+            useSerumPowder();
+        }
         return !a.has("keep") || a.get("keep").isJsonNull() || a.get("keep").getAsBoolean();
+    }
+
+    /** Exile the whole hand, draw that many (the mulligan question is then asked again on the new hand). */
+    void useSerumPowder() {
+        List<Card> hand = new ArrayList<>(player.getCardsIn(ZoneType.Hand));
+        int n = hand.size();
+        for (Card c : hand) game.getAction().exile(c, null, null);
+        player.drawCards(n);
+        game.getGameLog().add(GameLogEntryType.MULLIGAN, player.getName() + " used Serum Powder: exiled their hand and drew " + n + " cards.");
     }
 
     @Override

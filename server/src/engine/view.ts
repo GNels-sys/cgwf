@@ -92,6 +92,8 @@ export interface EnginePlayerJson {
 export interface EngineStateJson {
   type: "state";
   turn: number;
+  /** Rounds for people (engine RoundTracker); Forge's turn stays the truth. */
+  round?: number;
   phase: EnginePhase | null;
   activePlayer: number | null;
   priorityPlayer: number | null;
@@ -307,6 +309,7 @@ export function engineToView(s: EngineStateJson, ctx: ConvertContext): { view: P
     turnOrder,
     activePlayer: active,
     turn: s.turn,
+    round: typeof s.round === "number" && s.round > 0 ? s.round : null,
     step: stepOf(s.phase),
     stack,
     priority: userOf(ctx.seats, s.priorityPlayer),
@@ -454,7 +457,7 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
         card: raw.card && typeof raw.card === "object" ? toOptionCard(raw.card as EngineCardJson, ctx) : null,
       };
     case "mulligan":
-      return { kind: "mulligan", promptId, title, cardsToReturn: Number(raw.cardsToReturn ?? 0), hand: cardsOnly(raw.hand, ctx) };
+      return { kind: "mulligan", promptId, title, cardsToReturn: Number(raw.cardsToReturn ?? 0), hand: cardsOnly(raw.hand, ctx), ...(Array.isArray(raw.serumPowder) && raw.serumPowder.length ? { serumPowder: raw.serumPowder.map((id) => String(id)) } : {}) };
     case "number":
       return { kind: "number", promptId, title, source: str(raw.source), min: Number(raw.min ?? 0), max: Number(raw.max ?? 0), values: Array.isArray(raw.values) ? (raw.values as unknown[]).map(Number).filter((n) => Number.isFinite(n)) : null };
     case "order":
@@ -516,6 +519,8 @@ export function toEngineAnswer(answer: EngineAnswer, ctx: ConvertContext): Recor
     if (answer.cancel) out.cancel = true;
   } else if ("confirm" in answer) {
     out.confirm = Boolean(answer.confirm);
+  } else if ("serumPowder" in answer) {
+    out.serumPowder = Number(answer.serumPowder);
   } else if ("keep" in answer) {
     out.keep = Boolean(answer.keep);
   } else if ("value" in answer) {
@@ -548,6 +553,7 @@ export function isEngineAnswer(v: unknown): v is EngineAnswer {
   if ("options" in a) return Array.isArray(a.options) && (a.options as unknown[]).every((n) => typeof n === "number");
   if ("confirm" in a) return typeof a.confirm === "boolean";
   if ("keep" in a) return typeof a.keep === "boolean";
+  if ("serumPowder" in a) return typeof a.serumPowder === "string" && /^\d+$/.test(a.serumPowder);
   if ("value" in a) return typeof a.value === "number" && Number.isFinite(a.value);
   if ("order" in a) return Array.isArray(a.order) && (a.order as unknown[]).every((n) => typeof n === "number") && (a.buckets === undefined || (typeof a.buckets === "object" && a.buckets !== null && Object.values(a.buckets as object).every((v) => typeof v === "string")));
   if ("amounts" in a) return Array.isArray(a.amounts) && (a.amounts as unknown[]).every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0);

@@ -97,5 +97,6 @@ export interface RoomResponse {
   room: RoomInfo;
 }
 export interface MyRoomsResponse {
-  rooms: Array<{ code: string; status: RoomStatus; players: number; updatedAt: string; hostName: string }>;
+  /** `engine`: a rules-engine table (Forge enforces the rules) rather than a casual table (nothing enforced). */
+  rooms: Array<{ code: string; status: RoomStatus; players: number; updatedAt: string; hostName: string; engine: boolean }>;
 }
