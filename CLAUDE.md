@@ -1040,7 +1040,23 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   panel (`LogToasts`: at most three, ~5 s each, step/turn lines skipped, `aria-live`). Layout:
   at phone landscape the two are never open together (opening one closes the other; when the
   board closes it hands the log back if it took its place); portrait stacks them (board top
-  half, log bottom half). The relay strips Forge's internal ids and target brackets from log
+  half, log bottom half). **Rotation (2026-10-18 fix):** which panels are open is the pure
+  reducer `sidePanels.ts` (`panelsReducer`); every open carries the orientation read live from
+  `matchMedia` at that moment (nothing caches it: a background tab or a late media-query event
+  left a cached flag stale once), and a `layout` event on matchMedia change / resize /
+  orientationchange re-applies the rule (rotating to landscape with both open keeps the board on
+  an opponent's turn, else the log; rotating to portrait gives back a log that only stepped aside).
+  The Stack column (`.corner-right`: Stack panel + toasts) routes around open panels in pure CSS
+  (`.table-mid.side-panels/.has-board/.has-log`): left of the log at landscape, width-capped beside
+  the board, clear of the minimised Log tab, and in portrait between the board's header and the
+  log's header, so no minimise button or edge tab is ever covered. **Repeatable check:**
+  `client/src/game/layoutCheck.ts` (`layoutProblems` pure + unit-tested; the table installs
+  `window.cgwfLayoutCheck()`), which hit-tests every key control (phase steps, Hold, bar actions,
+  edge tabs, both minimise buttons, Stack header, Menu) with `elementFromPoint` and flags off-screen
+  or covered controls and both panels open at landscape. Rotate in DevTools (812x375 / 375x812 /
+  667x375 / 375x667) with the overlays open and closed and run it in the console: expect `[]`.
+  Tests: `sidePanels.test.ts` (incl. a 2000-step seeded rotation fuzz), `layoutCheck.test.ts`.
+  Note: the Stops panel edits a draft that only applies on Save; its x discards. The relay strips Forge's internal ids and target brackets from log
   lines (`cleanEngineText`: "Shock (108)" -> "Shock", "[Blair]" -> "Blair"). `isStepLine` is
   the shared "this line only announces a step" test. `CGWF_DEBUG_PRIORITY=1` on the engine
   prints every priority decision (stops, legal plays per card) to stderr: use it before
