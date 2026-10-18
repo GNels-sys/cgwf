@@ -6,6 +6,7 @@ import {
   SYSTEM_ACTOR,
   type CardPrinting,
   type EngineAnswer,
+  type EngineNotice,
   type EnginePhase,
   type EnginePrompt,
   type EngineStops,
@@ -20,7 +21,7 @@ import type { DbHandle } from "../db/index.js";
 import type { RoomMemberRow, RoomRow } from "../db/schema.js";
 import type { EngineClient, EngineFrame } from "../engine/client.js";
 import { deckForEngine } from "../engine/deck.js";
-import type { PrintingMapper } from "../engine/mapping.js";
+import type { EngineCardRef, PrintingMapper } from "../engine/mapping.js";
 import { cleanEngineText, engineToView, toEngineAnswer, toEnginePrompt, type ConvertContext, type EngineCardJson, type EngineStateJson, type SeatInfo } from "../engine/view.js";
 import { loadSettings, saveEngineStops } from "../settings.js";
 
@@ -75,6 +76,7 @@ export class EngineTable {
   private readonly holds = new Map<number, number>();
   private log: LogEntry[] = [];
   private seq = 0;
+  private noticeSeq = 0;
   private loaded = false;
   private cardsPersisted = 0;
   engineDown = false;
@@ -240,6 +242,32 @@ export class EngineTable {
         this.seq++;
         this.broadcast();
         this.room.broadcastRoom();
+        break;
+      }
+      case "notice": {
+        // Shown to ONE seat: the engine sends a notice only for cards Forge revealed to that player.
+        if (seat === SPECTATOR) break;
+        const user = this.seats.find((s) => s.seat === seat)?.userId;
+        if (!user) break;
+        const printings: Record<string, CardPrinting> = {};
+        const toCard = (raw: unknown): { name: string; printingId: string | null } => {
+          const c = (raw ?? {}) as EngineCardRef;
+          const name = typeof c.name === "string" && c.name ? c.name : "a card";
+          const p = typeof c.name === "string" && c.name ? this.mapper.resolve(c) : null;
+          if (p) printings[p.id] = p;
+          return { name, printingId: p?.id ?? null };
+        };
+        const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+        const src = list(frame.source)[0];
+        const notice: EngineNotice = {
+          id: ++this.noticeSeq,
+          kind: frame.kind === "reveal" ? "reveal" : "info",
+          title: cleanEngineText(String(frame.title ?? "")),
+          text: frame.text == null ? null : cleanEngineText(String(frame.text)),
+          cards: list(frame.cards).slice(0, 60).map(toCard),
+          source: src === undefined ? null : toCard(src),
+        };
+        for (const conn of this.room.connections()) if (conn.userId === user) conn.send({ t: "notice", notice, printings });
         break;
       }
       case "error": {

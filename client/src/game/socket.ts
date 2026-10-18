@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CardPrinting, ClientMessage, EventInput, PlayerView, RoomInfo, ServerMessage } from "@cgwf/shared";
+import type { CardPrinting, ClientMessage, EngineNotice, EventInput, PlayerView, RoomInfo, ServerMessage } from "@cgwf/shared";
 import { getToken } from "../api";
 
 /**
@@ -18,6 +18,9 @@ export interface RoomSocket {
   printings: Record<string, CardPrinting>;
   /** Last server error, cleared automatically after a few seconds. */
   error: string | null;
+  /** Engine tables: cards revealed to me / values Forge announced, oldest first, until dismissed. */
+  notices: EngineNotice[];
+  dismissNotice: (id: number) => void;
   send: (msg: ClientMessage) => void;
   dispatch: (event: EventInput) => void;
   leave: () => void;
@@ -30,6 +33,7 @@ export function useRoomSocket(code: string | null): RoomSocket {
   const [room, setRoom] = useState<RoomInfo | null>(null);
   const [view, setView] = useState<PlayerView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notices, setNotices] = useState<EngineNotice[]>([]);
   const printingsRef = useRef<Record<string, CardPrinting>>({});
   const [printings, setPrintings] = useState<Record<string, CardPrinting>>({});
   const wsRef = useRef<WebSocket | null>(null);
@@ -84,6 +88,16 @@ export function useRoomSocket(code: string | null): RoomSocket {
             if (errorTimer.current) window.clearTimeout(errorTimer.current);
             errorTimer.current = window.setTimeout(() => setError(null), 4000);
             break;
+          case "notice": {
+            if (Object.keys(msg.printings).length) {
+              const next = { ...printingsRef.current, ...msg.printings };
+              printingsRef.current = next;
+              setPrintings(next);
+            }
+            const n = msg.notice;
+            setNotices((prev) => [...prev, n].slice(-12));
+            break;
+          }
           case "pong":
             break;
         }
@@ -156,5 +170,7 @@ export function useRoomSocket(code: string | null): RoomSocket {
     closedRef.current = true;
   }, [send]);
 
-  return { status, room, view, printings, error, send, dispatch, leave };
+  const dismissNotice = useCallback((id: number) => setNotices((prev) => prev.filter((n) => n.id !== id)), []);
+
+  return { status, room, view, printings, error, notices, dismissNotice, send, dispatch, leave };
 }

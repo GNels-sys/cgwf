@@ -3,7 +3,7 @@ import type { AvatarColorKey, AvatarKey } from "../user.js";
 import type { Look } from "../settings.js";
 import type { EventInput, PlayerId } from "./types.js";
 import type { PlayerView } from "./view.js";
-import type { EngineAnswer, EngineStops } from "../engine.js";
+import type { EngineAnswer, EngineNotice, EngineStops } from "../engine.js";
 
 /**
  * Room + WebSocket protocol. The socket is opened at
@@ -80,6 +80,8 @@ export type ServerMessage =
   | { t: "room"; room: RoomInfo }
   | { t: "state"; view: PlayerView; printings: Record<string, CardPrinting> }
   | { t: "error"; message: string; cid?: string }
+  /** Engine tables: cards revealed to this player / a value Forge announces (see EngineNotice). */
+  | { t: "notice"; notice: EngineNotice; printings: Record<string, CardPrinting> }
   | { t: "pong" };
 
 export interface CreateRoomRequest {

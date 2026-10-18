@@ -103,10 +103,6 @@ class BridgeCoverageTest {
         ALLOWED.put("chooseContraptionsToCrank(List)", d("Un-set Contraptions: not Commander-legal"));
         ALLOWED.put("isAI()", d("stays true: Forge only branches on it for engine-internal paths (one-at-a-time library picks, the 999-action loop guard, AI-unplayable cards left out of random pools, sideboarding); false would take GUI-only paths with no GUI attached"));
 
-        // ---- needs a new message kind (pending: information shown to the seat, no decision)
-        ALLOWED.put("reveal(CardCollectionView, ZoneType, Player, String, boolean)", b("revealed cards (Forge's human shows them in a dialog): a per-seat notice is pending"));
-        ALLOWED.put("reveal(List, ZoneType, PlayerView, String, boolean)", b("revealed cards to this seat: a per-seat notice is pending"));
-        ALLOWED.put("notifyOfValue(SpellAbility, GameObject, String)", b("Forge's human sees a message (chosen colour, number, vote); a per-seat notice is pending"));
     }
 
     static String key(Method m) {

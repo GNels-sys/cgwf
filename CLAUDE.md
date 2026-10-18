@@ -977,8 +977,12 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   convoke/improvise, votes, coin-flip calls, dice (ignore / reroll / modify / swap), "one of each"
   digs, splice, Spellskite's target pick, prevention-shield splits, Assist (whom to ask; how much of
   someone else's spell you pay), dungeon choice, Room doors, life bids; an illegal trample split or
-  "discard a land or two cards" answer is asked again instead of going to the AI. Pending (batch 2):
-  `reveal` / `notifyOfValue` as per-seat notices. **Guard:** `BridgeCoverageTest` (reflection, no
+  "discard a land or two cards" answer is asked again instead of going to the AI. **Notices:** what
+  Forge shows a human without asking (`reveal`: cards revealed to that seat, e.g. an opponent's hand
+  after Gitaxian Probe; `notifyOfValue`: "Blair chose blue", votes, flips) goes out as an engine
+  `notice` frame for that seat only; the relay resolves printings and sends `{t:"notice"}` to that
+  player's sockets only; `client/src/game/Notices.tsx` shows them top right (cards stay until
+  dismissed, text fades after 8 s). **Guard:** `BridgeCoverageTest` (reflection, no
   assets) fails when a `PlayerController` method is neither overridden nor in its `ALLOWED` map
   (verdict + reason per entry) and on stale entries; after a Forge bump, read the human controller's
   version of each new method and route it or allow-list it with a doc row. The targets prompt
