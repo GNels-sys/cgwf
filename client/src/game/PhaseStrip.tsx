@@ -195,6 +195,7 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
     }
   }
 
+  const whoseTurn = view.phase === "mulligan" ? "Mulligans" : view.phase === "ended" ? (view.winner ? `${view.players[view.winner]?.name} wins` : "Game over") : isMyTurn ? "Your turn" : `${active?.name ?? ""}'s turn`;
   const canAttack = isMyTurn && canAct && !busy && !(combat && !combat.damageDealt && combat.attackers.length > 0) && Boolean(mePlayer && Object.values(mePlayer.battlefield).flat().some((c) => !c.tapped));
 
   return (
@@ -207,12 +208,19 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
               Casual
             </span>
           )}
-          <span className="phase-turn-text">
-            {engineMode && view.round ? <strong>Round {view.round}</strong> : <strong>T{view.turn}</strong>}
-            {engineMode && view.round ? " · " : " "}
-            {view.phase === "mulligan" ? "Mulligans" : view.phase === "ended" ? (view.winner ? `${view.players[view.winner]?.name} wins` : "Game over") : isMyTurn ? "Your turn" : `${active?.name ?? ""}'s turn`}
-            {engineMode && view.round ? <small className="phase-gameturn" title="Forge's game turn number">Game turn {view.turn}</small> : null}
-          </span>
+          {engineMode && view.round ? (
+            // engine tables: rounds for people on top, Forge's game turn (the source of truth) underneath
+            <span className="phase-turn-text has-round" title={`Round ${view.round} · ${whoseTurn} · game turn ${view.turn}`}>
+              <span className="phase-round-line">
+                <strong>Round {view.round}</strong> · {whoseTurn}
+              </span>
+              <small className="phase-gameturn">Game turn {view.turn}</small>
+            </span>
+          ) : (
+            <span className="phase-turn-text">
+              <strong>T{view.turn}</strong> {whoseTurn}
+            </span>
+          )}
         </div>
         {playing && (
           <ol className="phase-steps" aria-label="Steps">
