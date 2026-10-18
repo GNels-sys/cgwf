@@ -2,8 +2,9 @@ import { useTableMotion } from "./useTableMotion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
-import { isOut, type EngineAnswer, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
+import { isOut, type EngineAnswer, type EngineOption, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
+import { EnginePromptSheet, SHEET_PROMPT_KINDS } from "./EnginePrompts";
 import { StopsPanel } from "./StopsPanel";
 import { Avatar } from "../components/Avatar";
 import { useSettings } from "../settings";
@@ -44,6 +45,7 @@ type Sheet =
   | { kind: "anthems"; player: ViewPlayer }
   | { kind: "engineAbilities"; card: ViewCard; options: Array<{ index: number; description: string; cost: string | null; kind: string }> }
   | { kind: "engineList" }
+  | { kind: "enginePrompt" }
   | null;
 interface CardsPanel {
   title: string;
@@ -142,8 +144,21 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     if (pickFor.current === id) return;
     pickFor.current = id;
     setPickState(initialPick(prompt));
-    setSheet((s) => (s && (s.kind === "engineList" || s.kind === "engineAbilities") ? null : s));
-  }, [prompt]);
+    setSheet((s) => {
+      const mine = s && (s.kind === "engineList" || s.kind === "engineAbilities" || s.kind === "enginePrompt");
+      if (mine) s = null;
+      if (!prompt || s) return s; // never stomp a sheet the player opened themself
+      // Questions that need a sheet open at once; list choices open when there is nothing on the table to tap.
+      if (SHEET_PROMPT_KINDS.has(prompt.kind)) return { kind: "enginePrompt" };
+      // Lists open on their own when something in them cannot be tapped on the table (hidden cards, text, spells on the stack);
+      // players are chips in the bar already.
+      if (prompt.kind === "choose" || (prompt.kind === "chooseMany" && prompt.reason !== "mulligan") || prompt.kind === "targets") {
+        const tappable = (o: EngineOption) => (o.kind === "card" && findCardIn(view, o.iid) !== null) || (o.kind === "player" && prompt.kind === "targets");
+        if (prompt.options.length && !prompt.options.every(tappable)) return { kind: "engineList" };
+      }
+      return s;
+    });
+  }, [prompt]); // eslint-disable-line react-hooks/exhaustive-deps
   const setPick = useCallback((p: EnginePick) => setPickState(p), []);
   const answerEngine = useCallback((a: EngineAnswer) => sock.send({ t: "engine", answer: a }), [sock]);
   const engineHighlights = useMemo(() => promptHighlights(prompt), [prompt]);
@@ -457,6 +472,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       );
     } else if (sheet.kind === "engineList" && prompt) {
       sheetView = <EngineListSheet prompt={prompt} view={view} printings={printings} pick={pick} setPick={setPick} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
+    } else if (sheet.kind === "enginePrompt" && prompt && SHEET_PROMPT_KINDS.has(prompt.kind)) {
+      sheetView = <EnginePromptSheet prompt={prompt} view={view} printings={printings} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     }
   }
 
@@ -547,7 +564,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           engine={engine}
         >
           {engineMode && prompt && me && mePlayer && (
-            <EngineBar prompt={prompt} view={view} printings={printings} members={room.members} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} openList={() => setSheet({ kind: "engineList" })} />
+            <EngineBar prompt={prompt} view={view} printings={printings} members={room.members} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} openList={() => setSheet(SHEET_PROMPT_KINDS.has(prompt.kind) ? { kind: "enginePrompt" } : { kind: "engineList" })} />
           )}
           {mode && me && (
             <CombatBar

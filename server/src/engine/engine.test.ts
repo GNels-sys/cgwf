@@ -352,6 +352,90 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(saved.settings.engineStops.respond).toBe(false);
   });
 
+  it("round-trips the Stage 2 prompt kinds: confirm with the card, number, order with buckets, assign, mode, text, spell targets", async () => {
+    const gameId = ctx.roomsManager.get(code)!.id;
+    type StateMsg = Extract<ServerMessage, { t: "state" }>;
+    const promptOf = async (kind: string, mark: number) => (await alex.waitFor((f): f is StateMsg => f.t === "state" && f.view.engine?.prompt?.kind === kind, mark)).view.engine!.prompt!;
+
+    // confirm: the shock-land question, with the card and the consequence
+    let m = alex.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 20, prompt: "confirm", title: "Pay 2 life?", detail: "If you don't: enters tapped.", mode: "UNLESS", source: "Blood Crypt", options: ["Pay", "Don't pay"], card: card(31, "Forest", "Battlefield", pid[0]!) });
+    const confirm = await promptOf("confirm", m);
+    if (confirm.kind !== "confirm") throw new Error("unreachable");
+    expect(confirm.detail).toBe("If you don't: enters tapped.");
+    expect(confirm.options).toEqual(["Pay", "Don't pay"]);
+    expect(confirm.card?.iid).toBe("31");
+    expect(confirm.card?.printingId).toBe(FOREST);
+    alex.send({ t: "engine", answer: { promptId: 20, confirm: false } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 20)).toMatchObject({ seat: 0, confirm: false });
+
+    // number (X)
+    m = alex.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 21, prompt: "number", title: "Choose X for Fireball", source: "Fireball", min: 0, max: 4 });
+    const number = await promptOf("number", m);
+    if (number.kind !== "number") throw new Error("unreachable");
+    expect([number.min, number.max, number.values]).toEqual([0, 4, null]);
+    alex.send({ t: "engine", answer: { promptId: 21, value: 3 } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 21)).toMatchObject({ value: 3 });
+
+    // order with buckets (scry 2): hidden library cards come with their identity for the scrying seat only
+    m = alex.mark();
+    const mb = blair.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 22, prompt: "order", title: "Scry 2", note: "first = top", items: [card(41, "Forest", "Library", pid[0]!, { kind: "card", index: 0 }), card(42, "Forest", "Library", pid[0]!, { kind: "card", index: 1 })], buckets: ["top", "bottom"], defaultBucket: "top" });
+    const order = await promptOf("order", m);
+    if (order.kind !== "order") throw new Error("unreachable");
+    expect(order.buckets).toEqual(["top", "bottom"]);
+    expect(order.items.map((o) => (o.kind === "card" ? o.iid : ""))).toEqual(["41", "42"]);
+    expect(blair.text.slice(mb).join("\n")).not.toMatch(/"41"|Scry 2/);
+    alex.send({ t: "engine", answer: { promptId: 22, order: [1, 0], buckets: { "0": "bottom" } } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 22)).toMatchObject({ order: [1, 0], buckets: { "0": "bottom" } });
+
+    // assign (trample over two blockers, then the player)
+    m = alex.mark();
+    engine.send({
+      type: "prompt", gameId, seat: 0, promptId: 23, prompt: "assign", title: "Assign 5 damage", total: 5, card: card(14, "Atraxa, Grand Unifier", "Battlefield", pid[0]!, { power: 7, toughness: 7 }),
+      targets: [card(51, "Forest", "Battlefield", pid[1]!, { kind: "card", index: 0, lethal: 2 }), card(52, "Forest", "Battlefield", pid[1]!, { kind: "card", index: 1, lethal: 1 }), { kind: "player", id: pid[1]!, name: "Blair", index: 2 }],
+    });
+    const assign = await promptOf("assign", m);
+    if (assign.kind !== "assign") throw new Error("unreachable");
+    expect(assign.total).toBe(5);
+    expect(assign.lethal).toEqual({ 0: 2, 1: 1 });
+    expect(assign.targets[2]!.kind).toBe("player");
+    alex.send({ t: "engine", answer: { promptId: 23, amounts: [2, 1, 2] } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 23)).toMatchObject({ amounts: [2, 1, 2] });
+    // negative or fractional amounts never leave the server
+    const bad = alex.mark();
+    alex.send({ t: "engine", answer: { promptId: 23, amounts: [-1, 6] } });
+    expect(await alex.errorSince(bad)).toMatch(/bad engine answer|no longer open/);
+
+    // mode
+    m = alex.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 24, prompt: "mode", title: "Choose one", source: "Kolaghan's Command", min: 2, max: 2, allowRepeat: false, modes: [{ index: 0, text: "Return target creature card" }, { index: 1, text: "Target player discards a card" }, { index: 2, text: "Destroy target artifact" }] });
+    const mode = await promptOf("mode", m);
+    if (mode.kind !== "mode") throw new Error("unreachable");
+    expect(mode.modes.length).toBe(3);
+    alex.send({ t: "engine", answer: { promptId: 24, modes: [2, 0] } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 24)).toMatchObject({ modes: [2, 0] });
+
+    // text (name a card)
+    m = alex.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 25, prompt: "text", title: "Name a card", source: "Pithing Needle", freeText: true, hint: "Any card name" });
+    const text = await promptOf("text", m);
+    if (text.kind !== "text") throw new Error("unreachable");
+    expect(text.freeText).toBe(true);
+    alex.send({ t: "engine", answer: { promptId: 25, text: "Sol Ring" } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 25)).toMatchObject({ text: "Sol Ring" });
+
+    // targets may include a spell on the stack (counterspells)
+    m = alex.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 26, prompt: "targets", title: "Choose targets for Counterspell", ability: "Counter target spell", source: "Counterspell", min: 1, max: 1, options: [{ kind: "spell", index: 0, name: "Rhystic Study", cardId: 77, stackId: 5 }] });
+    const targets = await promptOf("targets", m);
+    if (targets.kind !== "targets") throw new Error("unreachable");
+    expect(targets.options[0]).toEqual({ kind: "spell", index: 0, label: "Rhystic Study", iid: "77", stackId: 5 });
+    alex.send({ t: "engine", answer: { promptId: 26, options: [0] } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 26)).toMatchObject({ options: [0] });
+  });
+
   it("seats a Phase 7 bot user as a Forge AI seat in createGame", async () => {
     const { users, decks, deckCards, roomMembers } = await import("../db/schema.js");
     const res = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(alex.token), payload: { engine: true } });

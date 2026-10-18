@@ -946,11 +946,40 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   seat, -1 = spectator): `createGame`, `answer`, `setStops`, `resync`, `attachSeat`/`detachSeat`,
   `concede`, `endGame`, `health`, `ping` in; `hello`, `gameCreated`, `cards` (every card at the
   start, for printing mapping), `state`, `prompt`, `log`, `gameOver`, `error`, `pong` out. Prompt
-  kinds today: priority (play a land / cast / activate, mana paid automatically), targets,
-  attackers, blockers, choose, chooseMany, confirm, mulligan (+ bottom as chooseMany with
-  `reason: "mulligan"`). Everything Forge asks that is not modelled yet (and any prompt nobody
-  answers within `CGWF_PROMPT_TIMEOUT_MS`, default 10 min, or while a seat is marked absent) is
-  decided by Forge's AI for that seat. Full list of prompt kinds still to build: design doc 3.3.
+  kinds: priority (play a land / cast / activate, mana paid automatically), targets (cards,
+  players and spells on the stack), attackers, blockers, choose, chooseMany, confirm, mulligan
+  (+ bottom as chooseMany with `reason: "mulligan"`), and since Stage 2 M1: number (X, "choose
+  a number", how many times), order (scry / surveil with `buckets` top|bottom|graveyard, "put
+  back in any order", trigger order: first = resolves first), assign (combat damage with
+  trample or several blockers, divided damage; positional `amounts`), mode (modal spells), text
+  (free-text card names, validated by the engine). Shapes: `shared/src/engine.ts`. Anything
+  nobody answers within `CGWF_PROMPT_TIMEOUT_MS` (default 10 min) or while a seat is marked
+  absent is decided by Forge's AI for that seat; an ILLEGAL answer gets an `error` and the same
+  question again (three times, then the AI).
+- **Casting is Forge's own human flow (Stage 2 M1).** `BridgeController.playChosenSpellAbility`
+  / `playTrigger` / `playSaFromPlayEffect` hand the chosen ability to `PlaySpellAbility`, so
+  optional costs (kicker) are offered, X is asked (capped by what the seat can pay), targets are
+  chosen per ability through `chooseTargetsFor`, and costs are decided by `BridgeCostDecision`
+  (extends Forge's AI decider: mana is still paid automatically; WHICH cards to sacrifice,
+  discard, tap, exile or return is asked through chooseMany). Resolve-time "unless" costs
+  (shock lands' 2 life, "counter unless you pay", echo) go through `payCostToPreventEffect`:
+  a confirm prompt with the card and "If you don't: ..." first, then Forge's
+  `payCostDuringAbilityResolve`. "You may" triggers ask at resolution (`confirmTrigger`);
+  replacement effects, static applications, coin calls and tap/untap choices are confirms with
+  two labelled buttons. Not asked yet: manual mana payment (always automatic), divide-shield,
+  redirect targets (Spellskite), bidding, Un-set dice/sprockets.
+- **Permanent tests.** `engine/src/test/.../PromptRoundTripTest` drives every prompt kind through
+  the real controller against a hand-built game (needs `-Dforge.assets`): prompt shape, answer,
+  return value, re-ask on illegal answers, "no question when the rules leave no choice";
+  `HiddenInformationTest` still audits every prompt's view. `server/src/engine/engine.test.ts`
+  round-trips each kind through the relay to the seat's socket and back.
+- **Client sheets** (`client/src/game/EnginePrompts.tsx`): confirm (card image + question + two
+  buttons), number (stepper + quick values), order (rows with up/down and a Top/Bottom or
+  Top/Graveyard segment), assign (per-target -/+ with lethal hints and a "Lethal first" fill),
+  mode (toggle list), text (card-name input with search suggestions). They open on their own when
+  the prompt arrives; closing one leaves the question in the engine bar ("Answer..."). List-shaped
+  prompts (choose / chooseMany / targets) open the list sheet automatically when no option is on
+  the table to tap (tutors, text options, spells on the stack); lists over 12 entries get a filter.
 - **Auto-pass.** The engine only offers priority at a seat's stops (`EngineStops`: my turn
   MAIN1, declare attackers, MAIN2, end; opponents' end step; always when the top of the stack is
   someone else's). Stops live in `UserSettings.engineStops` (sanitised in `shared/settings.ts`),
@@ -1013,5 +1042,9 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
 11. Rules engine (Forge) tables, Stage 1: M1 engine control protocol + relay + CI **(done)**,
     M2 engine games playable end to end in the app **(done)**, M3 four seats / saved stops /
     resync / legality messages / docs **(done)**, M4 Forge AI bot seats **(done)**. See `docs/FORGE-ENGINE.md`.
+11b. Stage 2: S2-M1 every common prompt reaches the human (confirm with the card, numbers/X,
+    ordering, damage assignment, modes, card names, cost choices; casting via Forge's human flow)
+    **(done)**; S2-M2 Stack panel + Interaction Stack; S2-M3 stops row + auto-pass when nothing
+    to do; S2-M4 Active Board overlay + Game Log panel with toasts.
 12. Ideas: per-event view deltas if bandwidth matters, browser push notifications (see Phase 8),
     password reset once there is an email provider.

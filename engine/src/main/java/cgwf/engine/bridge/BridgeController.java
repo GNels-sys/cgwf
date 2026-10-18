@@ -5,9 +5,15 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import forge.LobbyPlayer;
+import forge.StaticData;
 import forge.ai.ComputerUtilAbility;
+import forge.ai.ComputerUtilCombat;
 import forge.ai.ComputerUtilCost;
+import forge.ai.ComputerUtilMana;
 import forge.ai.PlayerControllerAi;
+import forge.card.ColorSet;
+import forge.card.ICardFace;
+import forge.card.MagicColor;
 import forge.game.Game;
 import forge.game.GameEntity;
 import forge.game.GameObject;
@@ -16,33 +22,53 @@ import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
 import forge.game.card.CardLists;
 import forge.game.card.CardUtil;
+import forge.game.card.CounterType;
 import forge.game.combat.Combat;
 import forge.game.combat.CombatUtil;
+import forge.game.cost.Cost;
+import forge.game.cost.CostDecisionMakerBase;
+import forge.game.cost.CostPart;
+import forge.game.cost.CostPartWithList;
+import forge.game.keyword.Keyword;
+import forge.game.keyword.KeywordInterface;
 import forge.game.phase.PhaseHandler;
 import forge.game.phase.PhaseType;
 import forge.game.player.DelayedReveal;
+import forge.game.player.PlaySpellAbility;
 import forge.game.player.Player;
 import forge.game.player.PlayerActionConfirmMode;
+import forge.game.replacement.ReplacementEffect;
+import forge.game.spellability.AbilitySub;
+import forge.game.spellability.OptionalCostValue;
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityStackInstance;
+import forge.game.trigger.WrappedAbility;
 import forge.game.zone.MagicStack;
 import forge.game.zone.ZoneType;
 import forge.util.collect.FCollectionView;
+import org.apache.commons.lang3.tuple.ImmutablePair;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * The human seat. Forge asks a {@code PlayerController} ~110 kinds of questions; this class turns
  * the ones modelled so far into JSON prompts and blocks until the seat answers. Everything it does
  * not model (and every prompt nobody answers: absent seat, timeout) falls through to Forge's own
- * AI, which is what {@code super} is. The modelled set grows prompt by prompt.
+ * AI, which is what {@code super} is.
  *
- * Modelled: priority ("choose an ability to play", mana paid automatically, with Arena-style
- * auto-pass from the seat's stops), targets, declare attackers, declare blockers, single choice,
- * multiple choice, confirm, mulligan + bottom.
+ * Casting goes through Forge's own human play flow ({@link PlaySpellAbility}): optional costs
+ * (kicker), X and other announcements, targets, then the cost, decided by {@link BridgeCostDecision}
+ * (mana is still paid automatically by the AI's mana payer; everything else that picks cards asks
+ * the seat). Prompt kinds on the wire: priority, targets, attackers, blockers, choose, chooseMany,
+ * confirm, mulligan, number, order, assign, mode, text.
  */
 public final class BridgeController extends PlayerControllerAi {
     private final BridgeSession session;
@@ -56,14 +82,18 @@ public final class BridgeController extends PlayerControllerAi {
 
     public BridgeSession session() { return session; }
 
-    private boolean autopilot() { return session.isAbsent(); }
+    boolean autopilot() { return session.isAbsent(); }
 
     private JsonObject prompt(String kind, String title) {
         JsonObject p = new JsonObject();
         p.addProperty("prompt", kind);
-        p.addProperty("title", title);
+        p.addProperty("title", title == null ? "" : title);
         p.add("view", session.viewFor(player));
         return p;
+    }
+
+    private static String sourceOf(SpellAbility sa) {
+        return sa == null || sa.getHostCard() == null ? null : sa.getHostCard().getName();
     }
 
     // ------------------------------------------------------------------ priority
@@ -116,10 +146,6 @@ public final class BridgeController extends PlayerControllerAi {
         }
         SpellAbility sa = legal.get(idx);
         sa.setActivatingPlayer(player);
-        if (!chooseTargets(sa)) {
-            session.sendError("no legal targets chosen; nothing was played");
-            return Collections.emptyList();
-        }
         List<SpellAbility> chosen = new ArrayList<>(1);
         chosen.add(sa);
         return chosen;
@@ -142,21 +168,13 @@ public final class BridgeController extends PlayerControllerAi {
                 sa.setActivatingPlayer(player);
                 ok = sa.canPlay()
                         && ComputerUtilCost.canPayCost(sa, player, false)
-                        && (!sa.usesTargeting() || sa.getMinTargets() == 0 || hasAnyTarget(sa));
+                        && (!sa.usesTargeting() || sa.getMinTargets() == 0 || !targetCandidates(sa).isEmpty());
             } catch (RuntimeException e) {
                 ok = false;
             }
             if (ok) out.add(sa);
         }
         return out;
-    }
-
-    private boolean hasAnyTarget(SpellAbility sa) {
-        if (!CardUtil.getValidCardsToTarget(sa).isEmpty()) return true;
-        if (sa.getTargetRestrictions().canTgtPlayer()) {
-            for (Player p : game.getPlayers()) if (sa.canTarget(p)) return true;
-        }
-        return false;
     }
 
     private static JsonObject abilityJson(int index, SpellAbility sa) {
@@ -173,35 +191,123 @@ public final class BridgeController extends PlayerControllerAi {
         return j;
     }
 
-    /** Walks the ability chain and asks for targets wherever Forge needs them. False = not playable. */
-    private boolean chooseTargets(SpellAbility root) {
-        for (SpellAbility sa = root; sa != null; sa = sa.getSubAbility()) {
-            if (!sa.usesTargeting()) continue;
-            sa.resetTargets();
-            List<GameObject> candidates = new ArrayList<>(CardUtil.getValidCardsToTarget(sa));
-            if (sa.getTargetRestrictions().canTgtPlayer()) {
-                for (Player p : game.getPlayers()) if (sa.canTarget(p)) candidates.add(p);
-            }
-            int min = sa.getMinTargets();
-            int max = sa.getMaxTargets();
-            if (candidates.isEmpty()) {
-                if (min == 0) continue;
-                return false;
-            }
-            JsonObject p = prompt("targets", "Choose targets for " + sa.getHostCard().getName());
-            p.addProperty("ability", sa.toString());
-            p.addProperty("min", min);
-            p.addProperty("max", max);
-            p.add("options", objectsJson(candidates));
-            JsonObject a = autopilot() ? null : session.ask(p);
-            if (a != null && isTrue(a, "cancel")) return false;
-            List<Integer> picks = a == null ? firstN(Math.max(1, min), candidates.size()) : indices(a, "options");
-            for (int idx : picks) {
-                if (idx >= 0 && idx < candidates.size()) sa.getTargets().add(candidates.get(idx));
-            }
-            if (!sa.isTargetNumberValid()) return false;
+    // ------------------------------------------------------------------ playing: Forge's human flow
+
+    /** The seat picked an ability: cast it the way Forge casts for a human (optional costs, X, targets, costs). */
+    @Override
+    public boolean playChosenSpellAbility(SpellAbility sa) {
+        if (autopilot()) return super.playChosenSpellAbility(sa);
+        if (sa.isLandAbility()) {
+            if (sa.canPlay()) sa.resolve();
+            return true;
         }
-        return true;
+        return PlaySpellAbility.playSpellAbility(this, player, sa);
+    }
+
+    @Override
+    public boolean playTrigger(Card host, WrappedAbility wrapperAbility, boolean isMandatory) {
+        if (autopilot()) return super.playTrigger(host, wrapperAbility, isMandatory);
+        return PlaySpellAbility.playSpellAbilityNoStack(this, player, wrapperAbility, false);
+    }
+
+    @Override
+    public boolean playSaFromPlayEffect(SpellAbility tgtSA) {
+        if (autopilot()) return super.playSaFromPlayEffect(tgtSA);
+        return PlaySpellAbility.playSpellAbility(this, player, tgtSA);
+    }
+
+    @Override
+    public void playSpellAbilityNoStack(SpellAbility effectSA, boolean canSetupTargets) {
+        if (autopilot()) { super.playSpellAbilityNoStack(effectSA, canSetupTargets); return; }
+        PlaySpellAbility.playSpellAbilityNoStack(this, player, effectSA, !canSetupTargets);
+    }
+
+    @Override
+    public CostDecisionMakerBase getCostDecisionMaker(Player p, SpellAbility ability, boolean effect, String prompt) {
+        return new BridgeCostDecision(this, p, ability, effect);
+    }
+
+    @Override
+    public CardCollectionView chooseCardsForCost(CardCollectionView optionList, SpellAbility sa, CostPartWithList cpl, int amount, boolean isOptional, String prompt) {
+        List<Card> valid = new ArrayList<>();
+        for (Card c : optionList) valid.add(c);
+        List<Card> chosen = autopilot() ? null : chooseCards(prompt == null || prompt.isBlank() ? "Pay the cost of " + sourceOf(sa) : prompt, sourceOf(sa), valid, isOptional ? 0 : amount, amount, "cost");
+        if (chosen == null) return super.chooseCardsForCost(optionList, sa, cpl, amount, isOptional, prompt);
+        return new CardCollection(chosen);
+    }
+
+    // ------------------------------------------------------------------ targets
+
+    /** Legal targets of one ability: cards, players and spells/abilities on the stack. */
+    private List<GameObject> targetCandidates(SpellAbility sa) {
+        List<GameObject> candidates = new ArrayList<>(CardUtil.getValidCardsToTarget(sa));
+        if (sa.getTargetRestrictions() != null && sa.getTargetRestrictions().canTgtPlayer()) {
+            for (Player p : game.getPlayers()) if (sa.canTarget(p)) candidates.add(p);
+        }
+        for (SpellAbilityStackInstance si : game.getStack()) {
+            SpellAbility onStack = si.getSpellAbility();
+            if (onStack != null && onStack != sa && sa.canTargetSpellAbility(onStack)) candidates.add(onStack);
+        }
+        return candidates;
+    }
+
+    /** Forge calls this for every targeting ability in a chain while casting (setupTargets). */
+    @Override
+    public boolean chooseTargetsFor(SpellAbility sa) {
+        if (autopilot()) return super.chooseTargetsFor(sa);
+        sa.resetTargets();
+        List<GameObject> candidates = targetCandidates(sa);
+        int min = sa.getMinTargets();
+        int max = sa.getMaxTargets();
+        if (candidates.isEmpty()) return min == 0;
+        JsonObject p = prompt("targets", "Choose targets for " + sa.getHostCard().getName());
+        p.addProperty("ability", sa.toString());
+        p.addProperty("source", sourceOf(sa));
+        p.addProperty("min", min);
+        p.addProperty("max", max);
+        p.add("options", objectsJson(candidates));
+        JsonObject a = session.ask(p);
+        if (a == null) return super.chooseTargetsFor(sa);
+        if (isTrue(a, "cancel")) return false;
+        for (int idx : indices(a, "options")) {
+            if (idx >= 0 && idx < candidates.size()) sa.getTargets().add(candidates.get(idx));
+        }
+        if (!sa.isTargetNumberValid()) {
+            session.sendError("that is not a legal set of targets");
+            return false;
+        }
+        return divideAmongTargets(sa);
+    }
+
+    /** "Divided as you choose" (Fireball, Electrolyze): how much goes where. */
+    private boolean divideAmongTargets(SpellAbility sa) {
+        int amount = sa.getStillToDivide();
+        List<GameEntity> targets = new ArrayList<>();
+        for (GameEntity e : sa.getTargets().getTargetEntities()) targets.add(e);
+        if (amount <= 0 || targets.isEmpty()) return true;
+        if (sa.hasParam("DividedUpTo")) {
+            Integer n = number("How much in total?", sourceOf(sa), targets.size(), amount, null);
+            amount = n == null ? amount : n;
+        }
+        if (targets.size() == 1) {
+            sa.addDividedAllocation(targets.get(0), amount);
+            return true;
+        }
+        if (targets.size() == amount) {
+            for (GameEntity e : targets) sa.addDividedAllocation(e, 1);
+            return true;
+        }
+        if (targets.size() > amount) return false;
+        List<Integer> amounts = assign("Divide " + amount + " among the targets", sourceOf(sa), null, targets, amount, null);
+        if (amounts == null) {
+            // even split, remainder on the first
+            int each = amount / targets.size();
+            int rest = amount - each * targets.size();
+            for (int i = 0; i < targets.size(); i++) sa.addDividedAllocation(targets.get(i), each + (i == 0 ? rest : 0));
+            return true;
+        }
+        for (int i = 0; i < targets.size(); i++) sa.addDividedAllocation(targets.get(i), amounts.get(i));
+        return sa.getStillToDivide() <= 0;
     }
 
     // ------------------------------------------------------------------ combat
@@ -296,7 +402,507 @@ public final class BridgeController extends PlayerControllerAi {
         }
     }
 
-    // ------------------------------------------------------------------ generic choices
+    /** Trample, several blockers: how the attacker's damage is split. */
+    @Override
+    public Map<Card, Integer> assignCombatDamage(Card attacker, CardCollectionView blockers, CardCollectionView remaining, int damageDealt, GameEntity defender, boolean overrideOrder) {
+        boolean trample = (attacker.hasKeyword(Keyword.TRAMPLE) && defender != null) || (attacker.hasKeyword("Trample:Planeswalker") && defender instanceof Card);
+        boolean needsChoice = trample || blockers.size() > 1
+                || (attacker.hasKeyword("You may assign CARDNAME's combat damage divided as you choose among defending player and/or any number of creatures they control.") && overrideOrder && !blockers.isEmpty());
+        if (autopilot()) return super.assignCombatDamage(attacker, blockers, remaining, damageDealt, defender, overrideOrder);
+        if (!needsChoice || damageDealt <= 0) {
+            Map<Card, Integer> simple = new HashMap<>();
+            simple.put(blockers.isEmpty() ? null : blockers.get(0), damageDealt);
+            return simple;
+        }
+        List<GameEntity> targets = new ArrayList<>();
+        Map<GameEntity, Integer> lethal = new HashMap<>();
+        for (Card b : blockers) {
+            targets.add(b);
+            lethal.put(b, Math.max(0, lethalDamage(b, attacker, damageDealt)));
+        }
+        if (trample) targets.add(defender);
+        List<Integer> amounts = assign("Assign " + attacker.getName() + "'s " + damageDealt + " damage", attacker.getName(), attacker, targets, damageDealt, lethal);
+        if (amounts == null) return super.assignCombatDamage(attacker, blockers, remaining, damageDealt, defender, overrideOrder);
+        if (trample) {
+            // the defender may only take what is left after lethal damage to every blocker
+            int toDefender = amounts.get(targets.size() - 1);
+            if (toDefender > 0) {
+                for (int i = 0; i < blockers.size(); i++) {
+                    if (amounts.get(i) < lethal.getOrDefault(blockers.get(i), 0)) {
+                        session.sendError("every blocker needs lethal damage before the rest tramples over; the AI assigned it");
+                        return super.assignCombatDamage(attacker, blockers, remaining, damageDealt, defender, overrideOrder);
+                    }
+                }
+            }
+        }
+        Map<Card, Integer> map = new HashMap<>();
+        for (int i = 0; i < blockers.size(); i++) if (amounts.get(i) > 0) map.put(blockers.get(i), amounts.get(i));
+        if (trample && amounts.get(targets.size() - 1) > 0) map.put(null, amounts.get(targets.size() - 1));
+        if (map.isEmpty()) map.put(blockers.isEmpty() ? null : blockers.get(0), damageDealt);
+        return map;
+    }
+
+    private static int lethalDamage(Card blocker, Card attacker, int maxDamage) {
+        try {
+            return ComputerUtilCombat.getEnoughDamageToKill(blocker, maxDamage, attacker, true, false);
+        } catch (RuntimeException e) {
+            return attacker.hasKeyword(Keyword.DEATHTOUCH) ? 1 : blocker.getLethalDamage();
+        }
+    }
+
+    // ------------------------------------------------------------------ yes / no
+
+    @Override
+    public boolean confirmAction(SpellAbility sa, PlayerActionConfirmMode mode, String message, List<String> options, Card cardToShow, Map<String, Object> params) {
+        Boolean r = autopilot() ? null : confirm(message, null, cardToShow != null ? cardToShow : (sa == null ? null : sa.getHostCard()), options, sourceOf(sa), mode == null ? null : mode.name());
+        return r != null ? r : super.confirmAction(sa, mode, message, options, cardToShow, params);
+    }
+
+    @Override
+    public boolean confirmStaticApplication(Card hostCard, PlayerActionConfirmMode mode, String message, String logic) {
+        Boolean r = autopilot() ? null : confirm(message, null, hostCard, null, hostCard == null ? null : hostCard.getName(), mode == null ? null : mode.name());
+        return r != null ? r : super.confirmStaticApplication(hostCard, mode, message, logic);
+    }
+
+    /** "You may ..." triggers: Forge asks when the trigger resolves. */
+    @Override
+    public boolean confirmTrigger(WrappedAbility wrapper) {
+        if (wrapper.isMandatory()) return true;
+        if (autopilot()) return super.confirmTrigger(wrapper);
+        Card host = wrapper.getTrigger() == null ? wrapper.getHostCard() : wrapper.getTrigger().getHostCard();
+        String name = host == null ? "this" : host.getName();
+        String detail = wrapper.getTrigger() == null ? "" : wrapper.getTrigger().toString();
+        Object triggeredBy = wrapper.getTriggeringObject(forge.game.ability.AbilityKey.Card);
+        if (triggeredBy instanceof Card tc && (tc.getController() == player || game.getZoneOf(tc) == null || game.getZoneOf(tc).getZoneType().isKnown())) {
+            detail = detail + (detail.isEmpty() ? "" : " ") + "(triggered by " + tc.getName() + ")";
+        }
+        Boolean r = confirm("Use " + name + "'s triggered ability?", detail, host, null, name, "TRIGGER");
+        return r != null ? r : super.confirmTrigger(wrapper);
+    }
+
+    @Override
+    public boolean confirmPayment(CostPart costPart, String question, SpellAbility sa) {
+        String q = question == null ? "Pay?" : question.replace("{0}", costPart == null ? "" : costPart.toString());
+        Boolean r = autopilot() ? null : confirm(q, null, sa == null ? null : sa.getHostCard(), null, sourceOf(sa), "PAYMENT");
+        return r != null ? r : super.confirmPayment(costPart, question, sa);
+    }
+
+    @Override
+    public boolean confirmReplacementEffect(ReplacementEffect replacementEffect, SpellAbility effectSA, GameEntity affected, String question) {
+        if (autopilot()) return super.confirmReplacementEffect(replacementEffect, effectSA, affected, question);
+        Card host = replacementEffect == null ? null : replacementEffect.getHostCard();
+        Boolean r = confirm(question, null, host, null, host == null ? null : host.getName(), "REPLACEMENT");
+        return r != null ? r : super.confirmReplacementEffect(replacementEffect, effectSA, affected, question);
+    }
+
+    @Override
+    public boolean chooseBinary(SpellAbility sa, String question, BinaryChoiceType kindOfChoice, Boolean defaultVal) {
+        if (autopilot()) return super.chooseBinary(sa, question, kindOfChoice, defaultVal);
+        List<String> labels = switch (kindOfChoice) {
+            case HeadsOrTails -> List.of("Heads", "Tails");
+            case TapOrUntap -> List.of("Tap", "Untap");
+            case OddsOrEvens -> List.of("Odds", "Evens");
+            case UntapOrLeaveTapped -> List.of("Untap", "Leave tapped");
+            case PlayOrDraw -> List.of("Play", "Draw");
+            case LeftOrRight -> List.of("Left", "Right");
+            case AddOrRemove -> List.of("Add a counter", "Remove a counter");
+            case IncreaseOrDecrease -> List.of("Increase", "Decrease");
+            default -> List.of(kindOfChoice.toString().split("Or"));
+        };
+        Boolean r = confirm(question, null, sa == null ? null : sa.getHostCard(), labels, sourceOf(sa), kindOfChoice.name());
+        return r != null ? r : super.chooseBinary(sa, question, kindOfChoice, defaultVal);
+    }
+
+    @Override
+    public boolean chooseBinary(SpellAbility sa, String question, BinaryChoiceType kindOfChoice, Map<String, Object> params) {
+        if (autopilot()) return super.chooseBinary(sa, question, kindOfChoice, params);
+        return chooseBinary(sa, question, kindOfChoice, (Boolean) null);
+    }
+
+    /** "Unless its controller pays ..." / "you may pay 2 life": the question, then the payment. */
+    @Override
+    public boolean payCostToPreventEffect(Cost cost, SpellAbility sa, boolean alreadyPaid, FCollectionView<Player> allPayers) {
+        if (autopilot()) return super.payCostToPreventEffect(cost, sa, alreadyPaid, allPayers);
+        String prompt = null;
+        if (sa.isKeyword(Keyword.ECHO)) prompt = "Pay the echo cost";
+        else if (sa.isKeyword(Keyword.CUMULATIVE_UPKEEP)) prompt = "Cumulative upkeep for " + sa.getHostCard();
+        return payOptionalCost(cost, sa, prompt);
+    }
+
+    @Override
+    public boolean payCombatCost(Card c, Cost cost, SpellAbility sa, String prompt) {
+        if (autopilot()) return super.payCombatCost(c, cost, sa, prompt);
+        return payOptionalCost(cost, sa, prompt);
+    }
+
+    @Override
+    public boolean payCostDuringRoll(Cost cost, SpellAbility sa) {
+        if (autopilot()) return super.payCostDuringRoll(cost, sa);
+        return payOptionalCost(cost, sa, null);
+    }
+
+    private boolean payOptionalCost(Cost cost, SpellAbility sa, String prompt) {
+        if (cost == null) return true;
+        List<CostPart> parts = cost.getCostParts();
+        boolean trivial = parts.isEmpty() || (parts.size() < 2 && "0".equals(parts.get(0).getAmount()));
+        if (!trivial) {
+            if (!ComputerUtilCost.canPayCost(cost, sa, player, true)) return false;
+            String what = cost.toSimpleString();
+            String pay = what.regionMatches(true, 0, "pay ", 0, 4) ? what : "Pay " + what; // "Pay 2 life" already says pay
+            String title = (prompt == null || prompt.isBlank() ? pay : prompt + ": " + pay.substring(0, 1).toLowerCase(Locale.ROOT) + pay.substring(1)) + "?";
+            String detail = describeUnless(sa);
+            Boolean yes = confirm(title, detail, sa.getHostCard(), List.of("Pay", "Don't pay"), sourceOf(sa), "UNLESS");
+            if (yes == null) return super.payCostToPreventEffect(cost, sa, false, null);
+            if (!yes) return false;
+        }
+        // Forge's own resolve-time payment (life, mana, sacrifices ...), decided by BridgeCostDecision.
+        return PlaySpellAbility.payCostDuringAbilityResolve(this, player, cost, sa, prompt);
+    }
+
+    private static String describeUnless(SpellAbility sa) {
+        if (sa == null) return "";
+        String desc = sa.getStackDescription();
+        if (desc == null || desc.isBlank()) desc = sa.getDescription();
+        if (desc == null || desc.isBlank()) return "";
+        desc = desc.trim();
+        return "If you don't: " + desc;
+    }
+
+    // ------------------------------------------------------------------ optional costs, X, numbers
+
+    @Override
+    public List<OptionalCostValue> chooseOptionalCosts(SpellAbility chosen, List<OptionalCostValue> optionalCostValues) {
+        if (autopilot() || optionalCostValues == null || optionalCostValues.isEmpty()) return super.chooseOptionalCosts(chosen, optionalCostValues);
+        List<String> labels = new ArrayList<>();
+        for (OptionalCostValue v : optionalCostValues) labels.add(v.toString());
+        List<Integer> picks = chooseManyText("Optional costs for " + sourceOf(chosen), sourceOf(chosen), labels, 0, labels.size(), "optionalCosts");
+        if (picks == null) return super.chooseOptionalCosts(chosen, optionalCostValues);
+        List<OptionalCostValue> out = new ArrayList<>();
+        for (int i : picks) out.add(optionalCostValues.get(i));
+        return out;
+    }
+
+    @Override
+    public int chooseNumberForKeywordCost(SpellAbility sa, Cost cost, KeywordInterface keyword, String prompt, int max) {
+        if (autopilot() || max <= 0) return super.chooseNumberForKeywordCost(sa, cost, keyword, prompt, max);
+        Integer n = number(prompt == null || prompt.isBlank() ? "How many times?" : prompt, sourceOf(sa), 0, max, null);
+        return n == null ? super.chooseNumberForKeywordCost(sa, cost, keyword, prompt, max) : n;
+    }
+
+    /** X (and other announced values) when casting; the cap is what the seat can actually pay. */
+    @Override
+    public Integer announceRequirements(SpellAbility ability, int min, int max, String announce) {
+        if (autopilot()) return super.announceRequirements(ability, min, max, announce);
+        Card host = ability.getHostCard();
+        Cost cost = ability.getPayCosts();
+        if ("X".equals(announce) && cost != null) {
+            Integer costX = cost.getMaxForNonManaX(ability, player, false);
+            if (costX != null) max = Math.min(max, costX);
+            if (cost.getCostMana() != null && cost.getCostMana().getAmountOfX() > 0) {
+                int affordable = ComputerUtilMana.determineLeftoverMana(ability, player, false);
+                max = Math.min(max, affordable);
+            }
+        }
+        if (min > max) return null;
+        String title = "X".equals(announce) ? ability.getParamOrDefault("XAnnounceTitle", "X") : ability.getParamOrDefault("AnnounceTitle", announce);
+        if ("NumTimes".equals(announce)) title = "How many times to pay " + (ability.getPayCosts() == null ? "" : ability.getPayCosts().getTotalMana()) + " for " + host.getName() + "?";
+        else title = "Choose " + title + " for " + host.getName();
+        Integer n = number(title, host.getName(), min, max, null);
+        return n == null ? Integer.valueOf(min) : n;
+    }
+
+    @Override
+    public int chooseNumber(SpellAbility sa, String title, int min, int max) {
+        if (autopilot() || min >= max) return min >= max ? min : super.chooseNumber(sa, title, min, max);
+        Integer n = number(title, sourceOf(sa), min, max, null);
+        return n == null ? super.chooseNumber(sa, title, min, max) : n;
+    }
+
+    @Override
+    public int chooseNumber(SpellAbility sa, String string, int min, int max, Map<String, Object> params) {
+        if (autopilot() || min >= max) return min >= max ? min : super.chooseNumber(sa, string, min, max, params);
+        Integer n = number(string, sourceOf(sa), min, max, null);
+        return n == null ? super.chooseNumber(sa, string, min, max, params) : n;
+    }
+
+    @Override
+    public int chooseNumber(SpellAbility sa, String title, List<Integer> options, Player relatedPlayer) {
+        if (autopilot() || options == null || options.size() <= 1) return super.chooseNumber(sa, title, options, relatedPlayer);
+        Integer n = number(title, sourceOf(sa), Collections.min(options), Collections.max(options), options);
+        return n == null || !options.contains(n) ? super.chooseNumber(sa, title, options, relatedPlayer) : n;
+    }
+
+    // ------------------------------------------------------------------ modes
+
+    @Override
+    public List<AbilitySub> chooseModeForAbility(SpellAbility sa, List<AbilitySub> possible, int min, int num, boolean allowRepeat) {
+        if (!allowRepeat && min == num && num == possible.size()) return possible;
+        if (autopilot()) return super.chooseModeForAbility(sa, possible, min, num, allowRepeat);
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            JsonObject p = prompt("mode", "Choose " + (min == num ? String.valueOf(num) : min + " to " + num) + (num == 1 ? " mode" : " modes") + " for " + sourceOf(sa));
+            p.addProperty("source", sourceOf(sa));
+            p.addProperty("min", min);
+            p.addProperty("max", num);
+            p.addProperty("allowRepeat", allowRepeat);
+            JsonArray modes = new JsonArray();
+            for (int i = 0; i < possible.size(); i++) {
+                JsonObject m = new JsonObject();
+                m.addProperty("index", i);
+                m.addProperty("text", possible.get(i).toUnsuppressedString());
+                modes.add(m);
+            }
+            p.add("modes", modes);
+            JsonObject a = session.ask(p);
+            if (a == null) break;
+            List<Integer> picks = indices(a, "modes");
+            List<AbilitySub> out = new ArrayList<>();
+            for (int i : picks) {
+                if (i < 0 || i >= possible.size()) continue;
+                if (!allowRepeat && out.contains(possible.get(i))) continue;
+                out.add(possible.get(i));
+            }
+            if (out.size() >= min && out.size() <= num) return out;
+            session.sendError("choose " + (min == num ? String.valueOf(num) : min + " to " + num) + (num == 1 ? " mode" : " modes"));
+        }
+        return super.chooseModeForAbility(sa, possible, min, num, allowRepeat);
+    }
+
+    // ------------------------------------------------------------------ ordering
+
+    @Override
+    public ImmutablePair<CardCollection, CardCollection> arrangeForScry(CardCollection topN) {
+        if (autopilot() || topN.isEmpty()) return super.arrangeForScry(topN);
+        Ordered o = order("Scry " + topN.size(), null, new ArrayList<GameObject>(topN), List.of("top", "bottom"), "top", "Order the cards that stay on top (first = top).");
+        if (o == null) return super.arrangeForScry(topN);
+        CardCollection toTop = new CardCollection();
+        CardCollection toBottom = new CardCollection();
+        for (int i : o.order) if ("bottom".equals(o.bucket.get(i))) toBottom.add(topN.get(i)); else toTop.add(topN.get(i));
+        return ImmutablePair.of(toTop, toBottom);
+    }
+
+    @Override
+    public ImmutablePair<CardCollection, CardCollection> arrangeForSurveil(CardCollection topN) {
+        if (autopilot() || topN.isEmpty()) return super.arrangeForSurveil(topN);
+        Ordered o = order("Surveil " + topN.size(), null, new ArrayList<GameObject>(topN), List.of("top", "graveyard"), "top", "Order the cards that stay on top (first = top).");
+        if (o == null) return super.arrangeForSurveil(topN);
+        CardCollection toTop = new CardCollection();
+        CardCollection toGrave = new CardCollection();
+        for (int i : o.order) if ("graveyard".equals(o.bucket.get(i))) toGrave.add(topN.get(i)); else toTop.add(topN.get(i));
+        return ImmutablePair.of(toTop, toGrave);
+    }
+
+    @Override
+    public boolean willPutCardOnTop(Card c) {
+        Boolean r = autopilot() ? null : confirm("Put " + c.getName() + " on top or on the bottom of your library?", null, c, List.of("Top", "Bottom"), c.getName(), "TOP_OR_BOTTOM");
+        return r != null ? r : super.willPutCardOnTop(c);
+    }
+
+    @Override
+    public CardCollectionView orderMoveToZoneList(CardCollectionView cards, ZoneType destinationZone, SpellAbility source) {
+        if (autopilot() || cards.size() < 2) return super.orderMoveToZoneList(cards, destinationZone, source);
+        boolean toTopOfLibrary = false;
+        String title;
+        String note;
+        switch (destinationZone) {
+            case Library -> {
+                toTopOfLibrary = source == null || !"-1".equals(source.getParam("LibraryPosition"));
+                title = "Order the cards going into your library";
+                note = toTopOfLibrary ? "First = closest to the top." : "First = closest to the bottom.";
+            }
+            case Graveyard -> {
+                if (source == null || source.getApi() != forge.game.ability.ApiType.ReorderZone) {
+                    if (!game.isGraveyardOrdered(player)) return cards; // nothing in the game cares about graveyard order
+                }
+                title = "Order the cards going into the graveyard";
+                note = "First = closest to the bottom.";
+            }
+            case Battlefield -> { title = "Order the permanents entering the battlefield"; note = "First enters first."; }
+            case Exile -> { title = "Order the cards going into exile"; note = "First goes first."; }
+            case Stack -> { title = "Order the copies"; note = "First is put on the stack first (resolves last)."; }
+            case None -> { title = "Order the cards"; note = "First goes first."; }
+            default -> { return super.orderMoveToZoneList(cards, destinationZone, source); }
+        }
+        Ordered o = order(title, sourceOf(source), new ArrayList<GameObject>(cards), null, null, note);
+        if (o == null) return super.orderMoveToZoneList(cards, destinationZone, source);
+        List<Card> list = new ArrayList<>();
+        for (int i : o.order) list.add(cards.get(i));
+        if (toTopOfLibrary) Collections.reverse(list); // Forge wants the top-most card LAST
+        return new CardCollection(list);
+    }
+
+    /** Several of this seat's triggers at once: which resolves first. */
+    @Override
+    public List<SpellAbility> orderSimultaneousSa(List<SpellAbility> activePlayerSAs) {
+        if (autopilot() || activePlayerSAs.size() < 2) return super.orderSimultaneousSa(activePlayerSAs);
+        List<String> labels = new ArrayList<>();
+        for (SpellAbility sa : activePlayerSAs) labels.add(describeSa(sa));
+        Ordered o = orderText("Order your triggered abilities", null, labels, "First = resolves first.");
+        if (o == null) return super.orderSimultaneousSa(activePlayerSAs);
+        List<SpellAbility> out = new ArrayList<>();
+        for (int i : o.order) out.add(activePlayerSAs.get(i));
+        Collections.reverse(out); // Forge puts the first of this list on the stack first, so it resolves last
+        return out;
+    }
+
+    private static String describeSa(SpellAbility sa) {
+        String host = sa.getHostCard() == null ? "" : sa.getHostCard().getName() + ": ";
+        String d = sa.isWrapper() ? ((WrappedAbility) sa).getWrappedAbility().toUnsuppressedString() : sa.toUnsuppressedString();
+        return host + (d == null ? sa.toString() : d);
+    }
+
+    // ------------------------------------------------------------------ named things: colours, types, names
+
+    @Override
+    public byte chooseColor(String message, SpellAbility sa, ColorSet colors) {
+        if (autopilot() || colors.countColors() < 2) return super.chooseColor(message, sa, colors);
+        List<String> names = colorNames(colors, false);
+        Integer i = chooseText(message == null || message.isBlank() ? "Choose a color" : message, sourceOf(sa), names, false);
+        return i == null ? super.chooseColor(message, sa, colors) : MagicColor.fromName(names.get(i));
+    }
+
+    @Override
+    public byte chooseColorAllowColorless(String message, Card card, ColorSet colors) {
+        if (autopilot()) return super.chooseColorAllowColorless(message, card, colors);
+        List<String> names = colorNames(colors, true);
+        if (names.size() < 2) return super.chooseColorAllowColorless(message, card, colors);
+        Integer i = chooseText(message == null || message.isBlank() ? "Choose a color" : message, card == null ? null : card.getName(), names, false);
+        return i == null ? super.chooseColorAllowColorless(message, card, colors) : MagicColor.fromName(names.get(i));
+    }
+
+    @Override
+    public ColorSet chooseColors(String message, SpellAbility sa, int min, int max, ColorSet options) {
+        if (autopilot()) return super.chooseColors(message, sa, min, max, options);
+        List<String> names = colorNames(options, false);
+        List<Integer> picks = chooseManyText(message == null || message.isBlank() ? "Choose colors" : message, sourceOf(sa), names, min, Math.min(max, names.size()), "colors");
+        if (picks == null) return super.chooseColors(message, sa, min, max, options);
+        List<String> chosen = new ArrayList<>();
+        for (int i : picks) chosen.add(names.get(i));
+        return ColorSet.fromNames(chosen);
+    }
+
+    private static List<String> colorNames(ColorSet set, boolean allowColorless) {
+        List<String> out = new ArrayList<>();
+        for (MagicColor.Color c : MagicColor.Color.values()) {
+            if (c == MagicColor.Color.COLORLESS) { if (allowColorless) out.add("colorless"); continue; }
+            if (set.hasAnyColor(c.getColorMask())) out.add(c.getName().toLowerCase(Locale.ROOT));
+        }
+        return out;
+    }
+
+    @Override
+    public String chooseSomeType(String kindOfType, SpellAbility sa, Collection<String> validTypes, boolean isOptional) {
+        if (autopilot() || validTypes == null || validTypes.isEmpty()) return super.chooseSomeType(kindOfType, sa, validTypes, isOptional);
+        List<String> list = new ArrayList<>(validTypes);
+        Integer i = chooseText("Choose a " + (kindOfType == null ? "" : kindOfType.toLowerCase(Locale.ROOT) + " ") + "type", sourceOf(sa), list, isOptional);
+        if (i == null) return super.chooseSomeType(kindOfType, sa, validTypes, isOptional);
+        return i < 0 ? null : list.get(i);
+    }
+
+    @Override
+    public CounterType chooseCounterType(List<CounterType> options, SpellAbility sa, String prompt, Map<String, Object> params) {
+        if (autopilot() || options == null || options.size() <= 1) return super.chooseCounterType(options, sa, prompt, params);
+        List<String> names = new ArrayList<>();
+        for (CounterType t : options) names.add(t.getName());
+        Integer i = chooseText(prompt == null || prompt.isBlank() ? "Choose a counter type" : prompt, sourceOf(sa), names, false);
+        return i == null ? super.chooseCounterType(options, sa, prompt, params) : options.get(i);
+    }
+
+    @Override
+    public String chooseKeywordForPump(List<String> options, SpellAbility sa, String prompt, Card tgtCard) {
+        if (autopilot() || options == null || options.size() <= 1) return super.chooseKeywordForPump(options, sa, prompt, tgtCard);
+        Integer i = chooseText(prompt == null || prompt.isBlank() ? "Choose a keyword" : prompt, sourceOf(sa), options, false);
+        return i == null ? super.chooseKeywordForPump(options, sa, prompt, tgtCard) : options.get(i);
+    }
+
+    @Override
+    public String chooseProtectionType(SpellAbility sa, List<String> choices) {
+        if (autopilot() || choices == null || choices.size() <= 1) return super.chooseProtectionType(sa, choices);
+        Integer i = chooseText("Choose what to protect from", sourceOf(sa), choices, false);
+        return i == null ? super.chooseProtectionType(sa, choices) : choices.get(i);
+    }
+
+    @Override
+    public String chooseCardName(SpellAbility sa, List<ICardFace> faces, String message) {
+        if (autopilot() || faces == null || faces.isEmpty()) return super.chooseCardName(sa, faces, message);
+        List<String> names = new ArrayList<>();
+        for (ICardFace f : faces) names.add(f.getName());
+        Integer i = chooseText(message == null || message.isBlank() ? "Name a card" : message, sourceOf(sa), names, false);
+        return i == null ? super.chooseCardName(sa, faces, message) : names.get(i);
+    }
+
+    /** Free-text card name (Pithing Needle, Cavern of Souls ...), validated against Forge's card database. */
+    @Override
+    public String chooseCardName(SpellAbility sa, Predicate<ICardFace> cpp, String valid, String message) {
+        if (autopilot()) return super.chooseCardName(sa, cpp, valid, message);
+        String title = message == null || message.isBlank() ? "Name a card" : message;
+        for (int attempt = 0; attempt < 3; attempt++) {
+            JsonObject p = prompt("text", title);
+            p.addProperty("source", sourceOf(sa));
+            p.addProperty("freeText", true);
+            p.addProperty("hint", valid == null || valid.isBlank() ? "Any card name" : valid);
+            JsonObject a = session.ask(p);
+            if (a == null) return super.chooseCardName(sa, cpp, valid, message);
+            String text = a.has("text") && !a.get("text").isJsonNull() ? a.get("text").getAsString().trim() : "";
+            ICardFace face = text.isEmpty() ? null : StaticData.instance().getCommonCards().getFaceByName(text);
+            if (face != null && (cpp == null || cpp.test(face))) return face.getName();
+            session.sendError(text.isEmpty() ? "name a card" : "\"" + text + "\" is not a card name that fits here");
+        }
+        return super.chooseCardName(sa, cpp, valid, message);
+    }
+
+    @Override
+    public SpellAbility chooseSingleSpellForEffect(List<SpellAbility> spells, SpellAbility sa, String title, Map<String, Object> params) {
+        if (autopilot() || spells == null || spells.size() <= 1) return super.chooseSingleSpellForEffect(spells, sa, title, params);
+        List<String> labels = new ArrayList<>();
+        for (SpellAbility s : spells) labels.add(describeSa(s));
+        Integer i = chooseText(title == null || title.isBlank() ? "Choose one" : title, sourceOf(sa), labels, false);
+        return i == null ? super.chooseSingleSpellForEffect(spells, sa, title, params) : spells.get(i);
+    }
+
+    @Override
+    public List<SpellAbility> chooseSpellAbilitiesForEffect(List<SpellAbility> spells, SpellAbility sa, String title, int num, Map<String, Object> params) {
+        if (autopilot() || spells == null || spells.isEmpty()) return super.chooseSpellAbilitiesForEffect(spells, sa, title, num, params);
+        List<String> labels = new ArrayList<>();
+        for (SpellAbility s : spells) labels.add(describeSa(s));
+        List<Integer> picks = chooseManyText(title == null || title.isBlank() ? "Choose" : title, sourceOf(sa), labels, 0, Math.min(num, labels.size()), "abilities");
+        if (picks == null) return super.chooseSpellAbilitiesForEffect(spells, sa, title, num, params);
+        List<SpellAbility> out = new ArrayList<>();
+        for (int i : picks) out.add(spells.get(i));
+        return out;
+    }
+
+    @Override
+    public ReplacementEffect chooseSingleReplacementEffect(List<ReplacementEffect> possibleReplacers) {
+        if (autopilot() || possibleReplacers == null || possibleReplacers.size() <= 1) return super.chooseSingleReplacementEffect(possibleReplacers);
+        List<String> labels = new ArrayList<>();
+        for (ReplacementEffect re : possibleReplacers) labels.add((re.getHostCard() == null ? "" : re.getHostCard().getName() + ": ") + re.toString());
+        Integer i = chooseText("Which replacement effect applies first?", null, labels, false);
+        return i == null ? super.chooseSingleReplacementEffect(possibleReplacers) : possibleReplacers.get(i);
+    }
+
+    @Override
+    public Player chooseStartingPlayer(boolean isFirstGame) {
+        if (autopilot()) return super.chooseStartingPlayer(isFirstGame);
+        List<Player> players = new ArrayList<>(game.getPlayersInTurnOrder());
+        Integer i = chooseIndex("Who plays first?", null, new ArrayList<GameObject>(players), false);
+        return i == null || i < 0 ? super.chooseStartingPlayer(isFirstGame) : players.get(i);
+    }
+
+    @Override
+    public boolean chooseCardsPile(SpellAbility sa, CardCollectionView pile1, CardCollectionView pile2, String faceUp) {
+        if (autopilot()) return super.chooseCardsPile(sa, pile1, pile2, faceUp);
+        List<String> labels = List.of("Pile 1: " + names(pile1), "Pile 2: " + names(pile2));
+        Integer i = chooseText("Choose a pile", sourceOf(sa), labels, false);
+        return i == null ? super.chooseCardsPile(sa, pile1, pile2, faceUp) : i == 0;
+    }
+
+    private static String names(CardCollectionView cards) {
+        List<String> n = new ArrayList<>();
+        for (Card c : cards) n.add(c.getName());
+        return n.isEmpty() ? "(empty)" : String.join(", ", n);
+    }
+
+    // ------------------------------------------------------------------ generic card choices
 
     @Override
     public <T extends GameEntity> T chooseSingleEntityForEffect(FCollectionView<T> optionList, DelayedReveal delayedReveal,
@@ -306,15 +912,9 @@ public final class BridgeController extends PlayerControllerAi {
         List<T> opts = new ArrayList<>();
         for (T t : optionList) opts.add(t);
         if (opts.isEmpty()) return null;
-        JsonObject p = prompt("choose", title);
-        p.addProperty("optional", isOptional);
-        p.addProperty("source", sa == null || sa.getHostCard() == null ? null : sa.getHostCard().getName());
-        p.add("options", objectsJson(opts));
-        JsonObject a = session.ask(p);
-        if (a == null) return super.chooseSingleEntityForEffect(optionList, null, sa, title, isOptional, targetedPlayer, params);
-        if (!a.has("option") || a.get("option").isJsonNull()) return isOptional ? null : opts.get(0);
-        int idx = a.get("option").getAsInt();
-        return idx >= 0 && idx < opts.size() ? opts.get(idx) : (isOptional ? null : opts.get(0));
+        Integer i = chooseIndex(title, sourceOf(sa), new ArrayList<GameObject>(opts), isOptional);
+        if (i == null) return super.chooseSingleEntityForEffect(optionList, null, sa, title, isOptional, targetedPlayer, params);
+        return i < 0 ? (isOptional ? null : opts.get(0)) : opts.get(i);
     }
 
     @Override
@@ -324,37 +924,126 @@ public final class BridgeController extends PlayerControllerAi {
         if (autopilot()) return super.chooseEntitiesForEffect(optionList, min, max, null, sa, title, targetedPlayer, params);
         List<T> opts = new ArrayList<>();
         for (T t : optionList) opts.add(t);
-        JsonObject p = prompt("chooseMany", title);
-        p.addProperty("min", min);
-        p.addProperty("max", max);
-        p.addProperty("source", sa == null || sa.getHostCard() == null ? null : sa.getHostCard().getName());
-        p.add("options", objectsJson(opts));
-        JsonObject a = session.ask(p);
-        if (a == null) return super.chooseEntitiesForEffect(optionList, min, max, null, sa, title, targetedPlayer, params);
+        List<Integer> picks = chooseManyIndex(title, sourceOf(sa), new ArrayList<GameObject>(opts), min, max, null);
+        if (picks == null) return super.chooseEntitiesForEffect(optionList, min, max, null, sa, title, targetedPlayer, params);
         List<T> out = new ArrayList<>();
-        for (int idx : indices(a, "options")) if (idx >= 0 && idx < opts.size() && !out.contains(opts.get(idx))) out.add(opts.get(idx));
-        if (out.size() < min || out.size() > max) {
-            session.sendError("expected between " + min + " and " + max + " choices; the AI chose instead");
-            return super.chooseEntitiesForEffect(optionList, min, max, null, sa, title, targetedPlayer, params);
-        }
+        for (int i : picks) out.add(opts.get(i));
         return out;
     }
 
     @Override
-    public boolean confirmAction(SpellAbility sa, PlayerActionConfirmMode mode, String message, List<String> options, Card cardToShow, Map<String, Object> params) {
-        if (autopilot()) return super.confirmAction(sa, mode, message, options, cardToShow, params);
-        JsonObject p = prompt("confirm", message);
-        p.addProperty("mode", mode == null ? null : mode.name());
-        p.addProperty("source", sa == null || sa.getHostCard() == null ? null : sa.getHostCard().getName());
-        JsonArray labels = new JsonArray();
-        if (options != null) for (String o : options) labels.add(o);
-        else { labels.add("Yes"); labels.add("No"); }
-        p.add("options", labels);
-        if (cardToShow != null) p.add("card", SeatView.card(cardToShow, player));
-        JsonObject a = session.ask(p);
-        if (a == null) return super.confirmAction(sa, mode, message, options, cardToShow, params);
-        if (a.has("confirm") && !a.get("confirm").isJsonNull()) return a.get("confirm").getAsBoolean();
-        return a.has("option") && !a.get("option").isJsonNull() && a.get("option").getAsInt() == 0;
+    public CardCollectionView chooseCardsForEffect(CardCollectionView sourceList, SpellAbility sa, String title, int min, int max, boolean isOptional, Map<String, Object> params) {
+        if (autopilot()) return super.chooseCardsForEffect(sourceList, sa, title, min, max, isOptional, params);
+        List<Card> chosen = chooseCards(title, sourceOf(sa), new ArrayList<>(sourceList), isOptional ? 0 : min, max, null);
+        return chosen == null ? super.chooseCardsForEffect(sourceList, sa, title, min, max, isOptional, params) : new CardCollection(chosen);
+    }
+
+    /** Tutors and "search your library": the seat sees the fetch list, which may be its own library. */
+    @Override
+    public Card chooseSingleCardForZoneChange(ZoneType destination, List<ZoneType> origin, SpellAbility sa, CardCollection fetchList, DelayedReveal delayedReveal,
+            String selectPrompt, boolean isOptional, Player decider) {
+        if (delayedReveal != null) reveal(delayedReveal);
+        if (autopilot()) return super.chooseSingleCardForZoneChange(destination, origin, sa, fetchList, null, selectPrompt, isOptional, decider);
+        if (fetchList == null || fetchList.isEmpty()) return null;
+        Integer i = chooseIndex(selectPrompt == null || selectPrompt.isBlank() ? "Choose a card" : selectPrompt, sourceOf(sa), new ArrayList<GameObject>(fetchList), isOptional);
+        if (i == null) return super.chooseSingleCardForZoneChange(destination, origin, sa, fetchList, null, selectPrompt, isOptional, decider);
+        return i < 0 ? null : fetchList.get(i);
+    }
+
+    @Override
+    public List<Card> chooseCardsForZoneChange(ZoneType destination, List<ZoneType> origin, SpellAbility sa, CardCollection fetchList, int min, int max,
+            DelayedReveal delayedReveal, String selectPrompt, Player decider) {
+        if (delayedReveal != null) reveal(delayedReveal);
+        if (autopilot() || fetchList == null) return super.chooseCardsForZoneChange(destination, origin, sa, fetchList, min, max, null, selectPrompt, decider);
+        List<Card> chosen = chooseCards(selectPrompt == null || selectPrompt.isBlank() ? "Choose cards" : selectPrompt, sourceOf(sa), new ArrayList<>(fetchList), min, max, null);
+        return chosen == null ? super.chooseCardsForZoneChange(destination, origin, sa, fetchList, min, max, null, selectPrompt, decider) : chosen;
+    }
+
+    @Override
+    public CardCollection chooseCardsToDiscardFrom(Player p, SpellAbility sa, CardCollection validCards, int min, int max, CardCollectionView visibleToChooser) {
+        if (autopilot() || validCards == null || validCards.isEmpty()) return super.chooseCardsToDiscardFrom(p, sa, validCards, min, max, visibleToChooser);
+        if (p != player) {
+            // choosing from someone else's hand: only when those cards are shown to us
+            for (Card c : validCards) if (visibleToChooser == null || !visibleToChooser.contains(c)) return super.chooseCardsToDiscardFrom(p, sa, validCards, min, max, visibleToChooser);
+        }
+        String who = p == player ? "Discard" : "Choose " + p.getName() + "'s cards to discard";
+        List<Card> chosen = chooseCards(who + (min == max ? " " + min : " " + min + " to " + max), sourceOf(sa), new ArrayList<>(validCards), min, max, "discard");
+        return chosen == null ? super.chooseCardsToDiscardFrom(p, sa, validCards, min, max, visibleToChooser) : new CardCollection(chosen);
+    }
+
+    @Override
+    public CardCollectionView chooseCardsToDiscardToMaximumHandSize(int numDiscard) {
+        if (autopilot() || numDiscard <= 0) return super.chooseCardsToDiscardToMaximumHandSize(numDiscard);
+        List<Card> hand = new ArrayList<>(player.getCardsIn(ZoneType.Hand));
+        List<Card> chosen = chooseCards("Discard down to your hand size: choose " + numDiscard, null, hand, numDiscard, numDiscard, "discard");
+        return chosen == null ? super.chooseCardsToDiscardToMaximumHandSize(numDiscard) : new CardCollection(chosen);
+    }
+
+    @Override
+    public CardCollectionView chooseCardsToDiscardUnlessType(int num, CardCollectionView hand, String[] uTypes, SpellAbility sa) {
+        if (autopilot()) return super.chooseCardsToDiscardUnlessType(num, hand, uTypes, sa);
+        String types = String.join(" or ", uTypes);
+        List<Card> all = new ArrayList<>(hand);
+        List<Card> chosen = chooseCards("Discard a " + types + " card, or " + num + " other cards", sourceOf(sa), all, 1, Math.max(1, num), "discard");
+        if (chosen == null) return super.chooseCardsToDiscardUnlessType(num, hand, uTypes, sa);
+        if (chosen.size() == 1 && CardLists.getValidCards(new CardCollection(chosen), uTypes, player, sa.getHostCard(), sa).size() == 1) return new CardCollection(chosen);
+        if (chosen.size() == num) return new CardCollection(chosen);
+        session.sendError("choose one " + types + " card or " + num + " cards; the AI chose");
+        return super.chooseCardsToDiscardUnlessType(num, hand, uTypes, sa);
+    }
+
+    @Override
+    public CardCollectionView chooseCardsToRevealFromHand(int min, int max, CardCollectionView valid) {
+        if (autopilot() || valid == null || valid.isEmpty()) return super.chooseCardsToRevealFromHand(min, max, valid);
+        List<Card> chosen = chooseCards("Reveal " + (min == max ? String.valueOf(min) : min + " to " + max) + " from your hand", null, new ArrayList<>(valid), min, Math.min(max, valid.size()), "reveal");
+        return chosen == null ? super.chooseCardsToRevealFromHand(min, max, valid) : new CardCollection(chosen);
+    }
+
+    @Override
+    public CardCollectionView choosePermanentsToSacrifice(SpellAbility sa, int min, int max, CardCollectionView validTargets, String message) {
+        if (autopilot() || validTargets == null) return super.choosePermanentsToSacrifice(sa, min, max, validTargets, message);
+        List<Card> chosen = chooseCards(message == null || message.isBlank() ? "Sacrifice" : message, sourceOf(sa), new ArrayList<>(validTargets), min, Math.min(max, validTargets.size()), "sacrifice");
+        return chosen == null ? super.choosePermanentsToSacrifice(sa, min, max, validTargets, message) : new CardCollection(chosen);
+    }
+
+    @Override
+    public CardCollectionView choosePermanentsToDestroy(SpellAbility sa, int min, int max, CardCollectionView validTargets, String message) {
+        if (autopilot() || validTargets == null) return super.choosePermanentsToDestroy(sa, min, max, validTargets, message);
+        List<Card> chosen = chooseCards(message == null || message.isBlank() ? "Destroy" : message, sourceOf(sa), new ArrayList<>(validTargets), min, Math.min(max, validTargets.size()), "destroy");
+        return chosen == null ? super.choosePermanentsToDestroy(sa, min, max, validTargets, message) : new CardCollection(chosen);
+    }
+
+    @Override
+    public CardCollectionView chooseCardsToDelve(int genericAmount, CardCollection grave) {
+        if (autopilot() || grave == null || grave.isEmpty() || genericAmount <= 0) return super.chooseCardsToDelve(genericAmount, grave);
+        List<Card> chosen = chooseCards("Delve: exile cards from your graveyard to pay generic mana", null, new ArrayList<>(grave), 0, Math.min(genericAmount, grave.size()), "delve");
+        return chosen == null ? super.chooseCardsToDelve(genericAmount, grave) : new CardCollection(chosen);
+    }
+
+    @Override
+    public List<Card> exertAttackers(List<Card> attackers) {
+        if (autopilot() || attackers == null || attackers.isEmpty()) return super.exertAttackers(attackers);
+        List<Card> chosen = chooseCards("Exert attackers?", null, attackers, 0, attackers.size(), "exert");
+        return chosen == null ? super.exertAttackers(attackers) : chosen;
+    }
+
+    @Override
+    public List<Card> enlistAttackers(List<Card> attackers) {
+        if (autopilot() || attackers == null || attackers.isEmpty()) return super.enlistAttackers(attackers);
+        List<Card> chosen = chooseCards("Enlist?", null, attackers, 0, attackers.size(), "enlist");
+        return chosen == null ? super.enlistAttackers(attackers) : chosen;
+    }
+
+    @Override
+    public List<SpellAbility> chooseSaToActivateFromOpeningHand(List<SpellAbility> usableFromOpeningHand) {
+        if (autopilot() || usableFromOpeningHand == null || usableFromOpeningHand.isEmpty()) return super.chooseSaToActivateFromOpeningHand(usableFromOpeningHand);
+        List<String> labels = new ArrayList<>();
+        for (SpellAbility s : usableFromOpeningHand) labels.add(describeSa(s));
+        List<Integer> picks = chooseManyText("Put these onto the battlefield from your opening hand?", null, labels, 0, labels.size(), "openingHand");
+        if (picks == null) return super.chooseSaToActivateFromOpeningHand(usableFromOpeningHand);
+        List<SpellAbility> out = new ArrayList<>();
+        for (int i : picks) out.add(usableFromOpeningHand.get(i));
+        return out;
     }
 
     // ------------------------------------------------------------------ mulligan
@@ -375,17 +1064,218 @@ public final class BridgeController extends PlayerControllerAi {
         if (autopilot()) return super.tuckCardsViaMulligan(hand, cardsToReturn);
         List<Card> cards = new ArrayList<>();
         for (Card c : hand) cards.add(c);
-        JsonObject p = prompt("chooseMany", "Put " + cardsToReturn + " card(s) on the bottom of your library");
-        p.addProperty("min", cardsToReturn);
-        p.addProperty("max", cardsToReturn);
-        p.addProperty("reason", "mulligan");
-        p.add("options", objectsJson(cards));
+        List<Card> chosen = chooseCards("Put " + cardsToReturn + " card(s) on the bottom of your library", null, cards, cardsToReturn, cardsToReturn, "mulligan");
+        return chosen == null ? super.tuckCardsViaMulligan(hand, cardsToReturn) : new CardCollection(chosen);
+    }
+
+    // ------------------------------------------------------------------ the generic prompts
+
+    /** Yes/no. Returns null when nobody answered (caller falls back to the AI). */
+    private Boolean confirm(String title, String detail, Card card, List<String> labels, String source, String mode) {
+        JsonObject p = prompt("confirm", title);
+        p.addProperty("mode", mode);
+        p.addProperty("source", source);
+        if (detail != null && !detail.isBlank()) p.addProperty("detail", detail);
+        JsonArray l = new JsonArray();
+        if (labels != null && labels.size() >= 2) { l.add(labels.get(0)); l.add(labels.get(1)); } else { l.add("Yes"); l.add("No"); }
+        p.add("options", l);
+        if (card != null) {
+            JsonObject cj = SeatView.card(card, player);
+            if (!cj.has("name")) SeatView.addIdentity(cj, card); // the question names it anyway
+            p.add("card", cj);
+        }
         JsonObject a = session.ask(p);
-        if (a == null) return super.tuckCardsViaMulligan(hand, cardsToReturn);
-        CardCollection out = new CardCollection();
-        for (int idx : indices(a, "options")) if (idx >= 0 && idx < cards.size() && !out.contains(cards.get(idx))) out.add(cards.get(idx));
-        if (out.size() != cardsToReturn) return super.tuckCardsViaMulligan(hand, cardsToReturn);
+        if (a == null) return null;
+        if (a.has("confirm") && !a.get("confirm").isJsonNull()) return a.get("confirm").getAsBoolean();
+        if (a.has("option") && !a.get("option").isJsonNull()) return a.get("option").getAsInt() == 0;
+        return null;
+    }
+
+    /** One number in [min, max] (or one of `values`). Out-of-range answers are clamped. */
+    private Integer number(String title, String source, int min, int max, List<Integer> values) {
+        JsonObject p = prompt("number", title);
+        p.addProperty("source", source);
+        p.addProperty("min", min);
+        p.addProperty("max", max);
+        if (values != null) {
+            JsonArray v = new JsonArray();
+            for (int i : values) v.add(i);
+            p.add("values", v);
+        }
+        JsonObject a = session.ask(p);
+        if (a == null || !a.has("value") || a.get("value").isJsonNull()) return null;
+        int n;
+        try { n = a.get("value").getAsInt(); } catch (RuntimeException e) { return null; }
+        if (values != null && !values.contains(n)) return null;
+        return Math.max(min, Math.min(max, n));
+    }
+
+    /** Pick one option (card / player / spell). Returns the index, -1 for "none" when optional, null = nobody answered. */
+    /** An illegal answer: the same question is asked again (up to {@link #ATTEMPTS} times) before the AI decides. */
+    private static final int ATTEMPTS = 3;
+    private static final Integer ILLEGAL_INDEX = Integer.MIN_VALUE;
+    private static final List<Integer> ILLEGAL_LIST = Collections.unmodifiableList(new ArrayList<>());
+
+    private Integer chooseIndex(String title, String source, List<GameObject> options, boolean optional) {
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            JsonObject p = prompt("choose", title);
+            p.addProperty("optional", optional);
+            p.addProperty("source", source);
+            p.add("options", objectsJson(options));
+            Integer r = readChoice(session.ask(p), options.size(), optional);
+            if (!ILLEGAL_INDEX.equals(r)) return r;
+        }
+        return null;
+    }
+
+    private Integer chooseText(String title, String source, List<String> labels, boolean optional) {
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            JsonObject p = prompt("choose", title);
+            p.addProperty("optional", optional);
+            p.addProperty("source", source);
+            p.add("options", textOptions(labels));
+            Integer r = readChoice(session.ask(p), labels.size(), optional);
+            if (!ILLEGAL_INDEX.equals(r)) return r;
+        }
+        return null;
+    }
+
+    private Integer readChoice(JsonObject a, int size, boolean optional) {
+        if (a == null) return null;
+        if (!a.has("option") || a.get("option").isJsonNull()) {
+            if (optional) return -1;
+            session.sendError("choose one");
+            return ILLEGAL_INDEX;
+        }
+        int idx = a.get("option").getAsInt();
+        if (idx < 0 || idx >= size) {
+            session.sendError("option " + idx + " is out of range");
+            return ILLEGAL_INDEX;
+        }
+        return idx;
+    }
+
+    /** Pick between min and max options; null = nobody answered or the answer was illegal. */
+    private List<Integer> chooseManyIndex(String title, String source, List<GameObject> options, int min, int max, String reason) {
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            JsonObject p = prompt("chooseMany", title);
+            p.addProperty("min", min);
+            p.addProperty("max", max);
+            p.addProperty("source", source);
+            if (reason != null) p.addProperty("reason", reason);
+            p.add("options", objectsJson(options));
+            List<Integer> r = readMany(session.ask(p), options.size(), min, max);
+            if (r != ILLEGAL_LIST) return r;
+        }
+        return null;
+    }
+
+    private List<Integer> chooseManyText(String title, String source, List<String> labels, int min, int max, String reason) {
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            JsonObject p = prompt("chooseMany", title);
+            p.addProperty("min", min);
+            p.addProperty("max", max);
+            p.addProperty("source", source);
+            if (reason != null) p.addProperty("reason", reason);
+            p.add("options", textOptions(labels));
+            List<Integer> r = readMany(session.ask(p), labels.size(), min, max);
+            if (r != ILLEGAL_LIST) return r;
+        }
+        return null;
+    }
+
+    private List<Integer> readMany(JsonObject a, int size, int min, int max) {
+        if (a == null) return null;
+        List<Integer> out = new ArrayList<>();
+        for (int idx : indices(a, "options")) if (idx >= 0 && idx < size && !out.contains(idx)) out.add(idx);
+        if (out.size() < min || out.size() > max) {
+            session.sendError(min == max ? "choose exactly " + min : "choose between " + min + " and " + max);
+            return ILLEGAL_LIST;
+        }
         return out;
+    }
+
+    /** Cards only (used by the cost decider too). */
+    List<Card> chooseCards(String title, String source, List<Card> cards, int min, int max, String reason) {
+        if (cards.isEmpty()) return min == 0 ? new ArrayList<>() : null;
+        List<Integer> picks = chooseManyIndex(title, source, new ArrayList<GameObject>(cards), min, Math.min(max, cards.size()), reason);
+        if (picks == null) return null;
+        List<Card> out = new ArrayList<>();
+        for (int i : picks) out.add(cards.get(i));
+        return out;
+    }
+
+    private record Ordered(List<Integer> order, Map<Integer, String> bucket) { }
+
+    /** Arrange items (cards) in order, optionally sorting each into a bucket ("top"/"bottom"). */
+    private Ordered order(String title, String source, List<GameObject> items, List<String> buckets, String defaultBucket, String note) {
+        JsonObject p = prompt("order", title);
+        p.addProperty("source", source);
+        p.addProperty("note", note);
+        p.add("items", objectsJson(items));
+        return readOrder(p, items.size(), buckets, defaultBucket);
+    }
+
+    private Ordered orderText(String title, String source, List<String> labels, String note) {
+        JsonObject p = prompt("order", title);
+        p.addProperty("source", source);
+        p.addProperty("note", note);
+        p.add("items", textOptions(labels));
+        return readOrder(p, labels.size(), null, null);
+    }
+
+    private Ordered readOrder(JsonObject p, int size, List<String> buckets, String defaultBucket) {
+        if (buckets != null) {
+            JsonArray b = new JsonArray();
+            for (String s : buckets) b.add(s);
+            p.add("buckets", b);
+            p.addProperty("defaultBucket", defaultBucket);
+        }
+        JsonObject a = session.ask(p);
+        if (a == null) return null;
+        List<Integer> order = new ArrayList<>();
+        for (int idx : indices(a, "order")) if (idx >= 0 && idx < size && !order.contains(idx)) order.add(idx);
+        for (int i = 0; i < size; i++) if (!order.contains(i)) order.add(i); // anything left keeps its place at the end
+        Map<Integer, String> bucket = new LinkedHashMap<>();
+        if (buckets != null) {
+            JsonObject bj = a.has("buckets") && a.get("buckets").isJsonObject() ? a.getAsJsonObject("buckets") : new JsonObject();
+            for (int i = 0; i < size; i++) {
+                String b = bj.has(String.valueOf(i)) && !bj.get(String.valueOf(i)).isJsonNull() ? bj.get(String.valueOf(i)).getAsString() : defaultBucket;
+                bucket.put(i, buckets.contains(b) ? b : defaultBucket);
+            }
+        }
+        return new Ordered(order, bucket);
+    }
+
+    /** Split `total` among targets; answer `amounts` is positional. Null = nobody answered / illegal. */
+    private List<Integer> assign(String title, String source, Card sourceCard, List<GameEntity> targets, int total, Map<GameEntity, Integer> lethal) {
+        for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
+            JsonObject p = prompt("assign", title);
+            p.addProperty("source", source);
+            p.addProperty("total", total);
+            if (sourceCard != null) p.add("card", SeatView.card(sourceCard, player));
+            JsonArray ts = objectsJson(new ArrayList<GameObject>(targets));
+            if (lethal != null) {
+                for (int i = 0; i < targets.size(); i++) {
+                    Integer l = lethal.get(targets.get(i));
+                    if (l != null) ts.get(i).getAsJsonObject().addProperty("lethal", l);
+                }
+            }
+            p.add("targets", ts);
+            JsonObject a = session.ask(p);
+            if (a == null) return null;
+            List<Integer> amounts = indices(a, "amounts");
+            String problem = null;
+            int sum = 0;
+            if (amounts.size() != targets.size()) problem = "expected " + targets.size() + " amounts";
+            else {
+                for (int n : amounts) { if (n < 0) problem = "amounts cannot be negative"; sum += n; }
+                if (problem == null && sum != total) problem = "the amounts must add up to " + total;
+            }
+            if (problem == null) return amounts;
+            session.sendError(problem);
+        }
+        return null;
     }
 
     // ------------------------------------------------------------------ helpers
@@ -402,9 +1292,15 @@ public final class BridgeController extends PlayerControllerAi {
                 if (!j.has("name")) SeatView.addIdentity(j, c);
             } else if (o instanceof GameEntity e) {
                 j = SeatView.entityRef(e);
+            } else if (o instanceof SpellAbility sa) {
+                j = new JsonObject();
+                j.addProperty("kind", "spell");
+                j.addProperty("name", describeSa(sa));
+                if (sa.getHostCard() != null) j.addProperty("cardId", sa.getHostCard().getId());
+                for (SpellAbilityStackInstance si : game.getStack()) if (si.getSpellAbility() == sa) j.addProperty("stackId", si.getId());
             } else {
                 j = new JsonObject();
-                j.addProperty("kind", "other");
+                j.addProperty("kind", "text");
                 j.addProperty("name", String.valueOf(o));
             }
             j.addProperty("index", i++);
@@ -413,17 +1309,25 @@ public final class BridgeController extends PlayerControllerAi {
         return a;
     }
 
+    private static JsonArray textOptions(List<String> labels) {
+        JsonArray a = new JsonArray();
+        for (int i = 0; i < labels.size(); i++) {
+            JsonObject j = new JsonObject();
+            j.addProperty("kind", "text");
+            j.addProperty("index", i);
+            j.addProperty("name", labels.get(i));
+            a.add(j);
+        }
+        return a;
+    }
+
     private static List<Integer> indices(JsonObject a, String key) {
         List<Integer> out = new ArrayList<>();
         if (a != null && a.has(key) && a.get(key).isJsonArray()) {
-            for (JsonElement e : a.getAsJsonArray(key)) out.add(e.getAsInt());
+            for (JsonElement e : a.getAsJsonArray(key)) {
+                try { out.add(e.getAsInt()); } catch (RuntimeException ignored) { }
+            }
         }
-        return out;
-    }
-
-    private static List<Integer> firstN(int n, int size) {
-        List<Integer> out = new ArrayList<>();
-        for (int i = 0; i < Math.min(n, size); i++) out.add(i);
         return out;
     }
 

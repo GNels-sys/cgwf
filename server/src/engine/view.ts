@@ -349,6 +349,9 @@ function toOption(o: Record<string, unknown>, ctx: ConvertContext): EngineOption
     const out: EngineOptionPlayerOut = { kind: "player", index, player, name: String(o.name ?? "") };
     return out;
   }
+  if (kind === "spell") {
+    return { kind: "spell", index, label: String(o.name ?? o.label ?? ""), iid: o.cardId === undefined || o.cardId === null ? null : String(o.cardId), stackId: typeof o.stackId === "number" ? o.stackId : null };
+  }
   return { kind: "text", index, label: String(o.name ?? o.label ?? "") };
 }
 type EngineOptionPlayerOut = Extract<EngineOption, { kind: "player" }>;
@@ -364,6 +367,10 @@ function cardsOnly(raw: unknown, ctx: ConvertContext): EngineOptionCard[] {
 }
 
 /** Engine `prompt` frame -> EnginePrompt for the browser. */
+function str(v: unknown): string | null {
+  return v === null || v === undefined ? null : String(v);
+}
+
 export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext): EnginePrompt | null {
   const promptId = Number(raw.promptId);
   const title = String(raw.title ?? "");
@@ -384,7 +391,7 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
       return { kind: "priority", promptId, title, options: opts, phase: (raw.phase as EnginePhase) ?? null, myTurn: Boolean(raw.myTurn), stackEmpty: Boolean(raw.stackEmpty), stackTopMine: Boolean(raw.stackTopMine) };
     }
     case "targets":
-      return { kind: "targets", promptId, title, ability: String(raw.ability ?? ""), min: Number(raw.min ?? 1), max: Number(raw.max ?? 1), options: options(raw.options, ctx) };
+      return { kind: "targets", promptId, title, ability: String(raw.ability ?? ""), source: str(raw.source), min: Number(raw.min ?? 1), max: Number(raw.max ?? 1), options: options(raw.options, ctx) };
     case "attackers": {
       const defenders = Array.isArray(raw.defenders) ? (raw.defenders as RawEntityRef[]).map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null) : [];
       return { kind: "attackers", promptId, title, candidates: cardsOnly(raw.candidates, ctx), defenders };
@@ -399,9 +406,60 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
       return out;
     }
     case "confirm":
-      return { kind: "confirm", promptId, title, options: Array.isArray(raw.options) ? (raw.options as unknown[]).map(String) : ["Yes", "No"], source: raw.source == null ? null : String(raw.source), card: raw.card && typeof raw.card === "object" ? toOptionCard(raw.card as EngineCardJson, ctx) : null };
+      return {
+        kind: "confirm",
+        promptId,
+        title,
+        detail: str(raw.detail),
+        mode: str(raw.mode),
+        options: Array.isArray(raw.options) && (raw.options as unknown[]).length >= 2 ? (raw.options as unknown[]).slice(0, 2).map(String) : ["Yes", "No"],
+        source: str(raw.source),
+        card: raw.card && typeof raw.card === "object" ? toOptionCard(raw.card as EngineCardJson, ctx) : null,
+      };
     case "mulligan":
       return { kind: "mulligan", promptId, title, cardsToReturn: Number(raw.cardsToReturn ?? 0), hand: cardsOnly(raw.hand, ctx) };
+    case "number":
+      return { kind: "number", promptId, title, source: str(raw.source), min: Number(raw.min ?? 0), max: Number(raw.max ?? 0), values: Array.isArray(raw.values) ? (raw.values as unknown[]).map(Number).filter((n) => Number.isFinite(n)) : null };
+    case "order":
+      return {
+        kind: "order",
+        promptId,
+        title,
+        source: str(raw.source),
+        note: str(raw.note),
+        items: options(raw.items, ctx),
+        buckets: Array.isArray(raw.buckets) ? (raw.buckets as unknown[]).map(String) : null,
+        defaultBucket: str(raw.defaultBucket),
+      };
+    case "assign": {
+      const lethal: Record<number, number> = {};
+      if (Array.isArray(raw.targets)) {
+        for (const t of raw.targets as Array<Record<string, unknown>>) if (typeof t.lethal === "number") lethal[Number(t.index ?? 0)] = t.lethal;
+      }
+      return {
+        kind: "assign",
+        promptId,
+        title,
+        source: str(raw.source),
+        total: Number(raw.total ?? 0),
+        card: raw.card && typeof raw.card === "object" ? toOptionCard(raw.card as EngineCardJson, ctx) : null,
+        targets: options(raw.targets, ctx),
+        lethal,
+      };
+    }
+    case "mode":
+      return {
+        kind: "mode",
+        promptId,
+        title,
+        source: str(raw.source),
+        min: Number(raw.min ?? 1),
+        max: Number(raw.max ?? 1),
+        allowRepeat: Boolean(raw.allowRepeat),
+        modes: Array.isArray(raw.modes) ? (raw.modes as Array<Record<string, unknown>>).map((m, i) => ({ index: Number(m.index ?? i), text: String(m.text ?? "") })) : [],
+      };
+    case "text":
+      return { kind: "text", promptId, title, source: str(raw.source), freeText: Boolean(raw.freeText), hint: str(raw.hint) };
     default:
       return null;
   }
@@ -423,6 +481,17 @@ export function toEngineAnswer(answer: EngineAnswer, ctx: ConvertContext): Recor
     out.confirm = Boolean(answer.confirm);
   } else if ("keep" in answer) {
     out.keep = Boolean(answer.keep);
+  } else if ("value" in answer) {
+    out.value = Number(answer.value);
+  } else if ("order" in answer) {
+    out.order = answer.order.map((n) => Number(n));
+    out.buckets = answer.buckets ?? {};
+  } else if ("amounts" in answer) {
+    out.amounts = answer.amounts.map((n) => Number(n));
+  } else if ("modes" in answer) {
+    out.modes = answer.modes.map((n) => Number(n));
+  } else if ("text" in answer) {
+    out.text = String(answer.text).slice(0, 200);
   } else if ("option" in answer) {
     out.option = answer.option === null ? null : Number(answer.option);
     if (answer.passUntilTurn !== undefined) out.passUntilTurn = Number(answer.passUntilTurn);
@@ -441,6 +510,11 @@ export function isEngineAnswer(v: unknown): v is EngineAnswer {
   if ("options" in a) return Array.isArray(a.options) && (a.options as unknown[]).every((n) => typeof n === "number");
   if ("confirm" in a) return typeof a.confirm === "boolean";
   if ("keep" in a) return typeof a.keep === "boolean";
+  if ("value" in a) return typeof a.value === "number" && Number.isFinite(a.value);
+  if ("order" in a) return Array.isArray(a.order) && (a.order as unknown[]).every((n) => typeof n === "number") && (a.buckets === undefined || (typeof a.buckets === "object" && a.buckets !== null && Object.values(a.buckets as object).every((v) => typeof v === "string")));
+  if ("amounts" in a) return Array.isArray(a.amounts) && (a.amounts as unknown[]).every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0);
+  if ("modes" in a) return Array.isArray(a.modes) && (a.modes as unknown[]).every((n) => typeof n === "number");
+  if ("text" in a) return typeof a.text === "string" && a.text.length <= 200;
   if ("option" in a) return a.option === null || typeof a.option === "number";
   return false;
 }

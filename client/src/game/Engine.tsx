@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { AVATAR_COLORS, type EngineAnswer, type EngineEntityRef, type EngineOption, type EnginePrompt, type PlayerView, type RoomMember, type ViewCard } from "@cgwf/shared";
+import { CardImage } from "../components/CardImage";
 import { CardTile } from "./CardTile";
+import { describeOption, sheetPromptSummary } from "./EnginePrompts";
 import { findCard, nameOf, type Printings } from "./model";
 
 /**
@@ -53,6 +55,13 @@ export function promptHighlights(prompt: EnginePrompt | null): Set<string> {
     case "blockers":
       for (const c of prompt.blockers) out.add(c.iid);
       for (const c of prompt.attackers) out.add(c.iid);
+      break;
+    case "assign":
+      for (const o of prompt.targets) if (o.kind === "card") out.add(o.iid);
+      if (prompt.card) out.add(prompt.card.iid);
+      break;
+    case "confirm":
+      if (prompt.card) out.add(prompt.card.iid);
       break;
     default:
       break;
@@ -290,18 +299,43 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
         <div className="engine-bar" role="region" aria-label={prompt.title}>
           <div className="engine-bar-head">
             <strong>{prompt.title}</strong>
-            {prompt.source && <span className="muted small">{prompt.source}</span>}
+            {(prompt.detail || prompt.source) && <span className="muted small">{prompt.detail ?? prompt.source}</span>}
           </div>
           <div className="engine-bar-actions">
-            <button className="btn btn-small btn-primary" onClick={() => answer({ promptId: id, confirm: true })}>
-              {prompt.options[0] ?? "Yes"}
-            </button>
+            {prompt.card && (
+              <button className="btn btn-small" onClick={openList}>
+                Show card
+              </button>
+            )}
             <button className="btn btn-small" onClick={() => answer({ promptId: id, confirm: false })}>
               {prompt.options[1] ?? "No"}
+            </button>
+            <button className="btn btn-small btn-primary" onClick={() => answer({ promptId: id, confirm: true })}>
+              {prompt.options[0] ?? "Yes"}
             </button>
           </div>
         </div>
       );
+    case "number":
+    case "order":
+    case "assign":
+    case "mode":
+    case "text": {
+      const { head, hint } = sheetPromptSummary(prompt);
+      return (
+        <div className="engine-bar" role="region" aria-label={prompt.title}>
+          <div className="engine-bar-head">
+            <strong>{head}</strong>
+            {hint && <span className="muted small">{hint}</span>}
+          </div>
+          <div className="engine-bar-actions">
+            <button className="btn btn-small btn-primary" onClick={openList}>
+              Answer...
+            </button>
+          </div>
+        </div>
+      );
+    }
     case "mulligan":
       return null; // the overlay handles it
     default:
@@ -328,12 +362,10 @@ export function EngineListSheet({ prompt, view, printings, pick, setPick, answer
   const picked = pick.kind === "select" ? pick.picked : [];
   const max = single ? 1 : prompt.max;
   const min = single ? 1 : prompt.min;
-  const label = (o: EngineOption): { title: string; hint?: string } => {
-    if (o.kind === "player") return { title: view.players[o.player]?.name ?? o.name };
-    if (o.kind === "text") return { title: o.label };
-    const bits = [o.zone, o.controller ? view.players[o.controller]?.name : null, o.power !== null ? `${o.power}/${o.toughness}` : null].filter(Boolean);
-    return { title: o.name, hint: bits.join(" - ") };
-  };
+  const label = (o: EngineOption) => describeOption(o, view);
+  const [filter, setFilter] = useState("");
+  useEffect(() => setFilter(""), [prompt.promptId]);
+  const shown = filter.trim() ? prompt.options.filter((o) => label(o).title.toLowerCase().includes(filter.trim().toLowerCase())) : prompt.options;
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={prompt.title} onClick={(e) => e.stopPropagation()}>
@@ -344,12 +376,14 @@ export function EngineListSheet({ prompt, view, printings, pick, setPick, answer
             &times;
           </button>
         </div>
+        {prompt.options.length > 12 && <input className="input" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" aria-label="Filter options" style={{ marginBottom: 8 }} />}
         <div className="engine-options">
           {prompt.options.length === 0 && <p className="muted">Nothing to choose.</p>}
-          {prompt.options.map((o) => {
+          {shown.map((o) => {
             const { title, hint } = label(o);
             const selected = picked.includes(o.index);
             const card = o.kind === "card" ? findCard(view, o.iid) : null;
+            const art = !card && o.kind === "card" && o.printingId ? <CardImage id={o.printingId} name={o.name} size="small" className="engine-row-img" /> : null;
             return (
               <button
                 key={o.index}
@@ -362,6 +396,7 @@ export function EngineListSheet({ prompt, view, printings, pick, setPick, answer
                 }}
               >
                 {card && <CardTile card={card} printings={printings} onHold={onZoom} />}
+                {art}
                 <span>
                   <span>{title}</span>
                   {hint && <small> {hint}</small>}
@@ -433,7 +468,7 @@ export function EngineMulligan({ prompt, view, printings, me, pick, setPick, ans
       <div className="mulligan">
         <div className="mulligan-box">
           <h2>Keep this hand?</h2>
-          <p className="muted small">{prompt.cardsToReturn > 0 ? `If you keep, you put ${prompt.cardsToReturn} card${prompt.cardsToReturn === 1 ? "" : "s"} on the bottom afterwards.` : "Seven cards. The rules engine shuffles and deals."}</p>
+          <p className="muted small">{prompt.cardsToReturn > 0 ? `${prompt.hand.length} cards after ${prompt.cardsToReturn} mulligan${prompt.cardsToReturn === 1 ? "" : "s"}. Another mulligan deals seven and puts ${prompt.cardsToReturn + 1} on the bottom.` : "Seven cards. The rules engine shuffles and deals."}</p>
           <div className="mulligan-hand">
             {prompt.hand.map((h) => {
               const c = findCard(view, h.iid) ?? mePlayer.hand.cards.find((x) => x.iid === h.iid);
