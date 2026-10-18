@@ -171,7 +171,7 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
               Confirm
             </button>
             <button className="btn btn-small" onClick={() => answer({ promptId: id, options: [], cancel: true })}>
-              Cancel
+              {prompt.cancelLabel ?? "Cancel"}
             </button>
           </div>
         </div>
@@ -412,7 +412,7 @@ export function EngineListSheet({ prompt, view, printings, pick, setPick, answer
             </button>
             {prompt.kind === "targets" && (
               <button className="btn" onClick={() => answer({ promptId: prompt.promptId, options: [], cancel: true })}>
-                Cancel
+                {prompt.cancelLabel ?? "Cancel"}
               </button>
             )}
           </div>

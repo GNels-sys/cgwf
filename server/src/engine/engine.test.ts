@@ -456,8 +456,18 @@ describe("engine tables (relay to the rules engine)", () => {
     const targets = await promptOf("targets", m);
     if (targets.kind !== "targets") throw new Error("unreachable");
     expect(targets.options[0]).toEqual({ kind: "spell", index: 0, label: "Rhystic Study", iid: "77", stackId: 5 });
+    expect(targets.cancelLabel).toBeNull();
     alex.send({ t: "engine", answer: { promptId: 26, options: [0] } });
     expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 26)).toMatchObject({ options: [0] });
+
+    // a copy that may choose new targets: Cancel keeps the current ones, and the button says so
+    m = alex.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 27, prompt: "targets", title: "Choose new targets for Lightning Bolt (now: Blair)", ability: "Lightning Bolt deals 3 damage to any target.", source: "Lightning Bolt", min: 1, max: 1, cancelLabel: "Keep current targets", options: [{ kind: "player", index: 0, id: 1, name: "Blair" }] });
+    const retarget = await promptOf("targets", m);
+    if (retarget.kind !== "targets") throw new Error("unreachable");
+    expect(retarget.cancelLabel).toBe("Keep current targets");
+    alex.send({ t: "engine", answer: { promptId: 27, options: [], cancel: true } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 27)).toMatchObject({ cancel: true });
   });
 
   it("describes the stack with kinds, printings and targets, including one stack item aimed at another", async () => {
