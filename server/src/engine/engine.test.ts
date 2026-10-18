@@ -346,7 +346,7 @@ describe("engine tables (relay to the rules engine)", () => {
     const m3 = alex.mark();
     alex.send({ t: "stops", stops: { myTurn: ["MAIN1"], theirTurn: [], respond: false } });
     const setStops = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { respond: boolean }).respond === false);
-    expect(setStops.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: false });
+    expect(setStops.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: false, autoPassEmpty: true });
     const withStops = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.stops.respond === false, m3)).view;
     expect(withStops.engine?.stops.myTurn).toEqual(["MAIN1"]);
     const saved = (await ctx.app.inject({ method: "GET", url: "/api/me/settings", headers: auth(alex.token) })).json() as { settings: { engineStops: { respond: boolean } } };
@@ -461,6 +461,35 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(top.targets).toEqual([{ kind: "stack", id: "8", name: "Rhystic Study", iid: "62" }]);
     expect(v.stack[1]!.targets).toEqual([{ kind: "player", player: v.viewer }]);
     expect(v.stack[1]!.controller).not.toBe(v.viewer);
+  });
+
+  it("relays hold-priority and the auto-pass setting, and mirrors them in the seat's view", async () => {
+    const gameId = ctx.roomsManager.get(code)!.id;
+    // hold this turn
+    const m1 = alex.mark();
+    alex.send({ t: "hold", turn: 3 });
+    const hold = await engine.waitFor((f) => f.type === "hold" && f.gameId === gameId && f.seat === 0 && f.turn === 3);
+    expect(hold.turn).toBe(3);
+    const held = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.holdTurn === 3, m1)).view;
+    expect(held.engine?.holdTurn).toBe(3);
+    // release
+    const m2 = alex.mark();
+    alex.send({ t: "hold", turn: null });
+    await engine.waitFor((f) => f.type === "hold" && f.gameId === gameId && f.seat === 0 && f.turn === null);
+    expect((await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.holdTurn === null, m2)).view.engine?.holdTurn).toBeNull();
+    // spectators cannot hold
+    if (!casey.ws || casey.ws.readyState !== WebSocket.OPEN) await casey.connect(port, code);
+    const mc = casey.mark();
+    casey.send({ t: "hold", turn: 3 });
+    expect(await casey.errorSince(mc)).toMatch(/spectators/);
+    // the auto-pass setting rides with the stops and is remembered per user
+    const m3 = alex.mark();
+    alex.send({ t: "stops", stops: { myTurn: ["MAIN1", "MAIN2"], theirTurn: ["END_OF_TURN"], respond: true, autoPassEmpty: false } });
+    const sent = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { autoPassEmpty: boolean }).autoPassEmpty === false);
+    expect(sent.stops).toEqual({ myTurn: ["MAIN1", "MAIN2"], theirTurn: ["END_OF_TURN"], respond: true, autoPassEmpty: false });
+    expect((await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.stops.autoPassEmpty === false, m3)).view.engine?.stops.myTurn).toEqual(["MAIN1", "MAIN2"]);
+    const saved = (await ctx.app.inject({ method: "GET", url: "/api/me/settings", headers: auth(alex.token) })).json() as { settings: { engineStops: { autoPassEmpty: boolean } } };
+    expect(saved.settings.engineStops.autoPassEmpty).toBe(false);
   });
 
   it("seats a Phase 7 bot user as a Forge AI seat in createGame", async () => {

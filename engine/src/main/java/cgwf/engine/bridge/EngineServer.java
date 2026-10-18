@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <pre>
  * CGwF -> engine: createGame {rid, gameId, seed?, seats:[{seat, kind:"human"|"ai", name, deck}]}
- *                 answer {gameId, seat, promptId, ...}   setStops {gameId, seat, stops}
+ *                 answer {gameId, seat, promptId, ...}   setStops {gameId, seat, stops}   hold {gameId, seat, turn|null}
  *                 resync {gameId, seat}   attachSeat/detachSeat {gameId, seat}   concede {gameId, seat}
  *                 endGame {gameId}   health {rid}   ping
  * engine -> CGwF: hello   gameCreated {rid, gameId, players[]}   cards {gameId, cards[]}
@@ -116,6 +116,7 @@ public final class EngineServer extends WebSocketServer {
                 case "createGame" -> createGame(conn, m, rid);
                 case "answer" -> game(gameId).answer(seat(m), m);
                 case "setStops" -> game(gameId).setStops(seat(m), m.has("stops") && m.get("stops").isJsonObject() ? m.getAsJsonObject("stops") : null);
+                case "hold" -> game(gameId).setHold(seat(m), m.has("turn") && !m.get("turn").isJsonNull() ? m.get("turn").getAsInt() : 0);
                 case "resync" -> game(gameId).resync(m.has("seat") && !m.get("seat").isJsonNull() ? m.get("seat").getAsInt() : GameSession.SPECTATOR);
                 case "attachSeat" -> game(gameId).setAbsent(seat(m), false);
                 case "detachSeat" -> game(gameId).setAbsent(seat(m), true);

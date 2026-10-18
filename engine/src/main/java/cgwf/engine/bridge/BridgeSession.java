@@ -32,6 +32,8 @@ public final class BridgeSession {
         final Set<String> theirTurn = new HashSet<>();
         /** Stop whenever the top of the stack was put there by someone else. */
         boolean respond = true;
+        /** Pass automatically when priority comes with nothing to play (Arena-style). */
+        boolean autoPassEmpty = true;
 
         static Stops defaults() {
             Stops s = new Stops();
@@ -49,6 +51,7 @@ public final class BridgeSession {
             fill(s.myTurn, j.get("myTurn"));
             fill(s.theirTurn, j.get("theirTurn"));
             s.respond = !j.has("respond") || j.get("respond").isJsonNull() || j.get("respond").getAsBoolean();
+            s.autoPassEmpty = !j.has("autoPassEmpty") || j.get("autoPassEmpty").isJsonNull() || j.get("autoPassEmpty").getAsBoolean();
             return s;
         }
 
@@ -66,6 +69,7 @@ public final class BridgeSession {
             j.add("myTurn", a);
             j.add("theirTurn", b);
             j.addProperty("respond", respond);
+            j.addProperty("autoPassEmpty", autoPassEmpty);
             return j;
         }
     }
@@ -85,6 +89,8 @@ public final class BridgeSession {
     private volatile Stops stops = Stops.defaults();
     /** Pass every priority until the given turn number is over (0 = off). */
     private volatile int passUntilTurn;
+    /** Hold priority for this turn number: every priority stops and nothing auto-passes (0 = off). */
+    private volatile int holdTurn;
 
     public BridgeSession(int seat, long timeoutMs) {
         this.seat = seat;
@@ -196,17 +202,40 @@ public final class BridgeSession {
 
     public Stops stops() { return stops; }
 
-    public void passUntilTurn(int turn) { passUntilTurn = turn; }
+    /** "End turn": pass every priority for the rest of this turn; an explicit end turn also releases a hold. */
+    public void passUntilTurn(int turn) {
+        passUntilTurn = turn;
+        if (turn > 0) holdTurn = 0;
+    }
+
+    /** Hold priority for the given turn (0 releases). A hold also cancels an "end turn" pass. */
+    public void setHold(int turn) {
+        holdTurn = Math.max(0, turn);
+        if (holdTurn > 0) passUntilTurn = 0;
+    }
+
+    public int holdTurn() { return holdTurn; }
+
+    /** True while the seat holds priority for this turn. */
+    public boolean holding(int turn) { return holdTurn > 0 && holdTurn == turn; }
 
     /**
      * Should this seat be offered priority now, or pass automatically?
-     * Always stops when the stack holds something the seat did not put there (if `respond`).
+     * Always stops when the stack holds something the seat did not put there (if `respond`),
+     * and at every priority while the seat holds this turn.
      */
     public boolean stopsAt(String phase, boolean myTurn, boolean stackTopNotMine, int turn) {
+        if (holding(turn)) return true;
+        if (holdTurn > 0 && turn > holdTurn) holdTurn = 0; // the held turn is over
         if (passUntilTurn > 0 && turn <= passUntilTurn) return false;
         if (passUntilTurn > 0) passUntilTurn = 0;
         Stops s = stops;
         if (stackTopNotMine && s.respond) return true;
         return (myTurn ? s.myTurn : s.theirTurn).contains(phase);
+    }
+
+    /** With nothing to play, pass without asking (unless the seat holds this turn or opted out). */
+    public boolean autoPassesEmpty(int turn) {
+        return stops.autoPassEmpty && !holding(turn);
     }
 }

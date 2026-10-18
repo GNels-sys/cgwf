@@ -359,6 +359,16 @@ export class LiveRoom {
     }
   }
 
+  engineHold(userId: string, turn: number | null): void {
+    if (!this.engineTable) throw new RoomError("this table is not run by the rules engine");
+    try {
+      this.engineTable.hold(userId, turn);
+    } catch (err) {
+      if (err instanceof EngineRoomError) throw new RoomError(err.message);
+      throw err;
+    }
+  }
+
   onEngineFrame(frame: EngineFrame): void {
     try {
       this.engineTable?.onFrame(frame);

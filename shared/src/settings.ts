@@ -117,10 +117,15 @@ export function sanitizeSettings(raw: unknown, base: UserSettings = DEFAULT_SETT
 
 function sanitizeStops(v: unknown, base: EngineStops): EngineStops {
   if (!v || typeof v !== "object") return base;
-  const s = v as { myTurn?: unknown; theirTurn?: unknown; respond?: unknown };
+  const s = v as { myTurn?: unknown; theirTurn?: unknown; respond?: unknown; autoPassEmpty?: unknown };
   const phases = (arr: unknown, fallback: EnginePhase[]): EnginePhase[] =>
     Array.isArray(arr) ? [...new Set(arr.filter((p): p is EnginePhase => typeof p === "string" && (ENGINE_PHASES as readonly string[]).includes(p)))] : fallback;
-  return { myTurn: phases(s.myTurn, base.myTurn), theirTurn: phases(s.theirTurn, base.theirTurn), respond: typeof s.respond === "boolean" ? s.respond : base.respond };
+  return {
+    myTurn: phases(s.myTurn, base.myTurn),
+    theirTurn: phases(s.theirTurn, base.theirTurn),
+    respond: typeof s.respond === "boolean" ? s.respond : base.respond,
+    autoPassEmpty: typeof s.autoPassEmpty === "boolean" ? s.autoPassEmpty : base.autoPassEmpty,
+  };
 }
 
 /** The part of a player's settings everyone at the table may see. */

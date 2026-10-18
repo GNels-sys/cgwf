@@ -178,6 +178,12 @@ public final class GameSession {
         if (s != null) s.setStops(stops);
     }
 
+    /** Hold priority for a turn (0 = release). */
+    public void setHold(int seat, int turn) {
+        BridgeSession s = humans.get(seat);
+        if (s != null) s.setHold(turn);
+    }
+
     public void concede(int seat) {
         BridgeSession s = humans.get(seat);
         if (s != null) s.requestConcede();
