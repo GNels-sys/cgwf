@@ -8,12 +8,14 @@ import forge.LobbyPlayer;
 import forge.StaticData;
 import forge.ai.ComputerUtilAbility;
 import forge.ai.ComputerUtilCombat;
+import forge.ai.ComputerUtil;
 import forge.ai.ComputerUtilCost;
 import forge.ai.ComputerUtilMana;
 import forge.ai.PlayerControllerAi;
 import forge.card.ColorSet;
 import forge.card.ICardFace;
 import forge.card.MagicColor;
+import forge.card.mana.ManaCost;
 import forge.game.Game;
 import forge.game.GameEntity;
 import forge.game.GameObject;
@@ -28,7 +30,9 @@ import forge.game.combat.CombatUtil;
 import forge.game.cost.Cost;
 import forge.game.cost.CostDecisionMakerBase;
 import forge.game.cost.CostPart;
+import forge.game.cost.CostPartMana;
 import forge.game.cost.CostPartWithList;
+import forge.game.mana.ManaConversionMatrix;
 import forge.game.keyword.Keyword;
 import forge.game.keyword.KeywordInterface;
 import forge.game.phase.PhaseHandler;
@@ -40,6 +44,7 @@ import forge.game.player.PlayerActionConfirmMode;
 import forge.game.replacement.ReplacementEffect;
 import forge.game.spellability.AbilitySub;
 import forge.game.spellability.OptionalCostValue;
+import forge.game.spellability.AbilityManaPart;
 import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityStackInstance;
 import forge.game.trigger.WrappedAbility;
@@ -153,6 +158,9 @@ public final class BridgeController extends PlayerControllerAi {
         }
         SpellAbility sa = legal.get(idx);
         sa.setActivatingPlayer(player);
+        // Stage 2 M5: "Pay with": the seat may name the mana sources to tap first (the rest is automatic).
+        List<Integer> sources = indices(a, "paySources");
+        setPaySources(sa.getHostCard(), sources.isEmpty() ? null : sources);
         List<SpellAbility> chosen = new ArrayList<>(1);
         chosen.add(sa);
         return chosen;
@@ -199,6 +207,100 @@ public final class BridgeController extends PlayerControllerAi {
         j.addProperty("cost", sa.getPayCosts() == null ? null : sa.getPayCosts().toSimpleString());
         j.addProperty("targets", sa.usesTargeting());
         return j;
+    }
+
+    // ------------------------------------------------------------------ mana: automatic, with "Pay with" (Stage 2 M5)
+
+    /** Card ids the seat asked to tap for the next payment of {@link #paySourcesHost}, in the order given. */
+    private List<Integer> paySources;
+    private Card paySourcesHost;
+
+    void setPaySources(Card host, List<Integer> sources) {
+        paySources = sources;
+        paySourcesHost = sources == null ? null : host;
+    }
+
+    /**
+     * Mana stays automatic (Forge's AI payer), but when the seat chose sources for this cast those are
+     * activated first, their mana goes to the pool, and the payer draws on the pool before tapping
+     * anything else. Sources that cannot pay (tapped, gone, not a mana source) are skipped; leftover
+     * mana floats in the pool like any other floating mana.
+     */
+    @Override
+    public boolean payManaCost(ManaCost toPay, CostPartMana costPartMana, SpellAbility sa, String prompt, ManaConversionMatrix matrix, boolean effect) {
+        List<Integer> sources = paySources;
+        Card host = paySourcesHost;
+        if (sources != null && !autopilot() && sa != null && sa.getHostCard() != null && host != null && sa.getHostCard().getId() == host.getId()) {
+            paySources = null;
+            paySourcesHost = null;
+            try {
+                tapChosenSources(sources, toPay);
+            } catch (RuntimeException e) {
+                session.sendError("could not tap the chosen sources: " + e.getMessage());
+            }
+        }
+        return super.payManaCost(toPay, costPartMana, sa, prompt, matrix, effect);
+    }
+
+    /** Activates one mana ability per chosen source, steering colour choices toward what the cost still needs. */
+    public void tapChosenSources(List<Integer> sources, ManaCost toPay) {
+        List<String> needColours = new ArrayList<>();
+        int generic = toPay == null ? 0 : toPay.getGenericCost();
+        if (toPay != null) {
+            for (char ch : toPay.toString().toCharArray()) {
+                if ("WUBRGC".indexOf(ch) >= 0) needColours.add(String.valueOf(ch));
+            }
+        }
+        for (int id : sources) {
+            Card c = game.findById(id);
+            if (c == null || c.getController() != player || !c.isInZone(ZoneType.Battlefield) || c.isTapped()) continue;
+            SpellAbility pick = null;
+            String pickColour = null;
+            for (SpellAbility ma : c.getManaAbilities()) {
+                ma.setActivatingPlayer(player);
+                AbilityManaPart mp = ma.getManaPart();
+                if (mp == null) continue;
+                boolean playable;
+                try { playable = ma.canPlay() && ComputerUtilCost.canPayCost(ma, player, false); } catch (RuntimeException e) { playable = false; }
+                if (!playable) continue;
+                List<String> produces = producedColours(ma, mp);
+                String match = null;
+                for (String col : produces) if (needColours.contains(col)) { match = col; break; }
+                if (pick == null) pick = ma;
+                if (match != null) { pick = ma; pickColour = match; break; }
+                if (produces.contains("any") && !needColours.isEmpty()) { pick = ma; pickColour = needColours.get(0); break; }
+            }
+            if (pick == null) continue;
+            AbilityManaPart mp = pick.getManaPart();
+            if (pickColour != null && (mp.isAnyMana() || mp.isComboMana())) mp.setExpressChoice(pickColour);
+            if (!ComputerUtil.playNoStack(player, pick, game, false)) continue;
+            if (pickColour != null) needColours.remove(pickColour);
+            else if (generic > 0) generic--;
+        }
+    }
+
+    /** The colour letters a mana ability can make ("any" for any-colour sources). */
+    public static List<String> producedColours(SpellAbility ma, AbilityManaPart mp) {
+        List<String> out = new ArrayList<>();
+        if (mp.isAnyMana()) { out.add("any"); return out; }
+        String spec = mp.isComboMana() ? mp.getComboColors(ma) : mp.getOrigProduced();
+        if (spec == null) return out;
+        for (String part : spec.split(" ")) {
+            String p = part.trim();
+            if (p.isEmpty()) continue;
+            if (p.equalsIgnoreCase("Any")) { out.add("any"); continue; }
+            String letter = switch (p.toUpperCase(Locale.ROOT)) {
+                case "W", "WHITE" -> "W";
+                case "U", "BLUE" -> "U";
+                case "B", "BLACK" -> "B";
+                case "R", "RED" -> "R";
+                case "G", "GREEN" -> "G";
+                case "C", "COLORLESS" -> "C";
+                default -> null;
+            };
+            if (letter != null && !out.contains(letter)) out.add(letter);
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ playing: Forge's human flow

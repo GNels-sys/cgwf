@@ -1,7 +1,9 @@
 package cgwf.engine;
 
 import com.google.common.collect.Multiset;
+import cgwf.engine.bridge.BridgeController;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import forge.StaticData;
 import forge.card.CardEdition;
@@ -16,6 +18,8 @@ import forge.game.mana.ManaPool;
 import forge.game.phase.PhaseHandler;
 import forge.game.phase.PhaseType;
 import forge.game.player.Player;
+import forge.game.spellability.AbilityManaPart;
+import forge.game.spellability.SpellAbility;
 import forge.game.spellability.SpellAbilityStackInstance;
 import forge.game.zone.ZoneType;
 import forge.item.IPaperCard;
@@ -140,6 +144,20 @@ public final class SeatView {
         if (c.isCommander()) j.addProperty("commander", true);
         if (c.getDamage() > 0) j.addProperty("damage", c.getDamage());
         if (c.isInZone(ZoneType.Battlefield) && c.isCreature() && c.isSick()) j.addProperty("sick", true);
+        if (c.isInZone(ZoneType.Battlefield)) {
+            // what the permanent can tap for (the "Pay with" picker): public information
+            JsonArray mana = new JsonArray();
+            for (SpellAbility ma : c.getManaAbilities()) {
+                AbilityManaPart mp = ma.getManaPart();
+                if (mp == null) continue;
+                for (String col : BridgeController.producedColours(ma, mp)) {
+                    boolean dup = false;
+                    for (JsonElement e : mana) if (e.getAsString().equals(col)) dup = true;
+                    if (!dup) mana.add(col);
+                }
+            }
+            if (mana.size() > 0) j.add("mana", mana);
+        }
         GameEntity attachedTo = c.getEntityAttachedTo();
         if (attachedTo != null) j.add("attachedTo", entityRef(attachedTo));
         Multiset<CounterType> counters = c.getCounters();

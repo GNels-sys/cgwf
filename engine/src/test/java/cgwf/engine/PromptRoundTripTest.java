@@ -13,6 +13,8 @@ import forge.game.GameEntity;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
+import forge.card.mana.ManaCost;
+import forge.card.mana.ManaCostParser;
 import forge.game.cost.Cost;
 import forge.game.player.Player;
 import forge.game.player.PlayerActionConfirmMode;
@@ -151,6 +153,44 @@ class PromptRoundTripTest {
     }
 
     private static Card hand(int i) { return me.getCardsIn(ZoneType.Hand).get(i); }
+
+    // ------------------------------------------------------------------ "Pay with" (Stage 2 M5)
+
+    @Test
+    void payWithTapsTheChosenSourcesFirstAndSkipsWhatCannotPay() {
+        // two basic lands of the human's onto the battlefield
+        List<Card> lands = new ArrayList<>();
+        for (Card c : new ArrayList<>(me.getCardsIn(ZoneType.Library))) {
+            if (!c.isBasicLand()) continue;
+            me.getZone(ZoneType.Library).remove(c);
+            me.getZone(ZoneType.Battlefield).add(c);
+            lands.add(c);
+            if (lands.size() == 2) break;
+        }
+        assertEquals(2, lands.size(), "the test deck has basic lands");
+        Card first = lands.get(0);
+        Card second = lands.get(1);
+        String colour = BridgeController.producedColours(first.getManaAbilities().get(0), first.getManaAbilities().get(0).getManaPart()).get(0);
+        me.getManaPool().clearPool(false);
+        Card oppCard = opp.getCardsIn(ZoneType.Battlefield).get(0);
+        // the opponent's permanent and an unknown id are skipped; the first land is tapped for the colour the cost needs
+        ctl.tapChosenSources(List.of(oppCard.getId(), 999_999, first.getId()), new ManaCost(new ManaCostParser("{1}{" + colour + "}")));
+        assertTrue(first.isTapped(), "the chosen land is tapped");
+        assertFalse(second.isTapped(), "the other land is untouched");
+        assertFalse(oppCard.isTapped(), "another player's permanent is never tapped");
+        assertEquals(1, me.getManaPool().totalMana(), "its mana waits in the pool for the automatic payer");
+        // a tapped source is skipped on a second request
+        ctl.tapChosenSources(List.of(first.getId()), new ManaCost(new ManaCostParser("{1}")));
+        assertEquals(1, me.getManaPool().totalMana());
+        me.getManaPool().clearPool(false);
+        first.untap();
+        // put the lands back: the final audit compares every recorded prompt view with the live library size
+        for (Card c : lands) {
+            me.getZone(ZoneType.Battlefield).remove(c);
+            me.getZone(ZoneType.Library).add(c);
+        }
+        assertTrue(prompts.isEmpty() || !lastPrompt().get("prompt").getAsString().equals("text"), "no colour question was asked");
+    }
 
     // ------------------------------------------------------------------ yes / no
 

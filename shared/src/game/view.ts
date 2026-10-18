@@ -32,7 +32,7 @@ export interface ViewCard {
   /** Library cards only: 0 = top. */
   position?: number;
   /** Engine tables only: the rules engine's current power/toughness, damage and summoning sickness. */
-  engine?: { power: number | null; toughness: number | null; damage: number; sick: boolean } | undefined;
+  engine?: { power: number | null; toughness: number | null; damage: number; sick: boolean; /** Colour letters the permanent can tap for ("any" = any colour); battlefield only. */ mana?: string[] } | undefined;
 }
 
 export interface ViewPlayer {

@@ -48,6 +48,8 @@ export interface EngineCardJson {
   commander?: boolean;
   damage?: number;
   sick?: boolean;
+  /** Colour letters the permanent can tap for ("any" for any-colour sources); battlefield only. */
+  mana?: string[];
   attachedTo?: { kind: "player" | "card"; id: number } | null;
   counters?: Record<string, number>;
   name?: string;
@@ -189,7 +191,7 @@ export function toViewCard(c: EngineCardJson, ctx: ConvertContext, printings: Ma
     modifier: null,
     anthemDismissed: false,
     public: Boolean(c.name) && kind !== "hand" && kind !== "library",
-    engine: { power: c.power ?? null, toughness: c.toughness ?? null, damage: c.damage ?? 0, sick: Boolean(c.sick) },
+    engine: { power: c.power ?? null, toughness: c.toughness ?? null, damage: c.damage ?? 0, sick: Boolean(c.sick), ...(Array.isArray(c.mana) && c.mana.length ? { mana: c.mana.map(String) } : {}) },
   };
   return out;
 }
@@ -531,6 +533,7 @@ export function toEngineAnswer(answer: EngineAnswer, ctx: ConvertContext): Recor
     out.option = answer.option === null ? null : Number(answer.option);
     if (answer.passUntilTurn !== undefined) out.passUntilTurn = Number(answer.passUntilTurn);
     if (answer.concede) out.concede = true;
+    if (Array.isArray(answer.paySources) && answer.paySources.length) out.paySources = answer.paySources.map((iid) => Number(iid)).filter((n) => Number.isFinite(n)).slice(0, 40);
   }
   return out;
 }
@@ -550,6 +553,6 @@ export function isEngineAnswer(v: unknown): v is EngineAnswer {
   if ("amounts" in a) return Array.isArray(a.amounts) && (a.amounts as unknown[]).every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0);
   if ("modes" in a) return Array.isArray(a.modes) && (a.modes as unknown[]).every((n) => typeof n === "number");
   if ("text" in a) return typeof a.text === "string" && a.text.length <= 200;
-  if ("option" in a) return a.option === null || typeof a.option === "number";
+  if ("option" in a) return (a.option === null || typeof a.option === "number") && (a.paySources === undefined || (Array.isArray(a.paySources) && (a.paySources as unknown[]).every((x) => typeof x === "string")));
   return false;
 }

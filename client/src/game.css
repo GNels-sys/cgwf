@@ -2395,3 +2395,23 @@ button.engine-row { cursor: pointer; width: 100%; }
   .corner-right { max-width: min(58vw, 260px); }
   .corner-right .stack-panel { width: min(58vw, 260px); }
 }
+
+/* ---------------------------------------------------------------- "Pay with" source picker (Stage 2 M5) */
+.pay-with { display: flex; flex-direction: column; gap: 10px; }
+.pay-with-head { display: flex; gap: 12px; align-items: flex-start; }
+.pay-with-card { flex: 0 0 auto; padding: 0; border: 0; background: none; cursor: pointer; }
+.pay-with-img { width: 72px; aspect-ratio: 63 / 88; border-radius: 4.5% / 3.5%; object-fit: cover; box-shadow: 0 4px 14px #0006; display: block; }
+.pay-with-noimg { display: inline-block; width: 72px; font-size: 0.75rem; }
+.pay-with-what { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pay-with-desc { font-size: 0.9rem; }
+.pay-with-select { max-width: 100%; font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-elev); color: var(--fg); }
+.pay-with-pips { display: inline-flex; align-items: center; gap: 6px; }
+.pay-with-sources { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; max-height: min(40dvh, 260px); overflow: auto; }
+.pay-with-source { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elev); color: var(--fg); font: inherit; text-align: left; cursor: pointer; }
+.pay-with-source.is-picked { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.pay-with-source-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem; }
+.pay-with-source-mana { display: inline-flex; gap: 2px; align-items: center; flex: none; }
+.pay-with-any { font-size: 0.7rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-muted); }
+.pay-with-order { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--bg); font-size: 0.7rem; line-height: 18px; text-align: center; font-weight: 600; }
+.pay-with-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.pay-with-actions .btn { min-height: 44px; }

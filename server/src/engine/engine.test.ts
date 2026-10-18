@@ -255,7 +255,7 @@ describe("engine tables (relay to the rules engine)", () => {
       {
         id: A, seat: 0, name: "Alex", isYou: viewer === A, human: true, life: 40, poison: 0, lost: false, handCount: 2, libraryCount: 97, landsPlayedThisTurn: 0, commanderDamage: {},
         ...(viewer === A ? { hand: [card(11, "Forest", "Hand", A), card(12, "Forest", "Hand", A)] } : {}),
-        battlefield: [card(13, "Forest", "Battlefield", A, { tapped: true })], graveyard: [], exile: [], command: [card(14, "Atraxa, Grand Unifier", "Command", A, { commander: true, power: 7, toughness: 7 })],
+        battlefield: [card(13, "Forest", "Battlefield", A, { tapped: true, mana: ["G"] })], graveyard: [], exile: [], command: [card(14, "Atraxa, Grand Unifier", "Command", A, { commander: true, power: 7, toughness: 7 })],
       },
       {
         id: B, seat: 1, name: "Blair", isYou: viewer === B, human: true, life: 40, poison: 0, lost: false, handCount: 3, libraryCount: 96, landsPlayedThisTurn: 0, commanderDamage: {},
@@ -302,6 +302,7 @@ describe("engine tables (relay to the rules engine)", () => {
     const sa = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt !== null && f.view.engine?.prompt !== undefined, ma)).view;
     expect(sa.engine?.prompt?.kind).toBe("priority");
     expect(sa.engine?.playable).toEqual(["11"]);
+    expect(Object.values(sa.players[sa.viewer!]!.battlefield).flat().find((c) => c.iid === "13")?.engine?.mana).toEqual(["G"]);
     const sb = (await blair.stateSince(mb)).view;
     expect(sb.engine?.prompt).toBeNull();
     expect(sb.engine?.waitingOn).toEqual([sa.viewer]);
@@ -315,6 +316,16 @@ describe("engine tables (relay to the rules engine)", () => {
     alex.send({ t: "engine", answer: { promptId: 7, option: 0 } });
     const answer = await engine.waitFor((f) => f.type === "answer");
     expect(answer).toMatchObject({ gameId, seat: 0, promptId: 7, option: 0 });
+    expect(answer).not.toHaveProperty("paySources");
+    // "Pay with": the chosen sources travel as Forge card ids, in the order given
+    engine.send({
+      type: "prompt", gameId, seat: 0, promptId: 70, prompt: "priority", title: "You have priority", phase: "MAIN1", myTurn: true, stackEmpty: true, stackTopMine: false,
+      options: [{ index: 0, cardId: 12, cardName: "Forest", zone: "Hand", kind: "land", description: "Play Forest", cost: null, targets: false }, { index: 1, cardId: 14, cardName: "Atraxa, Grand Unifier", zone: "Command", kind: "spell", description: "Cast Atraxa", cost: "{G}{W}{U}{B}", targets: false }],
+    });
+    await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 70, ma);
+    alex.send({ t: "engine", answer: { promptId: 70, option: 1, paySources: ["13", "x", "11"] } });
+    const paid = await engine.waitFor((f) => f.type === "answer" && f.promptId === 70);
+    expect(paid).toMatchObject({ seat: 0, option: 1, paySources: [13, 11] });
     // and the answer is on the room's event log
     const events = ctx.roomsManager.get(code)!.currentState() === null ? "engine" : "classic";
     expect(events).toBe("engine");
