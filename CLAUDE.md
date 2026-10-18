@@ -1072,6 +1072,20 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   The owner's "two lands in a turn" came from a Casual table (FHWK6D), where nothing is enforced;
   the Play page now asks "Rules engine (beta)" vs "Casual (no rules)" explicitly, the recent-table
   list and the lobby name the kind, and the phase strip shows a "Casual" tag on classic tables.
+- **Planeswalkers and the human's own triggers (2026-10-18).** Loyalty limits are Forge's, per card:
+  `SpellAbilityRestriction` compares that walker's `getPlaneswalkerAbilityActivated()` with 1 (2 under
+  `NumLoyaltyAct` statics such as Oath of Teferi; The Chain Veil adds more), and the priority list is
+  rebuilt from Forge's live playable abilities at every priority, so two walkers activate once each
+  and a blinked walker (a new object, printed loyalty) activates again. The owner's last game log
+  shows two walkers activating in the same turn (VUMT2D turns 20, 22, 24). The real defect found
+  while reproducing: the bridge inherited Forge's AI `orderAndPlaySimultaneousSa`, so Forge's AI
+  chose the TARGETS and modes of the human's own triggered abilities (Displacer Kitten blinked
+  whatever the AI picked). `BridgeController.orderAndPlaySimultaneousSa` now plays each of the
+  seat's triggers through Forge's human flow (`PlaySpellAbility.playSpellAbility`, as Forge's own
+  human controller does), so targets, modes, X and costs reach the human; copies of spells keep
+  Forge's handling. Test: `PlaneswalkerTest` (a real game through Forge's priority loop: Ajani +
+  Garruk once each, Mox Opal under Displacer Kitten with the human choosing the target, the blinked
+  Ajani again at 4 loyalty, Oath of Teferi allowing one more, never a third).
 - **Rounds (2026-10-18).** Forge's game turn stays the source of truth. A round is one pass around
   the table starting with the player who took turn 1: a new round begins when the turn goes to a
   player who sits earlier in Forge's player order (counted from that first player) than whoever had

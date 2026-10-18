@@ -861,6 +861,28 @@ public final class BridgeController extends PlayerControllerAi {
         return out;
     }
 
+    /**
+     * This seat's triggered abilities going on the stack. The inherited AI version let Forge's AI pick their
+     * targets and modes (brains.doTrigger): Displacer Kitten's "exile up to one target nonland permanent you
+     * control" was chosen for the human. Triggers now go through Forge's human play flow (the one Forge's own
+     * human controller uses), so targets, modes, X and costs are asked through this controller; copies of
+     * spells and anything else keep Forge's AI handling. Same direction as the AI loop: the first of the
+     * ordered list goes on the stack first (orderSimultaneousSa already accounts for that).
+     */
+    @Override
+    public void orderAndPlaySimultaneousSa(List<SpellAbility> activePlayerSAs) {
+        if (autopilot()) { super.orderAndPlaySimultaneousSa(activePlayerSAs); return; }
+        for (SpellAbility sa : orderSimultaneousSa(activePlayerSAs)) {
+            if (sa.isTrigger() && !sa.isCopied()) {
+                PlaySpellAbility.playSpellAbility(this, player, sa);
+            } else {
+                List<SpellAbility> one = new ArrayList<>(1);
+                one.add(sa);
+                super.orderAndPlaySimultaneousSa(one); // a single item: no ordering question, Forge's handling of copies
+            }
+        }
+    }
+
     /** Opening-hand actions the seat picked and Forge has not played yet (Forge skips any whose card left the hand). */
     private final java.util.Set<SpellAbility> openingHandPicks = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
 
