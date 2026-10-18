@@ -84,6 +84,9 @@ public final class BridgeController extends PlayerControllerAi {
 
     boolean autopilot() { return session.isAbsent(); }
 
+    /** CGWF_DEBUG_PRIORITY=1 prints every priority decision (stops, legal plays) to stderr: for chasing "it never asked me". */
+    private static final boolean DEBUG_PRIORITY = "1".equals(System.getenv("CGWF_DEBUG_PRIORITY"));
+
     private JsonObject prompt(String kind, String title) {
         JsonObject p = new JsonObject();
         p.addProperty("prompt", kind);
@@ -114,11 +117,12 @@ public final class BridgeController extends PlayerControllerAi {
             SpellAbilityStackInstance top = stack.peek();
             stackTopNotMine = top == null || top.getActivatingPlayer() != player;
         }
-        if (!session.stopsAt(phase == null ? "" : phase.name(), ph.isPlayerTurn(player), stackTopNotMine, ph.getTurn())) {
-            return null; // auto-pass
-        }
+        boolean stop = session.stopsAt(phase == null ? "" : phase.name(), ph.isPlayerTurn(player), stackTopNotMine, ph.getTurn());
+        if (DEBUG_PRIORITY) System.err.println("[priority] seat=" + session.seat() + " turn=" + ph.getTurn() + " phase=" + phase + " myTurn=" + ph.isPlayerTurn(player) + " stackTopNotMine=" + stackTopNotMine + " stop=" + stop + " stops=" + session.stops().toJson());
+        if (!stop) return null; // auto-pass
 
         List<SpellAbility> legal = legalAbilities();
+        if (DEBUG_PRIORITY) System.err.println("[priority] seat=" + session.seat() + " legal=" + legal.size() + " autoPassEmpty=" + session.autoPassesEmpty(ph.getTurn()));
         // Nothing to play or activate: pass without asking (Arena-style), unless the seat holds this turn.
         if (legal.isEmpty() && session.autoPassesEmpty(ph.getTurn())) return null;
         JsonObject p = prompt("priority", "You have priority");
@@ -169,10 +173,13 @@ public final class BridgeController extends PlayerControllerAi {
             boolean ok;
             try {
                 sa.setActivatingPlayer(player);
-                ok = sa.canPlay()
-                        && ComputerUtilCost.canPayCost(sa, player, false)
-                        && (!sa.usesTargeting() || sa.getMinTargets() == 0 || !targetCandidates(sa).isEmpty());
+                boolean canPlay = sa.canPlay();
+                boolean canPay = canPlay && ComputerUtilCost.canPayCost(sa, player, false);
+                boolean hasTargets = canPay && (!sa.usesTargeting() || sa.getMinTargets() == 0 || !targetCandidates(sa).isEmpty());
+                ok = canPlay && canPay && hasTargets;
+                if (DEBUG_PRIORITY && host.isInZone(ZoneType.Hand)) System.err.println("[priority]   " + host.getName() + ": canPlay=" + canPlay + " canPay=" + canPay + " targets=" + hasTargets);
             } catch (RuntimeException e) {
+                if (DEBUG_PRIORITY) System.err.println("[priority]   " + host.getName() + ": " + e);
                 ok = false;
             }
             if (ok) out.add(sa);

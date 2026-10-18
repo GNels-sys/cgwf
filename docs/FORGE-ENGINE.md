@@ -7,7 +7,10 @@ live; Stage 1 is complete. Stage 2 M1 (2026-10-18) wired the remaining common pr
 (section 3.3: confirm incl. unless-costs and optional triggers, number, order, assign, mode, text,
 spell targets, cost card choices) and moved casting onto Forge's own human play flow; mana payment
 stays automatic until the owner picks a manual-mana design. Stage 2 M2 put the stack on screen
-(stack items carry kind, printing and targets; Stack panel + Interaction Stack window). This document is the plan;
+(stack items carry kind, printing and targets; Stack panel + Interaction Stack window), M3 made
+the step dots stop toggles with auto-pass-when-nothing and a one-turn Hold, and M4 added the
+Active Board overlay (left edge, follows the turn) and the Game Log panel (right third, tappable
+card names, toasts when minimised). Manual mana (owner's option 1) is M5. This document is the plan;
 where the code differs from the plan the code wins and CLAUDE.md "Rules engine tables" describes
 it. The spike's measurements and go/no-go are in [`engine/README.md`](../engine/README.md).
 

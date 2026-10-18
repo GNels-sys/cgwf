@@ -21,7 +21,7 @@ import type { RoomMemberRow, RoomRow } from "../db/schema.js";
 import type { EngineClient, EngineFrame } from "../engine/client.js";
 import { deckForEngine } from "../engine/deck.js";
 import type { PrintingMapper } from "../engine/mapping.js";
-import { engineToView, toEngineAnswer, toEnginePrompt, type ConvertContext, type EngineCardJson, type EngineStateJson, type SeatInfo } from "../engine/view.js";
+import { cleanEngineText, engineToView, toEngineAnswer, toEnginePrompt, type ConvertContext, type EngineCardJson, type EngineStateJson, type SeatInfo } from "../engine/view.js";
 import { loadSettings, saveEngineStops } from "../settings.js";
 
 /**
@@ -100,7 +100,7 @@ export class EngineTable {
       }
     }
     for (const ev of this.room.loadedEvents()) {
-      if (ev.type === "EngineLog") this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text: ev.payload.text, ts: ev.ts });
+      if (ev.type === "EngineLog") this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text: cleanEngineText(ev.payload.text), ts: ev.ts });
     }
     this.seq = this.room.loadedEvents().length;
     // Loaded mid-game (the relay restarted, or the room was evicted while the engine kept playing): the
@@ -206,7 +206,7 @@ export class EngineTable {
         break;
       }
       case "log": {
-        const text = String(frame.text ?? "");
+        const text = cleanEngineText(String(frame.text ?? "")); // Forge names cards with internal ids: "Shock (108)"
         const ev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineLog", payload: { engineSeq: Number(frame.seq ?? 0), turn: Number(frame.turn ?? 0), logType: String(frame.logType ?? ""), text } });
         this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text, ts: ev.ts });
         this.seq = ev.seq;
