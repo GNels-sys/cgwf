@@ -86,7 +86,7 @@ Frames between CGwF and a browser carry no `gameId` (the room socket already sco
 | --- | --- |
 | `state` | the per-seat view (4) |
 | `prompt` | `promptId`, `prompt` (kind, 3.3), `title`, `view`, kind-specific fields; exactly one open prompt per seat at a time |
-| `notice` | `kind: reveal \| message \| error`, `text`, `cards?` (3.4) |
+| `notice` | `kind: reveal \| info`, `title`, `text?`, `cards[]` (identities revealed to this seat), `source[]?`; no answer expected (built 2026-10-18, 16.3) |
 | `log` | `seq`, `turn`, `type`, `text`, `cardIds?` (all seats; 8) |
 | `gameOver` | `winner`, `endReason`, final `view` (all seats) |
 | `error` | `message`, `promptId?` |
@@ -367,7 +367,7 @@ Verdicts: **(a)** route to the human with an existing prompt kind; **(b)** route
 decides it without asking); **(d)** deliberately left to Forge's AI, with the reason. "How often" is for a
 four-player Commander game.
 
-**Counts (the 79 inherited at the start):** (a) 19, all routed in this audit; (b) 3, pending (batch 2);
+**Counts (the 79 inherited at the start):** (a) 19, routed in the first PR (#14); (b) 3, routed in the second as per-seat notices;
 (c) 50; (d) 7. Three more AI fallbacks were found inside methods the bridge already overrode and are fixed
 too (second table).
 
@@ -418,16 +418,23 @@ the AI only for hidden cards (two Forge cards, Mind Spike-style "you choose" wit
 put hidden identities into a prompt. `chooseColorAllowColorless` with one colour, `orderMoveToZoneList` for
 zones where order is meaningless, and a mode answer illegal three times are AI or automatic by design.
 
-### 16.3 New message kind needed (b): batch 2
+### 16.3 New message kind (b): per-seat notices (second PR)
 
-| Method | Decision | How often | Human reference | Plan |
+| Method | What Forge shows | How often | Human reference | Now |
 | --- | --- | --- | --- | --- |
-| `reveal(CardCollectionView, ZoneType, Player, String, boolean)` | Cards revealed to this seat (tutors that reveal, "reveal the top card", an opponent's revealed hand) | Common | dialog showing the cards | per-seat notice frame with the cards, shown as a dismissable sheet |
+| `reveal(CardCollectionView, ZoneType, Player, String, boolean)` | Cards revealed to this seat: an opponent's hand (Gitaxian Probe, Thoughtseize), a tutored card, "reveal the top card", the rest of a dig | Common | dialog showing the cards | `notice` frame, kind `reveal`, with the cards |
 | `reveal(List<CardView>, ...)` | The same, by card views | Common | dialog | same notice |
-| `notifyOfValue` | Forge tells the seat a value (chosen colour, number, vote, "X chose Y") | Common | message box | same notice, text only |
+| `notifyOfValue` | A value Forge announces: chosen colour, number, creature type, vote, coin flip ("Blair chose blue") | Common | message box (mana abilities only logged) | `notice` frame, kind `info`, with the source card; skipped for mana abilities as Forge's human does |
 
-None of these is a decision (the AI version only skips showing them), but the human seat currently learns
-some of it only from the log.
+None of these is a decision: the AI version only skipped showing them, so a human seat learned some of it
+only from the log, and never saw an opponent's revealed hand. The engine sends `{type: "notice", kind,
+title, text?, cards[], source[]}` for that seat only (fire and forget, no promptId, nothing persisted). The
+identities are exactly what Forge reveals to that player, so carrying them is not a leak. The relay resolves
+printings and sends `{t: "notice", notice: EngineNotice, printings}` to that player's sockets only (never
+another seat, never spectators); the client shows them top right under the Stack panel (`Notices.tsx`):
+revealed cards stay until dismissed, text-only notices fade after 8 s, the newest two show. Tests:
+`PromptRoundTripTest.inheritedRevealsAndAnnouncedValuesReachTheSeatAsNotices`, relay "delivers a notice ...
+to that seat only".
 
 ### 16.4 Legitimately automatic (c)
 

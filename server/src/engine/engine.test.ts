@@ -331,6 +331,28 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(events).toBe("engine");
   });
 
+  it("delivers a notice (cards revealed to a seat, a value Forge announces) to that seat only, with printings", async () => {
+    const gameId = ctx.roomsManager.get(code)!.id;
+    const ma = alex.mark();
+    const mb = blair.mark();
+    engine.send({ type: "notice", gameId, seat: 0, kind: "reveal", title: "Revealed: Blair's hand", cards: [card(40, "Forest", "Hand", pid[1]!, { set: "M21", scryfallSet: "m21", number: "274" })] });
+    engine.send({ type: "notice", gameId, seat: 0, kind: "info", title: "Utopia Sprawl", text: "Blair picked Green (108)", source: [card(41, "Forest", "Battlefield", pid[1]!)] });
+    const reveal = await alex.waitFor((f): f is Extract<ServerMessage, { t: "notice" }> => f.t === "notice" && f.notice.kind === "reveal", ma);
+    expect(reveal.notice.title).toBe("Revealed: Blair's hand");
+    expect(reveal.notice.cards[0]!.name).toBe("Forest");
+    const pr = reveal.notice.cards[0]!.printingId;
+    expect(pr).toBeTruthy();
+    expect(reveal.printings[pr!]?.name).toBe("Forest");
+    const info = await alex.waitFor((f): f is Extract<ServerMessage, { t: "notice" }> => f.t === "notice" && f.notice.kind === "info", ma);
+    expect(info.notice.text).toBe("Blair picked Green"); // Forge's internal ids are stripped
+    expect(info.notice.source?.name).toBe("Forest");
+    // the other seat never sees it, and spectator / unknown seats are dropped
+    engine.send({ type: "notice", gameId, seat: -1, kind: "reveal", title: "nobody", cards: [] });
+    await new Promise((r) => setTimeout(r, 250));
+    expect(blair.frames.slice(mb).some((f) => f.t === "notice")).toBe(false);
+    expect(alex.frames.slice(ma).filter((f) => f.t === "notice")).toHaveLength(2);
+  });
+
   it("maps attack answers back to Forge ids and refuses classic events on an engine table", async () => {
     const gameId = ctx.roomsManager.get(code)!.id;
     const ma = alex.mark();

@@ -196,3 +196,18 @@ export interface EngineDeckProblem {
   deckName: string;
   problems: string[];
 }
+
+/**
+ * Something Forge shows one player without asking (engine tables only, never persisted, never sent to
+ * anyone else): cards revealed to that player ("reveal"), or a value Forge announces such as a chosen
+ * colour, number or vote ("info"). `cards` carry identities because Forge revealed them to this player.
+ */
+export interface EngineNotice {
+  id: number;
+  kind: "reveal" | "info";
+  title: string;
+  text: string | null;
+  cards: Array<{ name: string; printingId: string | null }>;
+  /** The card whose ability produced an "info" notice, when there is one. */
+  source: { name: string; printingId: string | null } | null;
+}

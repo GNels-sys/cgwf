@@ -64,6 +64,7 @@ class PromptRoundTripTest {
     private static final Deque<Function<JsonObject, JsonObject>> script = new ArrayDeque<>();
     private static final List<JsonObject> prompts = new ArrayList<>();
     private static final List<JsonObject> errors = new ArrayList<>();
+    private static final List<JsonObject> notices = new ArrayList<>();
     /** Hidden-information problems found in each prompt's view, checked against the live game when the prompt went out. */
     private static final List<String> viewLeaks = new ArrayList<>();
 
@@ -91,6 +92,8 @@ class PromptRoundTripTest {
                 session.answer(answer); // the game thread is inside ask(): completing the future there is fine
             } else if (type.equals("error")) {
                 errors.add(frame);
+            } else if (type.equals("notice")) {
+                notices.add(frame);
             }
         });
         List<GameFactory.Seat> seats = new ArrayList<>();
@@ -799,6 +802,32 @@ class PromptRoundTripTest {
                     StaticData.instance().getCommonCards().getFaceByName("Forest"));
             script.add(p -> answer("option", 1));
             assertEquals("Forest", ctl.chooseSingleCardFace(sa, faces, "Choose a dungeon").getName());
+        } finally { drop(bolt); }
+    }
+
+    @Test
+    void inheritedRevealsAndAnnouncedValuesReachTheSeatAsNotices() {
+        Card oppCard = opp.getCardsIn(ZoneType.Battlefield).get(0);
+        int before = notices.size();
+        // through Forge's own path: revealed to every player but the owner, so this seat gets it
+        game.getAction().reveal(new CardCollection(oppCard), opp);
+        assertEquals(before + 1, notices.size(), "a reveal reaches the human seat as a notice (Forge's AI ignored it)");
+        JsonObject n = notices.get(notices.size() - 1);
+        assertEquals("reveal", n.get("kind").getAsString());
+        assertTrue(n.get("title").getAsString().contains(opp.getName()), n.toString());
+        assertEquals(oppCard.getName(), n.getAsJsonArray("cards").get(0).getAsJsonObject().get("name").getAsString());
+        assertFalse(n.has("prompt"), "a notice asks nothing");
+        // an empty reveal says so
+        ctl.reveal(new CardCollection(), ZoneType.Hand, opp, null, true);
+        assertTrue(notices.get(notices.size() - 1).get("text").getAsString().startsWith("There are no cards"));
+        // a value Forge announces
+        Card bolt = fresh("Lightning Bolt", ZoneType.Hand);
+        try {
+            ctl.notifyOfValue(bolt.getFirstSpellAbility(), opp, "Blue");
+            JsonObject v = notices.get(notices.size() - 1);
+            assertEquals("info", v.get("kind").getAsString());
+            assertTrue(v.get("text").getAsString().contains("Blue"), v.toString());
+            assertEquals("Lightning Bolt", v.getAsJsonArray("source").get(0).getAsJsonObject().get("name").getAsString());
         } finally { drop(bolt); }
     }
 

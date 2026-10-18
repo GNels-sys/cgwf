@@ -7,6 +7,7 @@ import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK
 import { EnginePromptSheet, SHEET_PROMPT_KINDS, PayWithSheet } from "./EnginePrompts";
 import { InteractionStack, StackPanel, isInteraction } from "./StackPanel";
 import { ActiveBoard, EdgeTab, GameLog, LogToasts, printingAsCard } from "./Overlays";
+import { EngineNotices } from "./Notices";
 import { INITIAL_PANELS, isLandscapeNow, panelsReducer } from "./sidePanels";
 import { installLayoutCheck } from "./layoutCheck";
 import { StopsPanel, toggleStop } from "./StopsPanel";
@@ -673,6 +674,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
         <div className={`table-mid mat ${myMat.className}${mode ? " is-picking" : ""}${engineMode ? " side-panels" : ""}${engineMode && boardOpen ? " has-board" : ""}${engineMode && logOpen ? " has-log" : ""}`} style={myMat.style}>
           {engineMode && (
             <div className="corner-right">
+              {engineMode && sock.notices.length > 0 && (
+                <EngineNotices notices={sock.notices} printings={printings} onDismiss={sock.dismissNotice} onCard={(p) => setZoom(printingAsCard(p, me ?? view.turnOrder[0] ?? ""))} />
+              )}
               {view.stack.length > 0 && <StackPanel stack={view.stack} view={view} printings={printings} members={room.members} onZoom={holdCard} chain={chain} onOpenChain={() => setChainMin(false)} />}
               <LogToasts log={view.log} active={!logOpen} printings={printings} onCard={(p) => setZoom(printingAsCard(p, me ?? view.turnOrder[0] ?? ""))} />
             </div>

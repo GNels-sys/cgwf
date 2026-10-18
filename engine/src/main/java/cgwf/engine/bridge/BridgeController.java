@@ -1582,6 +1582,76 @@ public final class BridgeController extends PlayerControllerAi {
         return out;
     }
 
+    // ------------------------------------------------------------------ notices: what Forge shows a human without asking
+
+    /**
+     * Cards revealed TO this seat (an opponent's hand after Gitaxian Probe, a tutored card, "reveal the top
+     * card", the other cards of a dig). Forge's desktop human sees them in a dialog; here they go out as a
+     * fire-and-forget `notice` frame for this seat only (the relay delivers it to that player's sockets). The
+     * identities are exactly what Forge reveals to this player, so carrying them is not a leak.
+     */
+    @Override
+    public void reveal(CardCollectionView cards, ZoneType zone, Player owner, String messagePrefix, boolean addMsgSuffix) {
+        super.reveal(cards, zone, owner, messagePrefix, addMsgSuffix); // the AI's memory, harmless
+        if (autopilot() || cards == null) return;
+        String where = zoneLabel(owner, zone);
+        String title;
+        if (messagePrefix == null || messagePrefix.isBlank()) title = cards.isEmpty() ? "No cards in " + where : "Revealed: " + where;
+        else title = messagePrefix.trim() + (addMsgSuffix ? " " + where : ""); // as Forge's human: "Revealing face-down cards from Blair's exile"
+        JsonObject n = notice("reveal", title);
+        if (cards.isEmpty()) n.addProperty("text", "There are no cards in " + where + ".");
+        JsonArray cj = new JsonArray();
+        for (Card c : cards) {
+            JsonObject j = SeatView.card(c, player);
+            if (!j.has("name") || j.get("name").isJsonNull()) SeatView.addIdentity(j, c);
+            cj.add(j);
+        }
+        n.add("cards", cj);
+        session.send(n);
+    }
+
+    @Override
+    public void reveal(List<forge.game.card.CardView> cards, ZoneType zone, forge.game.player.PlayerView owner, String messagePrefix, boolean addMsgSuffix) {
+        CardCollection list = new CardCollection();
+        if (cards != null) for (forge.game.card.CardView cv : cards) { Card c = game.findByView(cv); if (c != null) list.add(c); }
+        Player p = owner == null ? null : game.getPlayer(owner);
+        reveal(list, zone, p, messagePrefix, addMsgSuffix);
+    }
+
+    /** Forge tells this player a value: a chosen colour, number, creature type, a vote, a coin flip. */
+    @Override
+    public void notifyOfValue(SpellAbility sa, GameObject relatedTarget, String value) {
+        super.notifyOfValue(sa, relatedTarget, value);
+        if (autopilot() || value == null || value.isBlank()) return;
+        if (sa != null && sa.isManaAbility()) return; // Forge's human only logs these
+        String text = forge.util.MessageUtil.formatNotificationMessage(sa, player, relatedTarget, value);
+        JsonObject n = notice("info", sa != null && sa.getHostCard() != null ? sa.getHostCard().getName() : "Note");
+        n.addProperty("text", text);
+        if (sa != null && sa.getHostCard() != null) {
+            Card host = sa.getHostCard();
+            JsonObject j = SeatView.card(host, player);
+            if (!j.has("name") || j.get("name").isJsonNull()) SeatView.addIdentity(j, host); // the message names it anyway
+            JsonArray cj = new JsonArray();
+            cj.add(j);
+            n.add("source", cj);
+        }
+        session.send(n);
+    }
+
+    private JsonObject notice(String kind, String title) {
+        JsonObject n = new JsonObject();
+        n.addProperty("type", "notice");
+        n.addProperty("kind", kind);
+        n.addProperty("title", title);
+        return n;
+    }
+
+    private String zoneLabel(Player owner, ZoneType zone) {
+        String z = zone == null ? "cards" : zone.name().toLowerCase(Locale.ROOT);
+        if (owner == null) return z;
+        return owner == player ? "your " + z : owner.getName() + "'s " + z;
+    }
+
     // ------------------------------------------------------------------ the generic prompts
 
     /** Yes/no. Returns null when nobody answered (caller falls back to the AI). */
