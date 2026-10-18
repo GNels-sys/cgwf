@@ -124,6 +124,8 @@ class PregameTest {
                     a.add("promptId", p.get("promptId"));
                     human.answer(a);
                 }
+            } catch (InterruptedException stop) {
+                // the game is over and the test stopped this thread: the normal way out
             } catch (Throwable t) {
                 failure.set(t);
             }
@@ -132,6 +134,7 @@ class PregameTest {
         answerer.start();
         created.match().startGame(run.game);
         answerer.interrupt();
+        answerer.join(10_000); // read `failure` only once the thread has finished
         if (failure.get() != null) throw new AssertionError(failure.get());
         if (!run.snapshotTaken) snapshot(run);
         return run;

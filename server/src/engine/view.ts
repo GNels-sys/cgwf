@@ -169,6 +169,13 @@ function zoneKind(zone: string | null | undefined): ViewCard["zone"]["kind"] {
   }
 }
 
+/** Where an option card is, in words for the choice list (Forge's sideboard holds a companion: outside the game). */
+function optionZone(zone: string | null | undefined): string {
+  if (zone === "Sideboard") return "outside the game";
+  if (zone === "Stack") return "stack";
+  return zoneKind(zone);
+}
+
 export function toViewCard(c: EngineCardJson, ctx: ConvertContext, printings: Map<string, CardPrinting>): ViewCard {
   const printing = c.name ? ctx.printingOf(c) : null;
   if (printing) printings.set(printing.id, printing);
@@ -355,7 +362,7 @@ function toOptionCard(c: EngineCardJson, ctx: ConvertContext): EngineOptionCard 
     iid: String(c.id),
     name: c.name ?? "Card",
     printingId: printing?.id ?? null,
-    zone: zoneKind(c.zone),
+    zone: optionZone(c.zone),
     controller: userOf(ctx.seats, c.controller),
     owner: userOf(ctx.seats, c.owner),
     tapped: Boolean(c.tapped),
