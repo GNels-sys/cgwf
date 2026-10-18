@@ -91,7 +91,7 @@ export interface EnginePlayable {
 }
 
 export type EnginePrompt =
-  | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean }
+  | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean; holding: boolean }
   | { kind: "targets"; promptId: number; title: string; ability: string; source: string | null; min: number; max: number; options: EngineOption[] }
   | { kind: "attackers"; promptId: number; title: string; candidates: EngineOptionCard[]; defenders: EngineEntityRef[] }
   | { kind: "blockers"; promptId: number; title: string; attackers: EngineOptionCard[]; blockers: EngineOptionCard[] }
@@ -135,13 +135,24 @@ export interface EngineStops {
   theirTurn: EnginePhase[];
   /** Always stop when the top of the stack is someone else's. */
   respond: boolean;
+  /**
+   * Pass automatically whenever priority comes with nothing to play or activate (no land to play
+   * at sorcery speed, no castable spell, no activatable ability with the mana available). Saves a
+   * tap at every stop; the trade-off is that an instant pass can tell the table your hand holds
+   * nothing you can use right now, as on Arena. "Hold priority this turn" overrides it for a turn.
+   */
+  autoPassEmpty: boolean;
 }
 
 export const DEFAULT_ENGINE_STOPS: EngineStops = {
   myTurn: ["MAIN1", "COMBAT_DECLARE_ATTACKERS", "MAIN2", "END_OF_TURN"],
   theirTurn: ["END_OF_TURN"],
   respond: true,
+  autoPassEmpty: true,
 };
+
+/** Steps a seat can stop at (untap and cleanup never give priority), in turn order, for the toggles row. */
+export const STOPPABLE_PHASES: EnginePhase[] = ["UPKEEP", "DRAW", "MAIN1", "COMBAT_BEGIN", "COMBAT_DECLARE_ATTACKERS", "COMBAT_DECLARE_BLOCKERS", "COMBAT_DAMAGE", "COMBAT_END", "MAIN2", "END_OF_TURN"];
 
 /** What a stack item looks like in an engine game (the classic StackItem shape, plus who is waiting). */
 export interface EngineInfo {
@@ -154,6 +165,8 @@ export interface EngineInfo {
   /** Cards that could be played right now (from the open priority prompt), for highlighting. */
   playable: string[];
   stops: EngineStops;
+  /** The turn number this seat is holding priority for (every priority stops, nothing auto-passes), or null. */
+  holdTurn: number | null;
   /** True while the relay has lost the engine (the table shows "reconnecting to the rules engine"). */
   engineDown: boolean;
 }

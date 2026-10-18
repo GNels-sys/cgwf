@@ -6,7 +6,7 @@ import { isOut, type EngineAnswer, type EngineOption, type PlayerView, type Room
 import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
 import { EnginePromptSheet, SHEET_PROMPT_KINDS } from "./EnginePrompts";
 import { InteractionStack, StackPanel, isInteraction } from "./StackPanel";
-import { StopsPanel } from "./StopsPanel";
+import { StopsPanel, toggleStop } from "./StopsPanel";
 import { Avatar } from "../components/Avatar";
 import { useSettings } from "../settings";
 import { anthemActions, cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
@@ -580,6 +580,16 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           onConfirmWin={confirmWin}
           busy={mode !== null || prompt !== null}
           engine={engine}
+          onToggleStop={
+            engine
+              ? (phase, mine) => {
+                  const stops = toggleStop(engine.stops, phase, mine);
+                  sock.send({ t: "stops", stops });
+                  updateSettings({ engineStops: stops });
+                }
+              : undefined
+          }
+          onHold={engine ? (turn) => sock.send({ t: "hold", turn }) : undefined}
         >
           {engineMode && prompt && me && mePlayer && (
             <EngineBar prompt={prompt} view={view} printings={printings} members={room.members} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} openList={() => setSheet(SHEET_PROMPT_KINDS.has(prompt.kind) ? { kind: "enginePrompt" } : { kind: "engineList" })} />

@@ -119,6 +119,8 @@ public final class BridgeController extends PlayerControllerAi {
         }
 
         List<SpellAbility> legal = legalAbilities();
+        // Nothing to play or activate: pass without asking (Arena-style), unless the seat holds this turn.
+        if (legal.isEmpty() && session.autoPassesEmpty(ph.getTurn())) return null;
         JsonObject p = prompt("priority", "You have priority");
         JsonArray opts = new JsonArray();
         for (int i = 0; i < legal.size(); i++) opts.add(abilityJson(i, legal.get(i)));
@@ -127,6 +129,7 @@ public final class BridgeController extends PlayerControllerAi {
         p.addProperty("myTurn", ph.isPlayerTurn(player));
         p.addProperty("stackEmpty", stack.isEmpty());
         p.addProperty("stackTopMine", !stack.isEmpty() && !stackTopNotMine);
+        p.addProperty("holding", session.holding(ph.getTurn()));
 
         JsonObject a = session.ask(p);
         if (a == null) return super.chooseSpellAbilityToPlay();

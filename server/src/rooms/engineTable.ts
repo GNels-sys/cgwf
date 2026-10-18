@@ -68,6 +68,8 @@ export class EngineTable {
   private readonly lastState = new Map<number, EngineStateJson>();
   private readonly prompts = new Map<number, { raw: Record<string, unknown>; prompt: EnginePrompt }>();
   private readonly stops = new Map<number, EngineStops>();
+  /** Seats holding priority this turn (turn number), cleared when the engine reports a later turn. */
+  private readonly holds = new Map<number, number>();
   private log: LogEntry[] = [];
   private seq = 0;
   private loaded = false;
@@ -183,6 +185,8 @@ export class EngineTable {
       case "state": {
         this.seq++;
         this.lastState.set(seat, frame as unknown as EngineStateJson);
+        const turn = (frame as unknown as EngineStateJson).turn;
+        for (const [s, held] of this.holds) if (typeof turn === "number" && turn > held) this.holds.delete(s);
         // A fresh state for a seat means its earlier prompt view is stale, not its prompt.
         this.sendSeat(seat);
         if (this.mapper.entries().length !== this.cardsPersisted) this.persist();
@@ -266,6 +270,7 @@ export class EngineTable {
     const open = this.prompts.get(seat);
     if (!open || open.prompt.promptId !== answer.promptId) throw new EngineRoomError("that prompt is no longer open");
     const out = toEngineAnswer(answer, this.ctx(userId));
+    if ("passUntilTurn" in answer && answer.passUntilTurn !== undefined) this.holds.delete(seat); // "End turn" releases a hold (the engine does the same)
     this.client.send({ type: "answer", gameId: this.room.id, seat, ...out });
     this.prompts.delete(seat);
     this.room.appendEngine(userId, { type: "EngineAnswer", payload: { seat, promptId: answer.promptId, prompt: open.prompt.kind, answer: out } });
@@ -281,10 +286,22 @@ export class EngineTable {
       myTurn: (Array.isArray(stops.myTurn) ? stops.myTurn : []).filter((p): p is EnginePhase => (ENGINE_PHASES as readonly string[]).includes(p)),
       theirTurn: (Array.isArray(stops.theirTurn) ? stops.theirTurn : []).filter((p): p is EnginePhase => (ENGINE_PHASES as readonly string[]).includes(p)),
       respond: stops.respond !== false,
+      autoPassEmpty: stops.autoPassEmpty !== false,
     };
     this.stops.set(seat, clean);
     this.client.trySend({ type: "setStops", gameId: this.room.id, seat, stops: clean });
     saveEngineStops(this.room.handle, userId, clean);
+    this.sendSeat(seat);
+  }
+
+  /** Hold priority for the rest of a turn (every priority stops, nothing auto-passes); null releases. */
+  hold(userId: string, turn: number | null): void {
+    this.ensureLoaded();
+    const seat = this.seatOf(userId);
+    if (seat === null) throw new EngineRoomError("spectators have no priority");
+    if (turn === null || !Number.isFinite(turn) || turn <= 0) this.holds.delete(seat);
+    else this.holds.set(seat, Math.floor(turn));
+    this.client.trySend({ type: "hold", gameId: this.room.id, seat, turn: this.holds.get(seat) ?? null });
     this.sendSeat(seat);
   }
 
@@ -397,6 +414,7 @@ export class EngineTable {
         waitingOn,
         playable,
         stops: (seat === null ? undefined : this.stops.get(seat)) ?? DEFAULT_ENGINE_STOPS,
+        holdTurn: (seat === null ? undefined : this.holds.get(seat)) ?? null,
         engineDown: this.engineDown,
       },
     };

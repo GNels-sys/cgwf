@@ -69,6 +69,8 @@ export type ClientMessage =
   | { t: "engine"; answer: EngineAnswer; cid?: string }
   /** Engine tables: change this seat's auto-pass stops. */
   | { t: "stops"; stops: EngineStops }
+  /** Engine tables: hold priority for this turn (every priority stops, nothing auto-passes); null releases. */
+  | { t: "hold"; turn: number | null }
   /** Concede (any table); on engine tables the engine records it at the seat's next decision. */
   | { t: "concede" }
   | { t: "ping" };

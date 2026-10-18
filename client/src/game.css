@@ -2343,3 +2343,13 @@ button.engine-row { cursor: pointer; width: 100%; }
 @media (orientation: portrait) {
   .stack-panel { width: min(58vw, 260px); }
 }
+
+/* ---------------------------------------------------------------- Stops row + hold (Stage 2 M3) */
+.phase-step.has-stop .phase-dot { border-color: var(--accent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
+.phase-step.has-stop:not(.is-current) { color: var(--fg); }
+.phase-hold.is-on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.stops-row { margin-bottom: 10px; }
+.stops-row-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.stops-row-head strong { font: 500 1rem var(--font-display); }
+.stops-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.stop-chip { min-height: 36px; }

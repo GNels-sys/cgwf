@@ -1001,6 +1001,17 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   are sent to the engine for every seat right after `createGame`, and the table's Menu -> Stops
   panel changes them for the game AND saves them (`{t:"stops"}` -> `saveEngineStops`). "End turn"
   answers with `passUntilTurn` so the rest of the turn passes without prompts.
+- **Stops row + auto-pass when nothing (Stage 2 M3).** On engine tables the phase strip's step
+  dots are toggles: tap a step to stop there on whose turn it currently is (a ring marks stops);
+  Menu -> Stops shows the same as two rows of chips (my turn / opponents' turns) plus "always
+  stop when someone else uses the stack" and "pass automatically when I have nothing to do"
+  (`EngineStops.autoPassEmpty`, ON by default). With that on, the engine passes without asking
+  whenever priority comes with no legal play (no land at sorcery speed, no castable spell, no
+  activatable ability with the mana available). Information trade-off, accepted by the owner:
+  an instant pass can tell the table the player holds nothing usable right now, as on Arena.
+  "Hold" in the strip (`{t:"hold", turn}`, engine frame `hold`) holds priority for one turn:
+  every priority stops and nothing auto-passes (it also cancels an "End turn"); the engine drops
+  it when the turn is over and the relay mirrors it in `EngineInfo.holdTurn`.
 - **Absent seats.** When a seated player's last socket closes during a game the relay waits
   `ENGINE_ABSENT_GRACE_MS` (3 min), then tells the engine `detachSeat`: Forge's AI plays that seat
   (a log line says so) until a socket is back (`attachSeat` + `resync`). Reloading the page
@@ -1060,6 +1071,7 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
 11b. Stage 2: S2-M1 every common prompt reaches the human (confirm with the card, numbers/X,
     ordering, damage assignment, modes, card names, cost choices; casting via Forge's human flow)
     **(done)**; S2-M2 Stack panel + Interaction Stack **(done)**; S2-M3 stops row + auto-pass
-    when nothing to do; S2-M4 Active Board overlay + Game Log panel with toasts.
+    when nothing to do + hold **(done)**; S2-M4 Active Board overlay + Game Log panel with toasts;
+    S2-M5 manual mana (owner's option 1: automatic, long-press "Pay with" source picker).
 12. Ideas: per-event view deltas if bandwidth matters, browser push notifications (see Phase 8),
     password reset once there is an email provider.

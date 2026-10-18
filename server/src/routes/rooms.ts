@@ -143,6 +143,10 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
             if (!msg.stops || typeof msg.stops !== "object") return fail("bad stops");
             room.engineStops(user.id, msg.stops);
             break;
+          case "hold":
+            if (msg.turn !== null && typeof msg.turn !== "number") return fail("bad hold");
+            room.engineHold(user.id, msg.turn);
+            break;
           case "concede":
             room.concede(user.id);
             break;

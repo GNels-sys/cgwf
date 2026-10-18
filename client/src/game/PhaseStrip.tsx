@@ -1,4 +1,4 @@
-import { AVATAR_COLORS, STEPS, STEP_LABELS, isOut, type EngineInfo, type EventInput, type PlayerView, type RoomMember, type Step, type ViewCard } from "@cgwf/shared";
+import { AVATAR_COLORS, STEPS, STEP_LABELS, isOut, type EngineInfo, type EnginePhase, type EventInput, type PlayerView, type RoomMember, type Step, type ViewCard } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
 import { findCard, nameOf, type Printings } from "./model";
 
@@ -43,15 +43,35 @@ export interface PhaseStripProps {
   children?: React.ReactNode;
   /** Rules-engine table: the engine drives steps and combat; the strip only shows them (and who it waits on). */
   engine?: EngineInfo | null | undefined;
+  /** Engine tables: tapping a step toggles a stop there (for whose turn it currently is). */
+  onToggleStop?: ((phase: EnginePhase, mine: boolean) => void) | undefined;
+  /** Engine tables: hold priority for this turn (every priority stops, nothing auto-passes) or release it. */
+  onHold?: ((turn: number | null) => void) | undefined;
 }
+
+/** Which engine step a strip step stands for (untap and cleanup never give priority). */
+export const STEP_TO_PHASE: Partial<Record<Step, EnginePhase>> = {
+  upkeep: "UPKEEP",
+  draw: "DRAW",
+  main1: "MAIN1",
+  beginCombat: "COMBAT_BEGIN",
+  attackers: "COMBAT_DECLARE_ATTACKERS",
+  blockers: "COMBAT_DECLARE_BLOCKERS",
+  damage: "COMBAT_DAMAGE",
+  endCombat: "COMBAT_END",
+  main2: "MAIN2",
+  end: "END_OF_TURN",
+};
 
 function creatureLabel(view: PlayerView, printings: Printings, iid: string): string {
   const c = findCard(view, iid);
   return c ? nameOf(c, printings) : "a creature";
 }
 
-export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onAttack, onBlock, onAssignDamage, onZoom, onConfirmWin, busy, children, engine = null }: PhaseStripProps) {
+export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onAttack, onBlock, onAssignDamage, onZoom, onConfirmWin, busy, children, engine = null, onToggleStop, onHold }: PhaseStripProps) {
   const engineMode = engine !== null;
+  const stopList = engine ? (view.activePlayer === me ? engine.stops.myTurn : engine.stops.theirTurn) : [];
+  const holding = engine !== null && engine.holdTurn === view.turn;
   const active = view.players[view.activePlayer];
   const member = members.find((m) => m.userId === view.activePlayer);
   const isMyTurn = me !== null && me === view.activePlayer;
@@ -188,22 +208,35 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
         </div>
         {playing && (
           <ol className="phase-steps" aria-label="Steps">
-            {STEPS.map((step, i) => (
-              <li key={step}>
-                <button
-                  className={`phase-step${i === current ? " is-current" : i < current ? " is-past" : ""}`}
-                  disabled={engineMode || !canAct || i === current}
-                  onClick={() => dispatch({ type: "StepSet", payload: { step } })}
-                  aria-current={i === current ? "step" : undefined}
-                  aria-label={`${STEP_LABELS[step]}${i === current ? ", current step" : ""}`}
-                  title={STEP_LABELS[step]}
-                >
-                  <span className="phase-dot" aria-hidden="true" />
-                  <span className="phase-step-label">{SHORT[step]}</span>
-                </button>
-              </li>
-            ))}
+            {STEPS.map((step, i) => {
+              const phase = STEP_TO_PHASE[step];
+              const stop = engineMode && phase !== undefined && stopList.includes(phase);
+              const toggles = engineMode && phase !== undefined && !!onToggleStop && !!me && !!view.players[me];
+              return (
+                <li key={step}>
+                  <button
+                    className={`phase-step${i === current ? " is-current" : i < current ? " is-past" : ""}${stop ? " has-stop" : ""}`}
+                    disabled={engineMode ? !toggles : !canAct || i === current}
+                    onClick={() => (engineMode ? phase && onToggleStop?.(phase, view.activePlayer === me) : dispatch({ type: "StepSet", payload: { step } }))}
+                    aria-current={i === current ? "step" : undefined}
+                    aria-pressed={engineMode && toggles ? stop : undefined}
+                    aria-label={`${STEP_LABELS[step]}${i === current ? ", current step" : ""}${engineMode && toggles ? (stop ? ", stop set, tap to clear" : ", tap to stop here") : ""}`}
+                    title={engineMode && toggles ? `${STEP_LABELS[step]}: ${stop ? "stop set (tap to clear)" : "tap to stop here"} on ${view.activePlayer === me ? "your" : "opponents'"} turns` : STEP_LABELS[step]}
+                  >
+                    <span className="phase-dot" aria-hidden="true" />
+                    <span className="phase-step-label">{SHORT[step]}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ol>
+        )}
+        {playing && engineMode && onHold && me && view.players[me] && !isOut(view.players[me]!) && (
+          <div className="phase-actions">
+            <button className={`btn btn-small phase-hold${holding ? " is-on" : ""}`} onClick={() => onHold(holding ? null : view.turn)} aria-pressed={holding} title="Hold priority this turn: the engine asks you at every step and never passes for you">
+              {holding ? "Holding" : "Hold"}
+            </button>
+          </div>
         )}
         {playing && !engineMode && (
           <div className="phase-actions">
