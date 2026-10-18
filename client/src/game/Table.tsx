@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { isOut, type EngineAnswer, type EngineOption, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
-import { EnginePromptSheet, SHEET_PROMPT_KINDS } from "./EnginePrompts";
+import { EnginePromptSheet, SHEET_PROMPT_KINDS, PayWithSheet } from "./EnginePrompts";
 import { InteractionStack, StackPanel, isInteraction } from "./StackPanel";
 import { ActiveBoard, EdgeTab, GameLog, LogToasts, printingAsCard } from "./Overlays";
 import { StopsPanel, toggleStop } from "./StopsPanel";
@@ -46,6 +46,7 @@ type Sheet =
   | { kind: "dice" }
   | { kind: "anthems"; player: ViewPlayer }
   | { kind: "engineAbilities"; card: ViewCard; options: Array<{ index: number; description: string; cost: string | null; kind: string }> }
+  | { kind: "payWith"; card: ViewCard; options: Array<{ index: number; description: string; cost: string | null; kind: string }> }
   | { kind: "engineList" }
   | { kind: "enginePrompt" }
   | null;
@@ -147,7 +148,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     pickFor.current = id;
     setPickState(initialPick(prompt));
     setSheet((s) => {
-      const mine = s && (s.kind === "engineList" || s.kind === "engineAbilities" || s.kind === "enginePrompt");
+      const mine = s && (s.kind === "engineList" || s.kind === "engineAbilities" || s.kind === "enginePrompt" || s.kind === "payWith");
       if (mine) s = null;
       if (!prompt || s) return s; // never stomp a sheet the player opened themself
       // Questions that need a sheet open at once; list choices open when there is nothing on the table to tap.
@@ -369,6 +370,20 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     [mode, me, engineMode, engineTap],
   );
   const holdCard = useCallback((card: ViewCard) => setZoom(card), []);
+  /** Long-press on an engine table: a glowing spell or ability opens "Pay with" (choose the mana sources); anything else zooms. */
+  const engineHold = useCallback(
+    (card: ViewCard) => {
+      if (prompt?.kind === "priority") {
+        const options = prompt.options.filter((o) => o.iid === card.iid && o.kind !== "land");
+        if (options.length > 0) {
+          setSheet({ kind: "payWith", card, options });
+          return;
+        }
+      }
+      setZoom(card);
+    },
+    [prompt],
+  );
 
   // Keep panels in sync with the live view (a card list opened from a zone follows that zone).
   const liveCardsPanel = useMemo(() => {
@@ -529,6 +544,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           onClose={closeSheet}
         />
       );
+    } else if (sheet.kind === "payWith" && prompt?.kind === "priority") {
+      sheetView = <PayWithSheet card={sheet.card} options={sheet.options} view={view} printings={printings} promptId={prompt.promptId} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     } else if (sheet.kind === "engineList" && prompt) {
       sheetView = <EngineListSheet prompt={prompt} view={view} printings={printings} pick={pick} setPick={setPick} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     } else if (sheet.kind === "enginePrompt" && prompt && SHEET_PROMPT_KINDS.has(prompt.kind)) {
@@ -672,7 +689,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               printings={printings}
               derived={myDerived}
               onTap={tapCard}
-              onHold={holdCard}
+              onHold={engineMode ? engineHold : holdCard}
               draggable={canEdit}
               droppable={canEdit}
               highlighted={highlighted}
@@ -716,7 +733,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
             <DropRow id="zone:hand" className="hand">
               {mePlayer.hand.cards.length === 0 && <span className="muted small">Empty hand</span>}
               {mePlayer.hand.cards.map((c) => (
-                <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={holdCard} draggable={canEdit} highlight={highlighted.has(c.iid)} selected={combatSelected.has(c.iid)} />
+                <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={engineMode ? engineHold : holdCard} draggable={canEdit} highlight={highlighted.has(c.iid)} selected={combatSelected.has(c.iid)} />
               ))}
             </DropRow>
             <LifeWidget

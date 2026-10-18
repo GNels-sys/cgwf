@@ -966,7 +966,7 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   a confirm prompt with the card and "If you don't: ..." first, then Forge's
   `payCostDuringAbilityResolve`. "You may" triggers ask at resolution (`confirmTrigger`);
   replacement effects, static applications, coin calls and tap/untap choices are confirms with
-  two labelled buttons. Not asked yet: manual mana payment (always automatic), divide-shield,
+  two labelled buttons. Not asked yet: divide-shield,
   redirect targets (Spellskite), bidding, Un-set dice/sprockets.
 - **Permanent tests.** `engine/src/test/.../PromptRoundTripTest` drives every prompt kind through
   the real controller against a hand-built game (needs `-Dforge.assets`): prompt shape, answer,
@@ -1012,6 +1012,21 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   "Hold" in the strip (`{t:"hold", turn}`, engine frame `hold`) holds priority for one turn:
   every priority stops and nothing auto-passes (it also cancels an "End turn"); the engine drops
   it when the turn is over and the relay mirrors it in `EngineInfo.holdTurn`.
+- **Mana: automatic, with "Pay with" (Stage 2 M5, owner's option 1).** Mana is still paid by
+  Forge's AI payer, but a long-press on a glowing spell or ability opens the **Pay with** sheet
+  (`PayWithSheet` in `EnginePrompts.tsx`): the card, the cost pips, and every untapped permanent
+  of yours that can make mana (`ViewCard.engine.mana`, colour letters or "any", filled by
+  `SeatView` from the permanent's mana abilities) as toggles numbered in the order tapped;
+  "Cast, tapping these" answers the priority prompt with `paySources` (iids -> Forge card ids in
+  the relay), "Cast, pay for me" answers without. In the engine `BridgeController.payManaCost`
+  (the first mana payment of that cast) runs `tapChosenSources` first: one mana ability per chosen
+  source, any-colour / combo sources steered to a colour the cost still needs via the mana
+  part's express choice (so no colour question is asked), activated with `ComputerUtil.playNoStack`
+  so the mana lands in the pool; the automatic payer then draws on the pool before tapping
+  anything else. Sources that are tapped, gone, another player's or not mana sources are skipped;
+  extra mana floats like any floating mana. Tests: `PromptRoundTripTest.payWithTaps...` and the
+  relay round trip ("Pay with" in engine.test.ts). Not built: a full Arena-style payment sheet
+  (option 2) or asking only when it matters (option 3).
 - **Active Board + Game Log (Stage 2 M4, `client/src/game/Overlays.tsx`).** Two frosted overlays
   on top of the board, never a page change. The **Active Board** on the LEFT edge follows the
   turn: whose turn and which step, hand count, untapped lands and creatures, life, that player's
@@ -1090,6 +1105,7 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
     ordering, damage assignment, modes, card names, cost choices; casting via Forge's human flow)
     **(done)**; S2-M2 Stack panel + Interaction Stack **(done)**; S2-M3 stops row + auto-pass
     when nothing to do + hold **(done)**; S2-M4 Active Board overlay + Game Log panel with toasts
-    **(done)**; S2-M5 manual mana (owner's option 1: automatic, long-press "Pay with" source picker).
+    **(done)**; S2-M5 manual mana (owner's option 1: automatic, long-press "Pay with" source picker)
+    **(done)**.
 12. Ideas: per-event view deltas if bandwidth matters, browser push notifications (see Phase 8),
     password reset once there is an email provider.

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { EngineAnswer, EngineOption, EnginePrompt, PlayerView } from "@cgwf/shared";
+import type { EngineAnswer, EngineOption, EnginePrompt, PlayerView, ViewCard } from "@cgwf/shared";
 import { api } from "../api";
 import { CardImage } from "../components/CardImage";
 import { CardTile } from "./CardTile";
-import { findCard, nameOf, type Printings } from "./model";
+import { ManaCost } from "../components/ManaCost";
+import { battlefieldCards, findCard, nameOf, type Printings } from "./model";
 
 /**
  * Rules-engine prompts that need a small sheet rather than a tap on the table: yes/no questions
@@ -51,6 +52,89 @@ function Sheet({ title, subtitle, onClose, children, label }: { title: string; s
         {children}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- "Pay with" (Stage 2 M5)
+
+export interface PlayableOption {
+  index: number;
+  description: string;
+  cost: string | null;
+  kind: string;
+}
+
+/**
+ * Long-press on a glowing card: cast or activate it, naming the mana sources to tap first. Mana is
+ * still automatic for anything the chosen sources do not cover; nothing chosen = automatic.
+ */
+export function PayWithSheet({ card, options, view, printings, promptId, answer, onClose, onZoom }: { card: ViewCard; options: PlayableOption[]; view: PlayerView; printings: Printings; promptId: number; answer: (a: EngineAnswer) => void; onClose: () => void; onZoom: (c: ViewCard) => void }) {
+  const [which, setWhich] = useState(options[0]?.index ?? 0);
+  const [picked, setPicked] = useState<string[]>([]);
+  const me = view.viewer ? view.players[view.viewer] : undefined;
+  const sources = me ? battlefieldCards(me).filter((c) => !c.tapped && (c.engine?.mana?.length ?? 0) > 0) : [];
+  const opt = options.find((o) => o.index === which) ?? options[0];
+  if (!opt) return null;
+  const name = nameOf(card, printings);
+  const toggle = (iid: string) => setPicked((p) => (p.includes(iid) ? p.filter((x) => x !== iid) : [...p, iid]));
+  const go = (withSources: boolean) => {
+    answer(withSources && picked.length ? { promptId, option: opt.index, paySources: picked } : { promptId, option: opt.index });
+    onClose();
+  };
+  const verb = opt.kind === "spell" ? "Cast" : opt.kind === "land" ? "Play" : "Activate";
+  return (
+    <Sheet title="Pay with" subtitle={name} onClose={onClose} label={`Pay with: ${name}`}>
+      <div className="pay-with">
+        <div className="pay-with-head">
+          <button className="pay-with-card" onClick={() => onZoom(card)} aria-label={`${name}, read the card`}>
+            {card.printingId ? <CardImage id={card.printingId} name={name} size="small" className="pay-with-img" loading="eager" /> : <span className="pay-with-noimg">{name}</span>}
+          </button>
+          <div className="pay-with-what">
+            {options.length > 1 ? (
+              <select className="pay-with-select" value={which} onChange={(e) => setWhich(Number(e.target.value))} aria-label="Which ability">
+                {options.map((o) => (
+                  <option key={o.index} value={o.index}>
+                    {o.description}
+                    {o.cost ? ` (${o.cost})` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="pay-with-desc">{opt.description}</span>
+            )}
+            {opt.cost && (
+              <span className="pay-with-pips">
+                <ManaCost cost={opt.cost} /> <span className="muted small">{opt.cost}</span>
+              </span>
+            )}
+            <span className="muted small">Tap the sources to use, in order. Anything missing is paid for you; extra mana floats.</span>
+          </div>
+        </div>
+        <div className="pay-with-sources" role="group" aria-label="Your untapped mana sources">
+          {sources.length === 0 && <span className="muted small">No untapped mana sources.</span>}
+          {sources.map((c) => {
+            const n = picked.indexOf(c.iid);
+            return (
+              <button key={c.iid} className={`pay-with-source${n >= 0 ? " is-picked" : ""}`} aria-pressed={n >= 0} onClick={() => toggle(c.iid)}>
+                <span className="pay-with-source-name">{nameOf(c, printings)}</span>
+                <span className="pay-with-source-mana" aria-label={`makes ${(c.engine?.mana ?? []).join(" or ")}`}>
+                  {(c.engine?.mana ?? []).map((m) => (m === "any" ? <span key={m} className="pay-with-any">any</span> : <ManaCost key={m} cost={`{${m}}`} />))}
+                </span>
+                {n >= 0 && <span className="pay-with-order">{n + 1}</span>}
+              </button>
+            );
+          })}
+        </div>
+        <div className="pay-with-actions">
+          <button className="btn" onClick={() => go(false)}>
+            {verb}, pay for me
+          </button>
+          <button className="btn btn-primary" disabled={picked.length === 0} onClick={() => go(true)}>
+            {verb}, tapping these{picked.length ? ` (${picked.length})` : ""}
+          </button>
+        </div>
+      </div>
+    </Sheet>
   );
 }
 

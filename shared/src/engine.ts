@@ -115,7 +115,7 @@ export type EnginePromptKind = EnginePrompt["kind"];
 
 /** Answers, mirrored from the engine protocol; `promptId` must echo the prompt. */
 export type EngineAnswer =
-  | { promptId: number; option: number | null; passUntilTurn?: number; concede?: boolean }
+  | { promptId: number; option: number | null; passUntilTurn?: number; concede?: boolean; /** "Pay with": iids of the mana sources to tap first (Stage 2 M5). */ paySources?: string[] }
   | { promptId: number; options: number[]; cancel?: boolean }
   | { promptId: number; attacks: Array<{ iid: string; defender: EngineEntityRef }> }
   | { promptId: number; blocks: Array<{ blockerIid: string; attackerIid: string }> }
