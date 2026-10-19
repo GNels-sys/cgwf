@@ -2550,3 +2550,14 @@ button.engine-row { cursor: pointer; width: 100%; }
 .admin-open-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 .admin-open-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .admin-open-list .muted { flex: 1; min-width: 200px; }
+
+/* Voice on Discord (Voice.tsx): lobby panel, the table's headphone button beside the menu */
+.voice-panel { margin: 18px 0; display: grid; gap: 6px; }
+.voice-join { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; justify-self: start; }
+.voice-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0; }
+.voice-manual { display: grid; gap: 6px; max-width: 420px; }
+.voice-manual .field { margin-block: 4px; }
+.voice-manual input[type="text"], .voice-manual input:not([type]) { width: 100%; }
+.voice-default { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+.voice-manual-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.voice-default-panel { margin-block: 18px; }

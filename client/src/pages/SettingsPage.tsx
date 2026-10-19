@@ -2,6 +2,7 @@ import { PageHeading } from "../components/PageHeading";
 import { Link } from "react-router-dom";
 import { RequireUser } from "../components/RequireUser";
 import { SettingsPanel } from "../game/SettingsPanel";
+import { VoiceDefault } from "../game/Voice";
 
 /** Personalize your table outside a game. The same panel opens from the table menu during one. */
 export function SettingsPage() {
@@ -11,6 +12,7 @@ export function SettingsPage() {
       <p className="muted small">Your playmat, sleeves and table look are saved to your account and follow you to every table.</p>
       <RequireUser>
         <SettingsPanel />
+        <VoiceDefault />
       </RequireUser>
     </main>
   );

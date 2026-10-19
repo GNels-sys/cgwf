@@ -215,6 +215,18 @@ export function registerAdminRoutes(app: FastifyInstance, deps: Deps): void {
   const owner = [requireUser(handle), requireOwner(handle)];
   let cache: Snapshot | null = null;
 
+  // ------------------------------------------------------------ Discord voice (owner)
+
+  /** The bot's configuration check: "connected as X / category Y", or exactly what is wrong. */
+  app.get("/api/admin/discord", { preHandler: owner }, async () => ({ status: deps.roomsManager.voice?.status ?? null }));
+  app.post("/api/admin/discord/check", { preHandler: owner }, async () => {
+    const v = deps.roomsManager.voice;
+    if (!v) return { status: null };
+    const status = await v.verify();
+    if (status.state === "ok") await v.sweepOrphans().catch(() => 0);
+    return { status };
+  });
+
   // ------------------------------------------------------------ open tables (owner)
 
   /** The machine itself (fly ssh, loopback) or ADMIN_TOKEN: the same list and bulk close, for operations. */

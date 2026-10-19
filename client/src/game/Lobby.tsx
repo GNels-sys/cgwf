@@ -6,6 +6,7 @@ import { isOwner, useUser } from "../user";
 import type { RoomSocket } from "./socket";
 import { DeckPicker } from "./DeckPicker";
 import { TableSettings } from "./TableSettings";
+import { VoicePanel } from "./Voice";
 
 /** Seat picking before the game: each player sits down with one of their own decks or a library deck; the host starts. */
 export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
@@ -116,6 +117,8 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
           );
         })}
       </ul>
+
+      <VoicePanel room={room} sock={sock} isHost={isHost} />
 
       {room.engine && <TableSettings room={room} sock={sock} isHost={isHost} />}
 

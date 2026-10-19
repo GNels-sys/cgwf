@@ -1,5 +1,6 @@
 import type {
   AdminOpenTable,
+  DiscordStatus,
   DeckPerformance,
   DeckStatsListResponse,
   DeckOptionsResponse,
@@ -188,6 +189,8 @@ export const api = {
     },
     user: (id: string) => request<AdminUserDetail>(`/api/admin/users/${encodeURIComponent(id)}`),
     tables: () => request<{ tables: AdminOpenTable[] }>("/api/admin/tables"),
+    discord: () => request<{ status: DiscordStatus | null }>("/api/admin/discord"),
+    discordCheck: () => request<{ status: DiscordStatus | null }>("/api/admin/discord/check", { method: "POST", json: {} }),
     closeTable: (code: string) => request<{ closed: boolean }>(`/api/admin/tables/${encodeURIComponent(code)}/close`, { method: "POST", json: {} }),
     closeIdle: (hours: number) => request<{ open: number; closed: number; codes: string[] }>("/api/admin/tables/close-idle", { method: "POST", json: { hours } }),
   },

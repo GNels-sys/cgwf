@@ -1,3 +1,4 @@
+import { normaliseInvite } from "./discord.js";
 import { DEFAULT_ENGINE_STOPS, ENGINE_PHASES, type EnginePhase, type EngineStops } from "./engine.js";
 /**
  * Per-user personalization. Saved on the server (user_settings) and applied
@@ -58,6 +59,8 @@ export interface UserSettings {
     opponents: "strip" | "around";
     compact: boolean;
   };
+  /** Manual voice fallback: a Discord invite used for tables this player hosts when the CGwF bot is off. */
+  discordInvite: string | null;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -69,6 +72,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   ui: "dark",
   ambient: "none",
   layout: { cardScale: 1, hand: "bottom", opponentSize: "medium", opponents: "strip", compact: false },
+  discordInvite: null,
 };
 
 export const CARD_SCALE_MIN = 0.7;
@@ -112,6 +116,7 @@ export function sanitizeSettings(raw: unknown, base: UserSettings = DEFAULT_SETT
       opponents: oneOf(layout.opponents, ["strip", "around"] as const, base.layout.opponents),
       compact: typeof layout.compact === "boolean" ? layout.compact : base.layout.compact,
     },
+    discordInvite: r.discordInvite === null ? null : (normaliseInvite(r.discordInvite) ?? base.discordInvite ?? null),
   };
 }
 

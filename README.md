@@ -116,6 +116,30 @@ Deck library: once you are the owner, open **Library** in the top bar and press 
 When Wizards changes the Game Changers list, edit `server/data/brackets/game_changers.json` and
 redeploy.
 
+## Voice on Discord (owner setup)
+
+CGwF can give every table its own temporary voice channel on your Discord server. Setup (done once):
+
+1. In the [Discord Developer Portal](https://discord.com/developers/applications), create an
+   application, add a **Bot**, and copy its token. No privileged intents are needed.
+2. Invite the bot to your server with these permissions: **View Channels, Manage Channels, Create
+   Instant Invite, Connect** (OAuth2 URL generator, scope `bot`).
+3. Create a category for the tables (for example "CGwF Tables") and make sure the bot keeps those four
+   permissions on it.
+4. With Developer Mode on (Discord settings -> Advanced), right-click the server and the category to
+   copy their ids, then:
+
+```bash
+fly secrets set DISCORD_BOT_TOKEN=... DISCORD_GUILD_ID=... DISCORD_CATEGORY_ID=... --app cgwf
+```
+
+The Admin page then says "Discord: connected as <bot> / category <name>", or exactly what is wrong.
+Each new table gets a voice channel "CGwF · <code>" (5 people) with an invite that only that table's
+players and spectators see ("Join voice on Discord" in the lobby, the headphone button on the table).
+Channels are deleted when the table is closed, 15 minutes after a game ends (a rematch keeps the
+channel), and on restart if anything was left behind. Without the secrets, hosts can paste their own
+Discord invite per table, or save one under Personalize.
+
 ## Playing against computer opponents (owner)
 
 1. Set the Fly secrets once: `ANTHROPIC_API_KEY` (a key created inside a workspace in the Anthropic

@@ -148,6 +148,10 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
             room.setTableSettings(user.id, { testGame: msg.testGame, tableBracket: msg.tableBracket });
             room.broadcastRoom();
             break;
+          case "voiceLink":
+            room.setVoiceLink(user.id, msg.url);
+            room.broadcastRoom();
+            break;
           case "endTable": {
             const row = room.refreshRow();
             if (row.hostUserId !== user.id && !user.isOwner) throw new RoomError("only the host can end the table");

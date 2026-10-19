@@ -32,6 +32,10 @@ export const config = {
   skipAutoIngest: env("SKIP_AUTO_INGEST", "0") === "1",
   /** Optional shared secret allowing POST /api/admin/* from outside the machine. */
   adminToken: env("ADMIN_TOKEN", ""),
+  /** Discord voice bot (2026-10-19): all three set = on; none = off (manual links only). */
+  discordBotToken: env("DISCORD_BOT_TOKEN", ""),
+  discordGuildId: env("DISCORD_GUILD_ID", ""),
+  discordCategoryId: env("DISCORD_CATEGORY_ID", ""),
   /** One-time code that grants the owner flag (POST /api/me/owner-claim). Unset = claiming disabled. */
   ownerClaimCode: env("OWNER_CLAIM_CODE", ""),
   /** Phase 7 computer opponents. Off unless AGENTS_ENABLED=1; the key comes from the environment only. */

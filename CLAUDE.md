@@ -1317,6 +1317,48 @@ deck page ("Performance (all players)"), and the Deck stats page `/stats` (nav "
 (grid by players and brackets, head-to-head, bots toggle, hint), `routes/deckStats.test.ts` (test and
 abandoned games excluded, personal-deck privacy, library aggregation).
 
+## Voice on Discord (2026-10-19)
+
+The owner chose "a CGwF bot that creates a temporary voice channel per table" (option 2 of 3). Code:
+`server/src/discord/` (`client.ts` REST client, `voice.ts` service), `shared/src/discord.ts` (types and
+`normaliseInvite`), `client/src/game/Voice.tsx` (lobby panel, table headphone button, Personalize
+default), `client/src/pages/DiscordStatusCard.tsx` (Admin). Tests: `server/src/discord/voice.test.ts`
+against an in-memory fake Discord.
+
+- **Secrets** (Fly app `cgwf`, never printed, never in the repo): `DISCORD_BOT_TOKEN`,
+  `DISCORD_GUILD_ID` (the owner's server), `DISCORD_CATEGORY_ID` (the "CGwF Tables" category). All three
+  set = on; none = off (manual links only); some = off with "X is not set" on the Admin page.
+- **Bot permissions** on the category: View Channels, Manage Channels, Create Instant Invite, Connect.
+  No gateway connection and no privileged intents: REST only (`https://discord.com/api/v10`,
+  `Authorization: Bot <token>`, `User-Agent: DiscordBot (https://cgwf.fly.dev, 1.0)`). The client honours
+  per-route `X-RateLimit-Remaining/Reset-After` buckets and 429 `retry_after` (global too; at most 3
+  retries, never a wait over 15 s), times out each call at 8 s, and never blocks a table: every call is
+  queued per room and fire-and-forget; a failure is logged and the table shows "voice unavailable".
+- **Boot check** (`DiscordVoice.verify`): GET /users/@me, /guilds/{id}, /guilds/{id}/channels, the bot's
+  member roles; the category must exist in that guild, be a category (type 4), and the bot's effective
+  permissions on it (Discord's algorithm: roles, @everyone and category overwrites; `effectivePermissions`)
+  must include the four above. Admin page: "Discord: connected as <bot> / category <name>" or the exact
+  problem naming the secret or permission; "Check again" re-runs it (`POST /api/admin/discord/check`).
+- **Lifecycle.** Table created (lobby) -> voice channel (type 2) "CGwF · <code>" under the category,
+  `user_limit` `VOICE_USER_LIMIT` = 5 (4 players + 1 spectator), invite `max_age 0, max_uses 0,
+  unique true`; stored in `rooms.voice_channel_id` / `voice_invite_url` (migration 0013). Closed by the
+  host or owner, or auto-closed after 48 h idle (`LiveRoom.closeTable`) -> deleted at once. A game that
+  ends on its own keeps its channel for `VOICE_REMATCH_GRACE_MS` (15 min) so the table can talk and
+  rematch, then it is deleted; a rematch takes over the same channel (renamed to the new code), a
+  reverted ending keeps it. Orphan sweep at boot and hourly: CGwF-named voice channels under the category
+  whose table is not open (past the grace) are deleted; nothing else in the server is ever touched.
+- **Who sees the invite.** `RoomInfo.voice` is filled only for members of that table (players and
+  spectators: `room_members`); everyone else, `/api/rooms/mine`, logs and other tables get nothing.
+- **Manual fallback.** When the bot is off or failed for a table, the host pastes an invite
+  (`{t:"voiceLink", url}`; `normaliseInvite` accepts only discord.gg/ and discord.com/invite/, stored as
+  `https://discord.gg/<code>` in `rooms.voice_manual_url`). `UserSettings.discordInvite` (lobby checkbox
+  "Use for every table I host", or Personalize -> Voice on Discord) fills new tables the host opens; a
+  rematch carries the manual link over.
+- **UI.** Lobby: "Join voice on Discord" (new tab; on phones the Discord app), or "Setting up..." /
+  "unavailable" with the host's paste field. Table: a 44 px headphone button beside the Menu in the turn
+  bar (`.voice-btn`, `a[aria-label='Join voice on Discord']`, also in `layoutCheck`'s control list);
+  `cgwfLayoutCheck()` returned [] at 812x375 and 375x812 with it present.
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
