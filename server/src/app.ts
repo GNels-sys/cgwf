@@ -24,6 +24,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMeRoutes } from "./routes/me.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
 import { registerDeckOptionRoutes } from "./routes/deckOptions.js";
+import { registerDeckStatsRoutes } from "./routes/deckStats.js";
 import { DeckBrackets } from "./stats/brackets.js";
 import { GameResults } from "./stats/results.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
@@ -144,6 +145,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   if (opts.idleSweep !== false) roomsManager.startIdleSweep();
   registerRoomRoutes(app, { handle, roomsManager, agents });
   registerDeckOptionRoutes(app, { handle, brackets: deckBrackets });
+  registerDeckStatsRoutes(app, { handle });
   registerSettingsRoutes(app, { handle, onSettingsChanged: (userId) => roomsManager.userChanged(userId) });
   registerSinglesRoutes(app, { handle, singles, library });
 

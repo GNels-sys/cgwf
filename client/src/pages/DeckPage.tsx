@@ -1,3 +1,4 @@
+import { PerformancePanel } from "../components/PerformancePanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { deckScenery } from "../components/deckScenery";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -300,6 +301,8 @@ function DeckView({ id }: { id: string }) {
         <BracketPanel deckId={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} />
         <StatsPanel load={loadStats} version={`${deck.updatedAt}:${deck.cards.length}`} />
       </div>
+
+      <PerformancePanel deckRef={deck.id} />
 
       <ShoppingPanel load={loadShopping} version={`${deck.updatedAt}:${deck.cards.length}`} />
 
