@@ -24,6 +24,7 @@ import { RoomError, type LiveRoom } from "../rooms/live.js";
 import type { Llm } from "./llm.js";
 import { costOf } from "./pricing.js";
 import { loadPrimers } from "./primers.js";
+import { pickAgentDecks, rememberDeal } from "./pick.js";
 import { AgentRunner, type DecisionRecord } from "./runner.js";
 
 /**
@@ -38,22 +39,17 @@ export interface AgentManagerDeps {
   /** null = dry run (no key). Tests inject a ScriptedLlm. */
   llm: Llm | null;
   enabled?: boolean | undefined;
+  /** Random source for picking bot decks (tests pin it); Math.random by default. */
+  random?: (() => number) | undefined;
 }
 
 const MAX_AGENTS = 3;
 const DRAFT_SPEND_KEY = (day: string) => `agent_draft_spend:${day}`;
+/** Library decks recently dealt to a host as bot decks, newest first (JSON array in `meta`). */
+const RECENT_DECKS_KEY = (userId: string) => `agent_recent_decks:${userId}`;
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
 }
 
 export class AgentManager {
@@ -141,6 +137,16 @@ export class AgentManager {
     return agents.length;
   }
 
+  /** Library deck ids this host was dealt as bot decks recently, newest first. */
+  recentDecks(userId: string): string[] {
+    try {
+      const v: unknown = JSON.parse(this.d.handle.getMeta(RECENT_DECKS_KEY(userId)) ?? "[]");
+      return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
   /** Archetype tags of the host's chosen deck, to pick agents that play differently. */
   private async hostTags(room: LiveRoom, hostId: string): Promise<{ tags: Set<ArchetypeTag>; bracket: Bracket | null }> {
     const m = room.member(hostId);
@@ -175,16 +181,11 @@ export class AgentManager {
     if (pool.length === 0) pool = this.d.library.list({ agentEligible: true });
     if (pool.length === 0) throw new RoomError("no agent-eligible decks in the library; mark some on the Library page");
 
-    const picks: typeof pool = [];
-    let candidates = shuffle(pool);
-    const taken = new Set<ArchetypeTag>(host.tags);
-    while (picks.length < Math.min(count, freeSeats.length) && candidates.length) {
-      // Fewest tags in common with the host's deck and the picks so far; ties broken by the shuffle.
-      candidates.sort((a, b) => a.tags.filter((t) => taken.has(t)).length - b.tags.filter((t) => taken.has(t)).length);
-      const pick = candidates.shift()!;
-      picks.push(pick);
-      for (const t of pick.tags) taken.add(t);
-    }
+    // Weighted random draw that favours strategies not yet at the table, skips decks this host was
+    // dealt recently until the pool has been cycled through, and never repeats a commander (pick.ts).
+    const recent = this.recentDecks(hostId);
+    const picks = pickAgentDecks(pool, { count: Math.min(count, freeSeats.length), hostTags: host.tags, recent, random: this.d.random });
+    this.d.handle.setMeta(RECENT_DECKS_KEY(hostId), JSON.stringify(rememberDeal(recent, picks.map((d) => d.id))));
 
     const out: AgentPick[] = [];
     const now = new Date().toISOString();
