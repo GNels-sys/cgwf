@@ -4,28 +4,15 @@ import { api } from "../api";
 import { Avatar } from "../components/Avatar";
 import { isOwner, useUser } from "../user";
 import type { RoomSocket } from "./socket";
+import { DeckPicker } from "./DeckPicker";
 
-interface DeckPick {
-  id: string;
-  name: string;
-  commanders: string[];
-}
-
-/** Seat picking before the game: each player sits down with one of their own decks; the host starts. */
+/** Seat picking before the game: each player sits down with one of their own decks or a library deck; the host starts. */
 export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
   const me = room.you;
   const isHost = me?.userId === room.hostId;
   const { user } = useUser();
   const owner = isOwner(user);
-  const [decks, setDecks] = useState<DeckPick[] | null>(null);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    api.rooms
-      .decks()
-      .then((r) => setDecks(r.decks))
-      .catch(() => setDecks([]));
-  }, []);
 
   const myMember = room.members.find((m) => m.userId === me?.userId);
   const seated = room.members.filter((m) => m.role === "player" && m.seat !== null);
@@ -73,11 +60,11 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
       </p>
       {room.engine ? (
         <p className="engine-badge">
-          <strong>Rules engine (beta).</strong> This table enforces the rules: one land per turn, mana, the stack and combat, and the engine untaps and draws. Everyone needs a legal Commander deck (100 cards, singleton, inside the commander&apos;s colours); the host&apos;s Start button says what is wrong otherwise.
+          <strong>Rules engine (beta).</strong> This table enforces the rules: one land per turn, mana, the stack and combat, and the engine untaps and draws. Everyone needs a legal Commander deck (100 cards, singleton, inside the commander&apos;s colours): one of your own, or any deck from the deck library. The host&apos;s Start button says what is wrong otherwise.
         </p>
       ) : (
         <p className="engine-badge is-casual">
-          <strong>Casual (no rules).</strong> Nothing is enforced on this table: players move, tap and count land drops themselves, like a real kitchen table. For enforced rules, open a <em>Rules engine (beta)</em> table from Play.
+          <strong>Casual (legacy).</strong> An older table where nothing is enforced: players move, tap and count land drops themselves. New tables always use the rules engine; open one from Play.
         </p>
       )}
 
@@ -126,25 +113,7 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
         })}
       </ul>
 
-      {myMember?.role === "player" && (
-        <label className="field">
-          <span>Your deck</span>
-          <select value={myMember.deckId ?? ""} onChange={(e) => pickDeck(e.target.value || null)}>
-            <option value="">Pick a deck...</option>
-            {(decks ?? []).map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-                {d.commanders.length ? ` - ${d.commanders.join(" / ")}` : ""}
-              </option>
-            ))}
-          </select>
-          {decks && decks.length === 0 && (
-            <span className="muted small">
-              No decks yet. <a href="/decks/new">Import one</a> first.
-            </span>
-          )}
-        </label>
-      )}
+      {myMember?.role === "player" && <DeckPicker deckId={myMember.deckId} onPick={pickDeck} />}
 
       {sock.error && <p className="error small">{sock.error}</p>}
 

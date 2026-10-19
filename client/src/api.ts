@@ -1,4 +1,5 @@
 import type {
+  DeckOptionsResponse,
   AddAgentsResponse,
   AdminStatsQuery,
   AdminStatsResponse,
@@ -271,5 +272,7 @@ export const api = {
     join: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}/join`, { method: "POST", json: {} }),
     mine: () => request<MyRoomsResponse>("/api/rooms/mine"),
     decks: () => request<{ decks: Array<{ id: string; name: string; commanders: string[] }> }>("/api/rooms/decks"),
+    /** The lobby deck picker: own decks OR the deck library, filtered by bracket (null = any), alphabetical. */
+    deckOptions: (bracket: number | null) => request<DeckOptionsResponse>(`/api/rooms/deck-options${bracket ? `?bracket=${bracket}` : ""}`),
   },
 };

@@ -69,7 +69,7 @@ describe("Phase 8: friends, invites, notifications and the agent deck queue", ()
   };
 
   beforeAll(async () => {
-    ctx = await buildApp({ logger: false, spellbookFetch: async () => new Response("down", { status: 503 }) });
+    ctx = await buildApp({ logger: false, casualRooms: true, spellbookFetch: async () => new Response("down", { status: 503 }) });
     await ctx.ingestor.run({ file: fixture });
     alex = await register("Alex", "10.0.0.1");
     blair = await register("Blair", "10.0.0.2");

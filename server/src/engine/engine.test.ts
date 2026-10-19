@@ -224,10 +224,18 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(engine.received.find((f) => f.type === "createGame")).toBeUndefined();
   });
 
-  it("starts the game through the engine with decks by set and collector number", async () => {
+  it("starts the game through the engine with decks by set and collector number, one of them from the deck library", async () => {
     const good = await makeDeck(alex.token, "Forests A", legal);
     alex.send({ t: "seat", seat: 0, deckId: good });
-    await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.members.every((x) => x.role !== "player" || x.deckName?.startsWith("Forests") === true));
+    // Blair sits down with a library deck instead of one of their own (owner-approved decks are open to everyone)
+    const lib = await ctx.library.create({ name: "Library Forests", source: "user", sourceKey: "test:library-forests", bracket: 2, entries: legal.map((e) => ({ cardId: e.cardId, quantity: e.quantity, board: e.board as "main" | "commander" })) }, { combos: "skip" });
+    blair.send({ t: "seat", seat: 1, deckId: `library:${lib.id}` });
+    const seatedRoom = await alex.waitFor(
+      (f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.members.some((x) => x.deckName === "Forests A") && f.room.members.some((x) => x.deckName === "Library Forests (library)"),
+    );
+    const blairSeat = seatedRoom.room.members.find((x) => x.deckName === "Library Forests (library)")!;
+    expect(blairSeat.commanders).toEqual(["Atraxa, Praetors' Voice"]);
+    expect(blairSeat.deckProblems).toEqual([]); // the same legality checks as an own deck
     const m = alex.mark();
     alex.send({ t: "start" });
     const created = await engine.waitFor((f) => f.type === "createGame");
@@ -239,6 +247,10 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(seats[0]!.deck.commanders[0]!.name).toBe("Atraxa, Praetors' Voice");
     expect(seats[0]!.deck.commanders[0]!.setCode).toBeTruthy();
     expect(seats[0]!.deck.main[0]!.count).toBe(99);
+    const libSeat = seats.find((x) => x.name === "Blair")!;
+    expect((libSeat.deck as unknown as { name: string }).name).toBe("Library Forests");
+    expect(libSeat.deck.commanders[0]!.name).toBe("Atraxa, Praetors' Voice");
+    expect(libSeat.deck.main[0]!.count).toBe(99);
     const room = await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "playing", m);
     expect(room.room.status).toBe("playing");
     const infos = ctx.roomsManager.get(code)!.engineTable!.seatInfos();

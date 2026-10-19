@@ -40,6 +40,11 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
     { preHandler: auth, config: { rateLimit: { max: 10, timeWindow: "1 hour", keyGenerator } } },
     async (req, reply): Promise<CreateRoomResponse | void> => {
       const wantEngine = Boolean(req.body && typeof req.body === "object" && req.body.engine);
+      // Casual (no rules) tables are retired: every new table is a rules-engine table. Existing casual
+      // tables still load; an old client asking for a casual one is refused.
+      if (!wantEngine && !roomsManager.casualRooms) {
+        return reply.code(400).send({ error: "Casual tables are retired: every new table uses the rules engine. Update the app and try again." });
+      }
       if (wantEngine && !roomsManager.engineAvailable()) {
         return reply.code(503).send({ error: roomsManager.engineConfigured() ? "the rules engine is not reachable right now; try again in a moment" : "the rules engine is not enabled on this server" });
       }

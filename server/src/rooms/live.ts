@@ -565,6 +565,8 @@ export class LiveRoom {
 
 export class RoomManager {
   private live = new Map<string, LiveRoom>();
+  /** Legacy casual tables may be created (tests of the classic table only); see BuildOptions.casualRooms. */
+  casualRooms = false;
   private sweeper: NodeJS.Timeout;
 
   constructor(
@@ -655,6 +657,7 @@ export class RoomManager {
     const row = old.refreshRow();
     if (row.hostUserId !== userId) throw new RoomError("only the host can start a rematch");
     if (row.status !== "ended") throw new RoomError("the game is still going");
+    if (!row.engine && !this.casualRooms) throw new RoomError("casual tables are retired: start a new rules-engine table from the Play page");
     if (row.nextRoomId) {
       const existing = this.handle.db.select({ code: rooms.code }).from(rooms).where(eq(rooms.id, row.nextRoomId)).get();
       const room = existing ? this.get(existing.code) : null;

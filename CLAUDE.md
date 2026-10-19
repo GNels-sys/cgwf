@@ -416,7 +416,24 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
   with the list date, tutors by kind, fast mana, extra turns, MLD, power signals, stats) and a
   Recompute button; it re-runs whenever the deck's `updatedAt` or card count changes.
 
-### Deck library (owner only; Phase 7 reads it)
+### Deck library (owner edits; every signed-in player can read and play it since 2026-10-18)
+
+- **Read-only for everyone (2026-10-18).** `GET /api/library-decks[?bracket=]` (summaries) and
+  `GET /api/library-decks/:id` (card list) need only a signed-in player; everything below under
+  `/api/library` (edit, primers, import, submissions) and the agents pages stay owner-only.
+  **Lobby deck choice** (`client/src/game/DeckPicker.tsx`): a bracket filter ("Any bracket" or
+  B1-B5) above two separate lists presented as an OR, "Your decks" and "Deck library" (picking in
+  one clears the other, because the seat holds one deck). `GET /api/rooms/deck-options[?bracket=N]`
+  (`server/src/routes/deckOptions.ts`) returns the caller's own decks (bracket = the analysis
+  engine's suggestion, computed with `analyzeSync`, cached per deck id + `updatedAt`; unknown only
+  under "Any bracket") and every library deck (stored bracket), both alphabetical
+  (`filterDeckOptions` / `deckOptionLabel` in `shared/src/deckOptions.ts`). Other players' personal
+  decks are never listed. A library pick is stored in `room_members.deck_id` as
+  `library:<library_decks.id>` (no migration); `describeDeck` shows it to the table as
+  "<name> (library)", and `seatDeckRows` (rooms/deck.ts) feeds `deckForEngine` and the classic
+  `loadDeckForGame` the same boards and legality checks as an own deck. Bot seats still copy an
+  agent-eligible library deck as before. Tests: `routes/deckOptions.test.ts`,
+  `shared/src/deckOptions.test.ts`, engine.test "one of them from the deck library".
 
 - Tables (migration 0006): `library_decks` (name, source precon|user, source_key unique =
   `mtgjson:<fileName>` or `deck:<deckId>`, set_code, set_name, release_date, commanders JSON,
@@ -567,7 +584,8 @@ Measured numbers from real games are in the Phase 7 hand-over note.
 
 `node scripts/seed-field.mjs <base-url> <code> <token> "Lotus Cobra" "Rancor" ...` pulls named
 cards from that player's library straight onto their battlefield (for testing bookkeeping).
-`node scripts/bots.mjs http://localhost:8080` registers "Georgie" + three bots with small decks,
+(Classic-table harness: since casual tables were retired on 2026-10-18 it cannot open a room; use
+`scripts/engine-bot.mjs` for engine tables.) `node scripts/bots.mjs http://localhost:8080` registers "Georgie" + three bots with small decks,
 creates a room, seats the bots and prints a device token: put it in localStorage as `cgwf.token`
 and open `/room/<code>` to play seat 1. Bots keep, play a land and pass on their turns; press
 Enter in that terminal to force-drop and rejoin Blair (reconnect drill). Works against
@@ -909,10 +927,14 @@ them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.
 
 ## Rules engine tables (Forge, Stage 1)
 
-An opt-in second kind of table: the open-source Forge rules engine runs the game (untap, draw,
-mana, the stack, combat, win conditions) and humans answer its prompts. The classic manual table
-is untouched; engine tables are per room ("Rules engine (beta)" on the Play page, shown only
-when the server has an engine configured). Design and effort plan: `docs/FORGE-ENGINE.md`;
+The open-source Forge rules engine runs the game (untap, draw, mana, the stack, combat, win
+conditions) and humans answer its prompts. **Since 2026-10-18 every new table is an engine table**
+(owner: casual tables "tend to be chaos"): the Play page has one "New table" button, and
+`POST /api/rooms` without `engine: true` answers 400 "Casual tables are retired", as does a rematch
+of an old casual room. The classic table code stays: existing casual rooms still load and show as
+"Casual (legacy)" in recent tables, the lobby and the phase strip. `BuildOptions.casualRooms`
+(tests of the classic table only, deliberately not an env var) turns creation back on. With no
+reachable engine the Play page disables "New table" and says why. Design and effort plan: `docs/FORGE-ENGINE.md`;
 the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge): `engine/README.md`.
 
 - **Topology.** Browser -> CGwF server (same room socket as always) -> ONE control WebSocket ->
@@ -1089,8 +1111,8 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   ordinary effects, not land plays. The relay refuses classic events on engine tables, so nothing
   else can move a card. Test: `PromptRoundTripTest.landDropsFollowForgesLimitAndExplorationGrantsOneMore`.
   The owner's "two lands in a turn" came from a Casual table (FHWK6D), where nothing is enforced;
-  the Play page now asks "Rules engine (beta)" vs "Casual (no rules)" explicitly, the recent-table
-  list and the lobby name the kind, and the phase strip shows a "Casual" tag on classic tables.
+  casual tables were retired later the same day (new tables are always engine tables; old ones show
+  "Casual (legacy)", and the phase strip shows a "Casual" tag on them).
 - **Planeswalkers and the human's own triggers (2026-10-18).** Loyalty limits are Forge's, per card:
   `SpellAbilityRestriction` compares that walker's `getPlaneswalkerAbilityActivated()` with 1 (2 under
   `NumLoyaltyAct` statics such as Oath of Teferi; The Chain Veil adds more), and the priority list is
