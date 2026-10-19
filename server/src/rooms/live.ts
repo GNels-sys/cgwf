@@ -35,12 +35,15 @@ import { PrintingMapper } from "../engine/mapping.js";
 import type { NameIndex } from "../search/index.js";
 import { EngineRoomError, EngineTable, type RoomPort } from "./engineTable.js";
 import { deckForEngine } from "../engine/deck.js";
-import type { EngineAnswer, EngineStops } from "@cgwf/shared";
+import type { GameResults } from "../stats/results.js";
+import type { AdminOpenTable, EngineAnswer, EngineStops } from "@cgwf/shared";
 
 /** What the rules-engine integration needs (null when no engine is configured). */
 export interface EngineDeps {
   client: EngineClient;
   index: NameIndex;
+  /** Deck-statistics recorder, wired after construction (RoomManager.setResults). */
+  results?: GameResults | null;
 }
 
 /**
@@ -109,7 +112,7 @@ export class LiveRoom {
     private readonly handle: DbHandle,
     private readonly log: FastifyBaseLogger,
     private row: RoomRow,
-    engineDeps: EngineDeps | null = null,
+    private readonly engineDeps: EngineDeps | null = null,
   ) {
     this.id = row.id;
     this.engineTable = row.engine && engineDeps ? new EngineTable(this.port(), engineDeps.client, new PrintingMapper(handle, engineDeps.index)) : null;
@@ -136,6 +139,7 @@ export class LiveRoom {
       broadcastRoom: () => this.broadcastRoom(),
       userName: (userId) => this.handle.db.select({ name: users.displayName }).from(users).where(eq(users.id, userId)).get()?.name ?? "Player",
       agentIds: () => new Set(this.agentMemberIds()),
+      results: () => this.engineDeps?.results ?? null,
     };
   }
 
@@ -193,6 +197,7 @@ export class LiveRoom {
     const userRows = rows.length ? this.handle.db.select().from(users).where(inArray(users.id, rows.map((m) => m.userId))).all() : [];
     const byId = new Map(userRows.map((u) => [u.id, u]));
     const online = this.onlineIds();
+    const results = this.engineDeps?.results ?? null;
     const members: RoomMember[] = rows
       .map((m): RoomMember | null => {
         const u = byId.get(m.userId);
@@ -213,6 +218,7 @@ export class LiveRoom {
           isAgent: Boolean(u.isAgent),
           thinking: this.agentPresence.get(m.userId)?.thinking ?? false,
           deckProblems: row.engine && m.deckId && m.role === "player" ? (deckForEngine(this.handle, m.userId, m.deckId)?.problems ?? []) : [],
+          deckBracket: row.engine && m.deckId && m.role === "player" && results ? results.brackets.forSeat(m.userId, m.deckId) : null,
         };
       })
       .filter((m): m is RoomMember => m !== null)
@@ -230,7 +236,55 @@ export class LiveRoom {
       nextCode: next?.code ?? null,
       you: me ? { userId: me.userId, role: me.role, seat: me.seat } : null,
       engine: Boolean(row.engine),
+      testGame: Boolean(row.testGame),
+      tableBracket: row.tableBracket ?? this.autoTableBracket(members),
+      tableBracketChosen: row.tableBracket !== null && row.tableBracket !== undefined,
     };
+  }
+
+  /** The table bracket when the host has not picked one: the highest bracket among the seated decks. */
+  private autoTableBracket(members: RoomMember[]): number | null {
+    let best: number | null = null;
+    for (const m of members) if (m.role === "player" && m.deckBracket != null && (best === null || m.deckBracket > best)) best = m.deckBracket;
+    return best;
+  }
+
+  /** Host, lobby only: the Test-game toggle and the table bracket (null = automatic). Frozen at start. */
+  setTableSettings(userId: string, s: { testGame?: unknown; tableBracket?: unknown }): void {
+    const row = this.refreshRow();
+    if (row.hostUserId !== userId) throw new RoomError("only the host can change the table settings");
+    if (row.status !== "lobby") throw new RoomError("the game has started; the table settings are frozen");
+    const set: Partial<typeof rooms.$inferInsert> = {};
+    if (typeof s.testGame === "boolean") set.testGame = s.testGame;
+    if (s.tableBracket === null) set.tableBracket = null;
+    else if (s.tableBracket !== undefined) {
+      const b = Number(s.tableBracket);
+      if (!Number.isInteger(b) || b < 1 || b > 5) throw new RoomError("the table bracket is 1 to 5");
+      set.tableBracket = b;
+    }
+    if (!Object.keys(set).length) return;
+    this.handle.db.update(rooms).set(set).where(eq(rooms.id, this.id)).run();
+    this.touch();
+  }
+
+  /**
+   * Close the table without a result: the host ("End table"), the owner (Admin) or the idle sweep.
+   * An engine game is torn down and recorded as abandoned (never counted); a lobby simply ends.
+   */
+  closeTable(reason: string): boolean {
+    const row = this.refreshRow();
+    if (row.status === "ended") return false;
+    if (this.engineTable && row.status === "playing") {
+      this.engineTable.close(reason);
+    } else {
+      this.engineDeps?.results?.abandon(this.id, reason);
+      this.handle.db.update(rooms).set({ status: "ended", updatedAt: now() }).where(eq(rooms.id, this.id)).run();
+      this.refreshRow();
+      this.engineTable?.dispose();
+    }
+    this.lastActivity = Date.now();
+    this.broadcastRoom();
+    return true;
   }
 
   // ------------------------------------------------------------ membership
@@ -567,6 +621,72 @@ export class RoomManager {
   private live = new Map<string, LiveRoom>();
   /** Legacy casual tables may be created (tests of the classic table only); see BuildOptions.casualRooms. */
   casualRooms = false;
+  /** Deck-statistics recorder (set by the app once the analyzer exists). */
+  results: GameResults | null = null;
+  /** Tables with no activity for this long are closed automatically (no result recorded). */
+  idleCloseMs = Number(process.env.TABLE_IDLE_CLOSE_HOURS ?? 48) * 3600_000;
+  private idleTimer: NodeJS.Timeout | null = null;
+
+  setResults(r: GameResults): void {
+    this.results = r;
+    if (this.engine) this.engine.results = r;
+  }
+
+  /** Close one table by code (host / owner checks are the caller's). False when unknown or already ended. */
+  closeTable(code: string, reason: string): boolean {
+    const room = this.get(code);
+    return room ? room.closeTable(reason) : false;
+  }
+
+  /** Tables still open (lobby or playing), oldest activity first, for the owner's Admin page. */
+  openTables(): AdminOpenTable[] {
+    const rows = this.handle.db
+      .select({ room: rooms, host: users })
+      .from(rooms)
+      .innerJoin(users, eq(users.id, rooms.hostUserId))
+      .where(inArray(rooms.status, ["lobby", "playing"]))
+      .all()
+      .sort((a, b) => a.room.updatedAt.localeCompare(b.room.updatedAt));
+    return rows.map((r) => ({
+      code: r.room.code,
+      status: r.room.status as AdminOpenTable["status"],
+      engine: Boolean(r.room.engine),
+      hostName: r.host.displayName,
+      players: this.handle.db.select().from(roomMembers).where(and(eq(roomMembers.roomId, r.room.id), eq(roomMembers.role, "player"))).all().length,
+      updatedAt: r.room.updatedAt,
+      createdAt: r.room.createdAt,
+    }));
+  }
+
+  /** Close every open table with no activity for `idleMs` (no result recorded). Returns the codes closed. */
+  closeIdle(idleMs: number, reason: string): string[] {
+    const cutoff = new Date(Date.now() - idleMs).toISOString();
+    const closed: string[] = [];
+    for (const t of this.openTables()) {
+      if (t.updatedAt >= cutoff) continue;
+      const live = [...this.live.values()].find((r) => r.code === t.code);
+      if (live && live.connectionCount > 0 && Date.now() - live.lastActivity < idleMs) continue;
+      try {
+        if (this.closeTable(t.code, reason)) closed.push(t.code);
+      } catch (err) {
+        this.log.warn({ err, code: t.code }, "closing an idle table failed");
+      }
+    }
+    if (closed.length) this.log.info({ closed }, "closed idle tables");
+    return closed;
+  }
+
+  /** Hourly: close tables idle for idleCloseMs (48 h by default). */
+  startIdleSweep(): void {
+    if (this.idleTimer || this.idleCloseMs <= 0) return;
+    const run = () => {
+      if (this.closed) return;
+      this.closeIdle(this.idleCloseMs, `Closed automatically after ${Math.round(this.idleCloseMs / 3600_000)} hours without activity.`);
+    };
+    this.idleTimer = setInterval(run, 60 * 60 * 1000);
+    this.idleTimer.unref();
+    setTimeout(run, 60_000).unref();
+  }
   private sweeper: NodeJS.Timeout;
 
   constructor(
@@ -618,6 +738,7 @@ export class RoomManager {
   close(): void {
     this.closed = true;
     clearInterval(this.sweeper);
+    if (this.idleTimer) clearInterval(this.idleTimer);
     this.live.clear();
   }
 
@@ -736,7 +857,7 @@ export class RoomManager {
       .all();
     return rows.map((r) => {
       const players = this.handle.db.select({ userId: roomMembers.userId }).from(roomMembers).where(and(eq(roomMembers.roomId, r.room.id), eq(roomMembers.role, "player"))).all().length;
-      return { code: r.room.code, status: r.room.status as RoomStatus, players, updatedAt: r.room.updatedAt, hostName: r.host.displayName, engine: Boolean(r.room.engine) };
+      return { code: r.room.code, status: r.room.status as RoomStatus, players, updatedAt: r.room.updatedAt, hostName: r.host.displayName, engine: Boolean(r.room.engine), isHost: r.room.hostUserId === userId, testGame: Boolean(r.room.testGame) };
     });
   }
 

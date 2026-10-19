@@ -30,7 +30,7 @@ describe("deck choice for engine tables: own decks OR the deck library, by brack
   const legal = [{ cardId: ATRAXA, quantity: 1, board: "commander" as const }, { cardId: FOREST, quantity: 99, board: "main" as const }];
 
   beforeAll(async () => {
-    ctx = await buildApp({ logger: false, spellbookFetch: async () => new Response("down", { status: 503 }) });
+    ctx = await buildApp({ logger: false, idleSweep: false, spellbookFetch: async () => new Response("down", { status: 503 }) });
     await ctx.ingestor.run({ file: fixture });
     alex = (await register("Alex", "10.1.0.1")).token;
     const o = await register("Owner", "10.1.0.2");
@@ -111,4 +111,27 @@ describe("deck choice for engine tables: own decks OR the deck library, by brack
     expect(me.commanders).toEqual(["Atraxa, Praetors' Voice"]);
     expect(() => room.takeSeat(alexId, 0, "library:no-such-deck")).toThrow(/deck not found/);
   });
+
+  it("lets only the owner list and close open tables; the host can end their own table", async () => {
+    ctx.roomsManager.casualRooms = true;
+    const mk = async () => ((await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(alex), payload: {} })).json() as { room: { code: string } }).room.code;
+    const a = await mk();
+    const b = await mk();
+    const c = await mk();
+    ctx.roomsManager.casualRooms = false;
+    expect((await ctx.app.inject({ method: "GET", url: "/api/admin/tables", headers: auth(alex) })).statusCode).toBe(403);
+    expect((await ctx.app.inject({ method: "POST", url: `/api/admin/tables/${a}/close`, headers: auth(alex) })).statusCode).toBe(403);
+    const list = (await ctx.app.inject({ method: "GET", url: "/api/admin/tables", headers: auth(owner) })).json() as { tables: Array<{ code: string }> };
+    expect(list.tables.map((t) => t.code)).toEqual(expect.arrayContaining([a, b, c]));
+    expect((await ctx.app.inject({ method: "POST", url: `/api/admin/tables/${a}/close`, headers: auth(owner) })).statusCode).toBe(200);
+    // the host ends their own table from Recent tables; another player may not
+    expect((await ctx.app.inject({ method: "POST", url: `/api/rooms/${b}/end`, headers: auth(owner) })).statusCode).toBe(200); // the owner may
+    expect((await ctx.app.inject({ method: "POST", url: `/api/rooms/${c}/end`, headers: auth(alex) })).json()).toEqual({ closed: true });
+    const mine = (await ctx.app.inject({ method: "GET", url: "/api/rooms/mine", headers: auth(alex) })).json() as { rooms: Array<{ code: string; status: string; isHost: boolean }> };
+    for (const code of [a, b, c]) expect(mine.rooms.find((r) => r.code === code)).toMatchObject({ status: "ended", isHost: true });
+    // bulk: nothing idle for 24 hours here
+    const bulk = (await ctx.app.inject({ method: "POST", url: "/api/admin/tables/close-idle", headers: auth(owner), payload: { hours: 24 } })).json() as { closed: number };
+    expect(bulk.closed).toBe(0);
+  });
+
 });

@@ -59,6 +59,9 @@ public final class GameSession {
     private boolean cardsSent;
     /** Rounds for people (Forge's turn stays the truth): see RoundTracker. */
     private final RoundTracker rounds = new RoundTracker();
+    /** Seats in the order Forge took them out of the game (same index = left together), for game results. */
+    private final Map<Integer, Integer> outOrder = new java.util.LinkedHashMap<>();
+    private int outCount = 0;
 
     public GameSession(String gameId, long seed, List<SeatSpec> specs, long promptTimeoutMs, Consumer<JsonObject> out) {
         this.gameId = gameId;
@@ -168,8 +171,52 @@ public final class GameSession {
                 done.addProperty("winner", winner == null ? null : winner.getName());
                 done.addProperty("endReason", game.getOutcome().getWinCondition() == null ? null : game.getOutcome().getWinCondition().name());
             }
+            noteEliminations();
+            done.add("results", results());
+            done.addProperty("round", rounds.round());
             emit(done, SPECTATOR);
         }
+    }
+
+    /** Records seats newly out of the game; everyone who left since the last check shares one step. */
+    private synchronized void noteEliminations() {
+        boolean any = false;
+        for (Map.Entry<Integer, Player> e : playerBySeat.entrySet()) {
+            if (outOrder.containsKey(e.getKey())) continue;
+            if (e.getValue().hasLost()) { outOrder.put(e.getKey(), outCount); any = true; }
+        }
+        if (any) outCount++;
+    }
+
+    /**
+     * Per seat: place (1 = winner; then the last one out, and so on; seats out together share a place),
+     * won, conceded, how the seat lost. A draw leaves every seat still in at place 1 with won = false.
+     */
+    private synchronized JsonArray results() {
+        JsonArray out = new JsonArray();
+        int seats = playerBySeat.size();
+        int stillIn = 0;
+        for (Integer seat : playerBySeat.keySet()) if (!outOrder.containsKey(seat)) stillIn++;
+        for (Map.Entry<Integer, Player> e : playerBySeat.entrySet()) {
+            Player p = e.getValue();
+            JsonObject r = new JsonObject();
+            r.addProperty("seat", e.getKey());
+            Integer step = outOrder.get(e.getKey());
+            int place;
+            if (step == null) place = 1;
+            else {
+                // seats that went out at a later step (or never) rank above this one
+                int ahead = stillIn;
+                for (Map.Entry<Integer, Integer> o : outOrder.entrySet()) if (o.getValue() > step) ahead++;
+                place = Math.min(seats, ahead + 1);
+            }
+            r.addProperty("place", place);
+            r.addProperty("won", p.getOutcome() != null && p.getOutcome().lossState == null && p.hasWon());
+            r.addProperty("conceded", p.conceded());
+            r.addProperty("lossReason", p.getOutcome() == null || p.getOutcome().lossState == null ? null : p.getOutcome().lossState.name());
+            out.add(r);
+        }
+        return out;
     }
 
     // ------------------------------------------------------------------ inbound (control socket thread)
@@ -226,6 +273,7 @@ public final class GameSession {
 
     @Subscribe
     public void onEvent(GameEvent e) {
+        noteEliminations();
         if (e instanceof GameEventTurnBegan tb) {
             List<Player> order = game.getRegisteredPlayers();
             int idx = -1;

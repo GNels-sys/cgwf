@@ -4,36 +4,12 @@ import { filterDeckOptions, LIBRARY_DECK_PREFIX, type DeckOption, type DeckOptio
 import { requireUser } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
 import { cards, decks, libraryDeckCards, libraryDecks } from "../db/schema.js";
-import type { DeckAnalyzer } from "../analysis/service.js";
+import type { DeckBrackets } from "../stats/brackets.js";
 import { describeDeck } from "../rooms/deck.js";
 
 interface Deps {
   handle: DbHandle;
-  analyzer: DeckAnalyzer;
-}
-
-/** Suggested bracket per own deck, keyed by deck id + updatedAt (every card change bumps updatedAt). */
-class BracketCache {
-  private map = new Map<string, number | null>();
-  constructor(private readonly analyzer: DeckAnalyzer) {}
-  get(deckId: string, updatedAt: string): number | null {
-    const key = `${deckId}|${updatedAt}`;
-    const hit = this.map.get(key);
-    if (hit !== undefined) return hit;
-    let bracket: number | null = null;
-    try {
-      const cardsOf = this.analyzer.loadDeckCards(deckId);
-      if (cardsOf.length) {
-        const s = this.analyzer.analyzeSync(cardsOf).suggested;
-        bracket = typeof s === "number" && s >= 1 && s <= 5 ? s : null;
-      }
-    } catch {
-      bracket = null;
-    }
-    if (this.map.size > 2000) this.map.clear();
-    this.map.set(key, bracket);
-    return bracket;
-  }
+  brackets: DeckBrackets;
 }
 
 function parseBracket(raw: unknown): number | null {
@@ -47,9 +23,8 @@ function parseBracket(raw: unknown): number | null {
  * primers and agents stays behind the owner-only /api/library routes.
  */
 export function registerDeckOptionRoutes(app: FastifyInstance, deps: Deps): void {
-  const { handle, analyzer } = deps;
+  const { handle, brackets } = deps;
   const auth = requireUser(handle);
-  const brackets = new BracketCache(analyzer);
 
   const libraryOptions = (): DeckOption[] =>
     handle.db
@@ -69,7 +44,7 @@ export function registerDeckOptionRoutes(app: FastifyInstance, deps: Deps): void
       for (const d of handle.db.select().from(decks).where(eq(decks.userId, userId)).all()) {
         const pick = describeDeck(handle, userId, d.id);
         if (!pick) continue;
-        mine.push({ id: d.id, name: d.name, commanders: pick.commanders, bracket: brackets.get(d.id, d.updatedAt), tags: [] });
+        mine.push({ id: d.id, name: d.name, commanders: pick.commanders, bracket: brackets.ownDeck(d.id, d.updatedAt), tags: [] });
       }
       return { mine: filterDeckOptions(mine, bracket), library: filterDeckOptions(libraryOptions(), bracket) };
     },

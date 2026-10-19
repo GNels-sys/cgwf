@@ -33,6 +33,8 @@ export interface RoomMember {
   thinking: boolean;
   /** Engine tables only: why this seat's deck cannot start an engine game (empty = legal or no deck yet). */
   deckProblems: string[];
+  /** Engine lobbies: the seated deck's bracket (library: stored; own deck: suggested), null = unknown. */
+  deckBracket?: number | null;
 }
 
 export interface RoomInfo {
@@ -49,6 +51,15 @@ export interface RoomInfo {
   you: { userId: PlayerId; role: MemberRole; seat: number | null } | null;
   /** Rules-engine table (Forge decides what is legal) instead of the classic manual table. */
   engine: boolean;
+  /** Lobby setting: a test game is played normally but never counted in deck statistics. */
+  testGame: boolean;
+  /**
+   * The table bracket (1-5) agreed before the game: the host's pick, or else the highest suggested
+   * bracket among the seated decks; frozen when the game starts. Null when no deck's bracket is known.
+   */
+  tableBracket: number | null;
+  /** True when the host picked the table bracket (false = the automatic default above). */
+  tableBracketChosen: boolean;
 }
 
 export const ROOM_CODE_LENGTH = 6;
@@ -64,6 +75,10 @@ export type ClientMessage =
   | { t: "revert"; toSeq: number }
   /** Host only, once the game has ended: new table, same seats and decks, fresh seed. */
   | { t: "rematch" }
+  /** Host only, in the lobby: the Test-game toggle and the table bracket (null = automatic). */
+  | { t: "tableSettings"; testGame?: boolean; tableBracket?: number | null }
+  /** Host only (or the owner): close the table without recording a result. */
+  | { t: "endTable" }
   | { t: "leave" }
   /** Engine tables: answer the prompt the engine is waiting on (see shared/engine.ts). */
   | { t: "engine"; answer: EngineAnswer; cid?: string }
@@ -100,5 +115,5 @@ export interface RoomResponse {
 }
 export interface MyRoomsResponse {
   /** `engine`: a rules-engine table (Forge enforces the rules) rather than a casual table (nothing enforced). */
-  rooms: Array<{ code: string; status: RoomStatus; players: number; updatedAt: string; hostName: string; engine: boolean }>;
+  rooms: Array<{ code: string; status: RoomStatus; players: number; updatedAt: string; hostName: string; engine: boolean; isHost: boolean; testGame: boolean }>;
 }
