@@ -156,8 +156,11 @@ export function BracketPanel({ deckId, version }: { deckId: string; version: str
 
   return (
     <section className="bracket-panel">
-      <div className="row-between">
-        <h3>Bracket</h3>
+      <div className="row-between analysis-panel-heading">
+        <div className="analysis-panel-title">
+          <span className="analysis-panel-glyph" aria-hidden="true">◇</span>
+          <div><p className="eyebrow">Power profile</p><h3>Bracket</h3></div>
+        </div>
         <button className="btn btn-small" disabled={busy} onClick={() => void load(true)}>
           {busy ? "Working..." : "Recompute"}
         </button>

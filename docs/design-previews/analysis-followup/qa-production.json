@@ -1,0 +1,224 @@
+[
+  {
+    "name": "deck",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "analysis-styles",
+    "size": "portrait",
+    "ui": "dark",
+    "computed": {
+      "panel": {
+        "radius": "5px 22px",
+        "background": "radial-gradient(at 100% 0%, color(srgb 0.85098 0.643137 0.254902 / 0.1), rgba(0, 0, 0, 0) 65%), none",
+        "border": "rgb(217, 164, 65) color(srgb 0.335059 0.482039 0.457098) color(srgb 0.335059 0.482039 0.457098)"
+      },
+      "badge": {
+        "radius": "4px 18px",
+        "background": "linear-gradient(135deg, color(srgb 0.158274 0.184941 0.146667), rgb(37, 53, 50))",
+        "border": "rgb(91, 155, 213)"
+      },
+      "fill": {
+        "radius": "99px",
+        "background": "linear-gradient(90deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0.19))",
+        "border": "rgb(243, 238, 226)"
+      },
+      "styles": [
+        "http://localhost:4173/assets/index-C5_pS7PB.css"
+      ]
+    },
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "analysis-styles",
+    "size": "portrait",
+    "ui": "light",
+    "computed": {
+      "panel": {
+        "radius": "5px 22px",
+        "background": "radial-gradient(at 100% 0%, color(srgb 0.85098 0.643137 0.254902 / 0.1), rgba(0, 0, 0, 0) 65%), none",
+        "border": "rgb(217, 164, 65) color(srgb 0.594196 0.680784 0.63498) color(srgb 0.594196 0.680784 0.63498)"
+      },
+      "badge": {
+        "radius": "4px 18px",
+        "background": "linear-gradient(135deg, color(srgb 0.988078 0.971451 0.940392), rgb(233, 227, 211))",
+        "border": "rgb(91, 155, 213)"
+      },
+      "fill": {
+        "radius": "99px",
+        "background": "linear-gradient(90deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0.19))",
+        "border": "rgb(30, 36, 32)"
+      },
+      "styles": [
+        "http://localhost:4173/assets/index-C5_pS7PB.css"
+      ]
+    },
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "analysis-styles",
+    "size": "landscape",
+    "ui": "dark",
+    "computed": {
+      "panel": {
+        "radius": "5px 22px",
+        "background": "radial-gradient(at 100% 0%, color(srgb 0.85098 0.643137 0.254902 / 0.1), rgba(0, 0, 0, 0) 65%), none",
+        "border": "rgb(217, 164, 65) color(srgb 0.335059 0.482039 0.457098) color(srgb 0.335059 0.482039 0.457098)"
+      },
+      "badge": {
+        "radius": "4px 18px",
+        "background": "linear-gradient(135deg, color(srgb 0.158274 0.184941 0.146667), rgb(37, 53, 50))",
+        "border": "rgb(91, 155, 213)"
+      },
+      "fill": {
+        "radius": "99px",
+        "background": "linear-gradient(90deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0.19))",
+        "border": "rgb(243, 238, 226)"
+      },
+      "styles": [
+        "http://localhost:4173/assets/index-C5_pS7PB.css"
+      ]
+    },
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "analysis-styles",
+    "size": "landscape",
+    "ui": "light",
+    "computed": {
+      "panel": {
+        "radius": "5px 22px",
+        "background": "radial-gradient(at 100% 0%, color(srgb 0.85098 0.643137 0.254902 / 0.1), rgba(0, 0, 0, 0) 65%), none",
+        "border": "rgb(217, 164, 65) color(srgb 0.594196 0.680784 0.63498) color(srgb 0.594196 0.680784 0.63498)"
+      },
+      "badge": {
+        "radius": "4px 18px",
+        "background": "linear-gradient(135deg, color(srgb 0.988078 0.971451 0.940392), rgb(233, 227, 211))",
+        "border": "rgb(91, 155, 213)"
+      },
+      "fill": {
+        "radius": "99px",
+        "background": "linear-gradient(90deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0.19))",
+        "border": "rgb(30, 36, 32)"
+      },
+      "styles": [
+        "http://localhost:4173/assets/index-C5_pS7PB.css"
+      ]
+    },
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "analysis-styles",
+    "size": "desktop",
+    "ui": "dark",
+    "computed": {
+      "panel": {
+        "radius": "5px 22px",
+        "background": "radial-gradient(at 100% 0%, color(srgb 0.85098 0.643137 0.254902 / 0.1), rgba(0, 0, 0, 0) 65%), none",
+        "border": "rgb(217, 164, 65) color(srgb 0.335059 0.482039 0.457098) color(srgb 0.335059 0.482039 0.457098)"
+      },
+      "badge": {
+        "radius": "4px 18px",
+        "background": "linear-gradient(135deg, color(srgb 0.158274 0.184941 0.146667), rgb(37, 53, 50))",
+        "border": "rgb(91, 155, 213)"
+      },
+      "fill": {
+        "radius": "99px",
+        "background": "linear-gradient(90deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0.19))",
+        "border": "rgb(243, 238, 226)"
+      },
+      "styles": [
+        "http://localhost:4173/assets/index-C5_pS7PB.css"
+      ]
+    },
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "analysis-styles",
+    "size": "desktop",
+    "ui": "light",
+    "computed": {
+      "panel": {
+        "radius": "5px 22px",
+        "background": "radial-gradient(at 100% 0%, color(srgb 0.85098 0.643137 0.254902 / 0.1), rgba(0, 0, 0, 0) 65%), none",
+        "border": "rgb(217, 164, 65) color(srgb 0.594196 0.680784 0.63498) color(srgb 0.594196 0.680784 0.63498)"
+      },
+      "badge": {
+        "radius": "4px 18px",
+        "background": "linear-gradient(135deg, color(srgb 0.988078 0.971451 0.940392), rgb(233, 227, 211))",
+        "border": "rgb(91, 155, 213)"
+      },
+      "fill": {
+        "radius": "99px",
+        "background": "linear-gradient(90deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0.19))",
+        "border": "rgb(30, 36, 32)"
+      },
+      "styles": [
+        "http://localhost:4173/assets/index-C5_pS7PB.css"
+      ]
+    },
+    "errors": []
+  }
+]
