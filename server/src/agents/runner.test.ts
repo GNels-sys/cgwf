@@ -59,8 +59,8 @@ describe("computer opponents play through the normal event path", () => {
     const cards = lines.filter((l) => l.card).map((l) => ({ cardId: l.card!.id, quantity: l.line.quantity, board: l.line.board }));
     const created = await ctx.app.inject({ method: "POST", url: "/api/decks", headers: auth, payload: { name: "Owner deck", cards } });
     ownerDeckId = (created.json() as { deck: { id: string } }).deck.id;
-    // Two agent-eligible library decks (same cards, different names).
-    for (const name of ["Atraxa A", "Atraxa B"]) {
+    // Six agent-eligible library decks (same cards, different names).
+    for (const name of ["Atraxa A", "Atraxa B", "Atraxa C", "Atraxa D", "Atraxa E", "Atraxa F"]) {
       const lib = await ctx.library.create({ name, source: "user", sourceKey: `test:${name}`, entries: cards.map((c) => ({ cardId: c.cardId, quantity: c.quantity, board: c.board as "main" | "commander" })) }, { combos: "skip" });
       ctx.library.patch(lib.id, { agentEligible: true, bracket: 2, primer: `# ${name}\nRamp, deploy, attack.` });
     }
@@ -145,6 +145,22 @@ describe("computer opponents play through the normal event path", () => {
     // The agent's prompt view never contains the owner's hand: checked structurally by prompt.test.ts; here the host's hand is untouched.
     expect(state.players[ownerId]!.zones.hand.length).toBe(7);
   }, 40000);
+
+  it("re-rolling keeps dealing decks this host has not just been dealt", async () => {
+    const roomRes = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(), payload: {} });
+    const code = (roomRes.json() as { room: { code: string } }).room.code;
+    ctx.roomsManager.get(code)!.takeSeat(ownerId, 0, ownerDeckId);
+    const dealt: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const res = await ctx.app.inject({ method: "POST", url: `/api/rooms/${code}/agents`, headers: auth(), payload: { count: 1, bracket: 2 } });
+      expect(res.statusCode).toBe(200);
+      dealt.push((res.json() as { agents: Array<{ deckName: string }> }).agents[0]!.deckName);
+    }
+    // Six eligible decks: five re-rolls in a row never repeat one (the old picker could deal one deck every time).
+    expect(new Set(dealt).size).toBe(5);
+    const remembered = ctx.agents.recentDecks(ownerId);
+    expect(remembered.length).toBeGreaterThanOrEqual(5);
+  });
 
   it("with a model: one call per decision, rationale and cost recorded, and the game cap concedes politely", async () => {
     const roomRes = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(), payload: {} });

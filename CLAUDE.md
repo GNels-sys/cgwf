@@ -630,9 +630,15 @@ an organisation-level key without it is rejected with "must include the anthropi
 ### Runtime (`server/src/agents/`)
 
 - `manager.ts` (`AgentManager`): `addAgents(room, host, {count, bracket})` removes existing agents,
-  takes `library.list({agentEligible: true, bracket})` (falls back to any eligible deck), shuffles,
-  then greedily picks decks sharing the fewest archetype tags with the host's deck (analysed with
-  combos skipped) and with each other; creates the bot user ("Krenko bot", random avatar), the deck
+  takes `library.list({agentEligible: true, bracket})` (falls back to any eligible deck) and picks
+  with `pickAgentDecks` (`pick.ts`, 2026-10-19 fix for "Re-roll always deals the same four decks":
+  the old greedy fewest-shared-tags sort let tag-less decks win every deal): a **weighted random
+  draw** (weight = 1 - 0.75 x share of the deck's tags already at the table, floor 0.25; a deck with
+  no tags counts as half overlapping), decks dealt to this host recently sit out until the eligible
+  pool is used up (`meta` key `agent_recent_decks:<userId>`, newest first, last 120 decks), then the
+  least recently dealt come back first; two bots never share a commander unless the library leaves no
+  other choice. Tests: `pick.test.ts` (seeded), runner.test "re-rolling keeps dealing decks this host
+  has not just been dealt". It then creates the bot user ("Krenko bot", random avatar), the deck
   copy, joins + seats it on the next free seat. `onGameStarted(room)` / `ensureRunning(room)` start
   one runner per seated agent (also called on every WebSocket attach, so a game resumes after the
   machine restarts); `agent_runs` rows track mode (`live` | `dry_run`), status and totals.
