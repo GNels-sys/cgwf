@@ -9,6 +9,7 @@ import {
   type DeckAnalysis,
   type LibraryDeckDetail,
   type LibraryDeckSummary,
+  type LibraryEngineCheck,
   type LibraryImportInfo,
   type LibraryPatchRequest,
   type LibrarySource,
@@ -18,6 +19,7 @@ import { primerSkeleton } from "../analysis/index.js";
 import type { DbHandle } from "../db/index.js";
 import { cards, libraryDeckCards, libraryDecks, users, type LibraryDeckRow } from "../db/schema.js";
 import { checkPrintingSwap } from "../decks/printing.js";
+import { decideEligibility, type EligibilityDecision } from "./eligibility.js";
 
 /**
  * The owner's deck library. Rows come from the precon importer or from "add my
@@ -66,7 +68,8 @@ export class LibraryService {
       name: row.name,
       source: isLibrarySource(row.source) ? row.source : "user",
       sourceUrl: row.sourceUrl ?? null,
-      importInfo: (row.importMeta as LibraryImportInfo | null) ?? null,
+      importInfo: row.source === "edhrec" ? ((row.importMeta as LibraryImportInfo | null) ?? null) : null,
+      engineCheck: engineCheckOf(row.importMeta as Record<string, unknown> | null),
       setCode: row.setCode,
       setName: row.setName,
       releaseDate: row.releaseDate,
@@ -299,10 +302,18 @@ export class LibraryService {
     return { id, created: !existing };
   }
 
-  /** Record a Forge coverage result and set agent eligibility from it (imported decks only). */
-  setCoverage(id: string, coverage: { missing: string[] | null; error?: string | undefined }, eligibleWhenClean: boolean): void {
+  /**
+   * Record a Forge coverage result (+ engine-table legality problems) in import_meta and update agent
+   * eligibility with `decideEligibility` (eligibility.ts): the owner's own choice is never overridden.
+   */
+  recordCoverage(
+    id: string,
+    coverage: { missing: string[] | null; error?: string | undefined },
+    problems: string[],
+    opts: { enable: boolean },
+  ): EligibilityDecision | null {
     const row = this.getRow(id);
-    if (!row) return;
+    if (!row) return null;
     const meta = { ...((row.importMeta as Record<string, unknown> | null) ?? {}) };
     if (coverage.missing) {
       meta.coverage = { checkedAt: new Date().toISOString(), missing: coverage.missing };
@@ -310,8 +321,30 @@ export class LibraryService {
     } else {
       meta.coverageError = coverage.error ?? "not checked";
     }
-    const eligible = Boolean(coverage.missing && coverage.missing.length === 0 && eligibleWhenClean);
-    this.handle.db.update(libraryDecks).set({ importMeta: meta, agentEligible: eligible, updatedAt: new Date().toISOString() }).where(eq(libraryDecks.id, id)).run();
+    meta.problems = problems;
+    const clean = coverage.missing ? coverage.missing.length === 0 && problems.length === 0 : null;
+    const by = meta.eligibleBy === "owner" || meta.eligibleBy === "coverage" ? meta.eligibleBy : null;
+    const d = decideEligibility({ current: row.agentEligible, eligibleBy: by, source: row.source, clean, enable: opts.enable });
+    meta.eligibleBy = d.eligibleBy;
+    this.handle.db.update(libraryDecks).set({ importMeta: meta, agentEligible: d.eligible, updatedAt: new Date().toISOString() }).where(eq(libraryDecks.id, id)).run();
+    return d;
+  }
+
+  /** EDHREC import's coverage step (clean decks switch on; never against the owner's choice). */
+  setCoverage(id: string, coverage: { missing: string[] | null; error?: string | undefined }, eligibleWhenClean: boolean): void {
+    this.recordCoverage(id, coverage, eligibleWhenClean ? [] : ["not legal for engine tables"], { enable: true });
+  }
+
+  /** Whole library per bracket: bot-eligible vs total (Library page header, bot box). */
+  bracketCounts(): Record<Bracket, { eligible: number; total: number }> {
+    const out = { 1: { eligible: 0, total: 0 }, 2: { eligible: 0, total: 0 }, 3: { eligible: 0, total: 0 }, 4: { eligible: 0, total: 0 }, 5: { eligible: 0, total: 0 } } as Record<Bracket, { eligible: number; total: number }>;
+    const rows = this.handle.db.select({ bracket: libraryDecks.bracket, eligible: libraryDecks.agentEligible }).from(libraryDecks).all();
+    for (const r of rows) {
+      if (!isBracket(r.bracket)) continue;
+      out[r.bracket as Bracket].total++;
+      if (r.eligible) out[r.bracket as Bracket].eligible++;
+    }
+    return out;
   }
 
   /** Re-run the engine (and re-ask Spellbook) for a library deck; keeps the owner's bracket, tags and primer. */
@@ -350,7 +383,11 @@ export class LibraryService {
       if (typeof body.primer !== "string") return { ok: false, error: "primer must be text" };
       set.primer = body.primer.slice(0, MAX_PRIMER);
     }
-    if (body.agentEligible !== undefined) set.agentEligible = Boolean(body.agentEligible);
+    if (body.agentEligible !== undefined) {
+      // The owner's own choice: coverage checks never switch it back (eligibility.ts).
+      set.agentEligible = Boolean(body.agentEligible);
+      set.importMeta = { ...((row.importMeta as Record<string, unknown> | null) ?? {}), eligibleBy: "owner" };
+    }
     if (Object.keys(set).length) {
       set.updatedAt = new Date().toISOString();
       this.handle.db.update(libraryDecks).set(set).where(eq(libraryDecks.id, id)).run();
@@ -375,4 +412,17 @@ export class LibraryService {
     if (!a) return null;
     return primerSkeleton(row.name, a, analysisCards);
   }
+}
+
+/** The rules-engine check recorded in import_meta, for any source. */
+export function engineCheckOf(meta: Record<string, unknown> | null): LibraryEngineCheck | null {
+  if (!meta || (meta.coverage === undefined && meta.coverageError === undefined && meta.eligibleBy === undefined)) return null;
+  const cov = meta.coverage as { checkedAt?: string; missing?: string[] } | null | undefined;
+  return {
+    checkedAt: cov?.checkedAt ?? null,
+    missing: cov?.missing ?? null,
+    problems: Array.isArray(meta.problems) ? (meta.problems as string[]) : [],
+    error: typeof meta.coverageError === "string" ? meta.coverageError : null,
+    eligibleBy: meta.eligibleBy === "owner" || meta.eligibleBy === "coverage" ? meta.eligibleBy : null,
+  };
 }

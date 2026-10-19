@@ -532,6 +532,43 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
   (name, bracket select, agent-eligible toggle, tag chips, primer textarea with "Fill in a
   skeleton", Save, Re-analyse, Remove, the engine analysis, the card list). Deck pages show
   "Add to library" for the owner (`isOwner(user)` in `client/src/user.tsx`; the server enforces).
+- **Bot pool and the rules-engine check (2026-10-19).** Owner report: Bracket 2 bots kept dealing the
+  same four decks (Sai, Giada, Trostani, Jace). Cause: only 4 of the 197 precons were agent-eligible
+  (an earlier test run had switched them on), so the Bracket 2 pool was four decks. Fixes:
+  - `server/src/library/coverage.ts` (`LibraryCoverage`): the EDHREC importer's Forge check made
+    library-wide, for any source. Each deck goes through `deckForEngine` (an engine table's own
+    conversion and legality checks) and `CoverageChecker` (four decks per `deckcheck-<uuid>` game);
+    `LibraryService.recordCoverage` stores `import_meta.coverage` {checkedAt, missing}, `problems`
+    (why an engine table would refuse it), `coverageError`, `eligibleBy`, and writes
+    `DATA_DIR/reports/library-coverage-<ts>.md` (per-bracket eligible before/after, switched on,
+    excluded with missing cards or problems, not checked). Run: `node server/dist/cli.js
+    check-library-coverage [--source precon|edhrec|user] [--enable]` over `fly ssh console` (needs the
+    running server; stays attached and prints progress), `POST /api/admin/library-coverage` (loopback /
+    ADMIN_TOKEN), owner `POST/GET /api/library/coverage {source?, enable?}` and the Library page's "Check
+    with the rules engine" button. **Precon imports run it for the decks they add** (with enable) and
+    list the ones that are not for bots in the import's problems.
+  - **Eligibility never overrides the owner** (`server/src/library/eligibility.ts`, `decideEligibility`):
+    `import_meta.eligibleBy` = "owner" (set by PATCH agentEligible from the Library page: the check never
+    changes it, on or off) or "coverage" (switched on by a check, so a later failing check may switch it
+    off). With no record, a deck that is already on counts as the owner's (the four hand-enabled
+    precons), except EDHREC imports, which only ever became eligible through their importer's check. A
+    check that could not run (engine down) changes nothing. The EDHREC importer's `setCoverage` uses the
+    same rule. `LibraryDeckSummary.engineCheck` exposes the result for every source (`importInfo` is now
+    EDHREC rows only); the library deck page shows missing cards / problems for non-EDHREC decks.
+  - **Library page header**: bot-eligible vs total per bracket (`LibraryListResponse.bracketCounts`,
+    whole library, ignoring filters), brackets under 15 eligible decks marked; tap one to filter.
+  - **Bot box** (`AgentsControl` in `client/src/game/Lobby.tsx`): `GET /api/agents/pool?room=CODE`
+    (owner, not behind AGENTS_ENABLED) -> eligible decks per bracket + the host's deck bracket (library
+    seat: its stored bracket and tags; own deck: the analysis suggestion), which is the default choice.
+    Options read "2 · Core · 190 decks", plus "Any bracket near mine (B1-B3) · N decks" (`bracket:
+    "near"` = `nearBrackets(host)`, the host's bracket and one either side). A warning shows when the
+    pool is under 5 decks per bot seat ("Only N decks at this bracket; re-rolls will repeat").
+    `AddAgentsResponse.pool` {brackets, size, fallback, note}: an empty choice still falls back to every
+    eligible deck and says so ("No Bracket 1 decks for bots; dealt from all brackets."). Helpers
+    `agentPoolSize`, `agentPoolIsSmall`, `nearLabel` in `shared/src/agents.ts`. Tests:
+    `library/eligibility.test.ts`, `library/coverage.test.ts` (fixture engine + fixture MTGJSON: import
+    auto-check, hand-enabled kept, hand-disabled kept, check-enabled switched off later, offline engine,
+    report-only, routes, counts), `agents/runner.test.ts` "bot box", `shared/src/agents.test.ts`.
 - **Phase 7 hook:** a model may draft the primer; keep `PRIMER_SECTIONS` headings (the agent will
   read them by name), write the draft into `library_decks.primer` through the same PATCH, and add
   the model call behind an owner-only route. Agent opponents should pick from

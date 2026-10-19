@@ -51,6 +51,9 @@ import type {
   UploadKind,
   User,
   UserSettings,
+  AddAgentsRequest,
+  AgentPoolCounts,
+  LibraryCoverageState,
 } from "@cgwf/shared";
 
 const TOKEN_KEY = "cgwf.token";
@@ -166,6 +169,9 @@ export const api = {
     stats: (id: string) => request<DeckStatsResponse>(`/api/library/${encodeURIComponent(id)}/stats`),
     patch: (id: string, body: LibraryPatchRequest) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}`, { method: "PATCH", json: body }),
     remove: (id: string) => request<{ ok: true }>(`/api/library/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    /** Library-wide rules-engine check; `enable` switches clean decks on for bots (never the owner's own choices). */
+    checkCoverage: (body: { source?: string; enable: boolean }) => request<{ started: boolean; state: LibraryCoverageState }>("/api/library/coverage", { json: body }),
+    coverageState: () => request<{ state: LibraryCoverageState }>("/api/library/coverage"),
     setPrinting: (id: string, entryId: number, cardId: string) =>
       request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}/cards/${entryId}`, { method: "PATCH", json: { cardId } }),
     analyze: (id: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}/analyze`, { method: "POST", json: {} }),
@@ -177,7 +183,9 @@ export const api = {
   agents: {
     status: () => request<AgentsStatus>("/api/agents/status"),
     games: () => request<AgentGamesResponse>("/api/agents/games"),
-    add: (code: string, body: { count: number; bracket: number }) => request<AddAgentsResponse>(`/api/rooms/${encodeURIComponent(code)}/agents`, { json: body }),
+    add: (code: string, body: AddAgentsRequest) => request<AddAgentsResponse>(`/api/rooms/${encodeURIComponent(code)}/agents`, { json: body }),
+    /** Bot-eligible library decks per bracket, and the host's deck bracket in this room. */
+    pool: (code: string) => request<AgentPoolCounts>(`/api/agents/pool?room=${encodeURIComponent(code)}`),
     remove: (code: string) => request<{ removed: number }>(`/api/rooms/${encodeURIComponent(code)}/agents`, { method: "DELETE" }),
     room: (code: string) => request<RoomAgentsResponse>(`/api/rooms/${encodeURIComponent(code)}/agents`),
     draftPrimer: (libraryDeckId: string, force = false) => request<DraftPrimerResponse>(`/api/library/${encodeURIComponent(libraryDeckId)}/draft-primer`, { json: { force } }),

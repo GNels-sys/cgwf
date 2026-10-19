@@ -4,6 +4,13 @@
  *   node server/dist/cli.js import-precons [--force] [--no-combos]
  *   node server/dist/cli.js agent-game [--agents 2] [--bracket 2] [--rounds 3]
  *   node server/dist/cli.js import-edhrec [--dry-run] [--refresh] [--recheck-coverage]
+ *   node server/dist/cli.js check-library-coverage [--source precon|edhrec|user] [--enable]
+ *
+ * `check-library-coverage` runs every library deck (or one source) through the rules engine the way an
+ * engine table would (server/src/library/coverage.ts) and records the result; with `--enable` it
+ * switches on, for bots, the decks Forge can fully play that are legal for engine tables. It never
+ * changes a deck the owner switched on or off by hand. It needs the running server (which holds the
+ * engine connection) and stays attached, printing progress, until the check ends.
  *
  * `import-edhrec` adds EDHREC average decks to the deck library (75 Bracket 3, 75 Bracket 4,
  * 25 cEDH; see server/src/library/edhrec). With the server running it asks the server (which holds
@@ -32,8 +39,8 @@ const file = fileIdx >= 0 ? rest[fileIdx + 1] : undefined;
 const force = flags.has("--force");
 const base = `http://127.0.0.1:${config.port}`;
 
-if (command !== "ingest" && command !== "import-precons" && command !== "agent-game" && command !== "import-edhrec") {
-  console.error("usage: cli ingest [--force] [--file cards.json] | cli import-precons [--force] [--no-combos] | cli agent-game [--agents N] [--bracket B] [--rounds R] | cli import-edhrec [--dry-run] [--refresh] [--recheck-coverage]");
+if (command !== "ingest" && command !== "import-precons" && command !== "agent-game" && command !== "import-edhrec" && command !== "check-library-coverage") {
+  console.error("usage: cli ingest [--force] [--file cards.json] | cli import-precons [--force] [--no-combos] | cli agent-game [--agents N] [--bracket B] [--rounds R] | cli import-edhrec [--dry-run] [--refresh] [--recheck-coverage] | cli check-library-coverage [--source precon|edhrec|user] [--enable]");
   process.exit(2);
 }
 
@@ -168,6 +175,46 @@ async function importEdhrec(): Promise<void> {
 
 if (command === "import-edhrec") {
   await importEdhrec();
+  process.exit(0);
+}
+
+async function checkLibraryCoverage(): Promise<void> {
+  const fs = await import("node:fs");
+  const i = rest.indexOf("--source");
+  const source = i >= 0 ? rest[i + 1] : undefined;
+  const body = { source, enable: flags.has("--enable") };
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/admin/library-coverage`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  } catch {
+    console.error("the server is not running on this machine; the check needs its rules-engine connection");
+    process.exit(1);
+  }
+  if (res.status !== 202 && res.status !== 409) {
+    console.error(`server answered ${res.status}: ${await res.text()}`);
+    process.exit(1);
+  }
+  console.log(res.status === 409 ? "a check is already running; following it" : `rules-engine check started (${source ?? "every source"}${body.enable ? ", switching clean decks on" : ", report only"})`);
+  type State = { running: boolean; message: string; error: string | null; reportPath: string | null };
+  let last = "";
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const s = ((await (await fetch(`${base}/api/admin/library-coverage`)).json()) as { state: State }).state;
+    if (s.message !== last) console.log(s.message);
+    last = s.message;
+    if (!s.running) {
+      if (s.reportPath && fs.existsSync(s.reportPath)) console.log(`\nreport: ${s.reportPath}\n\n${fs.readFileSync(s.reportPath, "utf8")}`);
+      if (s.error) {
+        console.error(`check failed: ${s.error}`);
+        process.exit(1);
+      }
+      return;
+    }
+  }
+}
+
+if (command === "check-library-coverage") {
+  await checkLibraryCoverage();
   process.exit(0);
 }
 

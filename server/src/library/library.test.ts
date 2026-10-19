@@ -106,8 +106,10 @@ describe("deck library (owner only)", () => {
     expect(state.phase).toBe("done");
     expect(state.total).toBe(2); // theme deck filtered out
     expect(state.imported).toBe(1);
-    expect(state.errors.length).toBe(1);
+    // The broken deck, then the rules-engine check of the deck that was added (a 9-card list: not for bots).
+    expect(state.errors.length).toBe(2);
     expect(state.errors[0]).toContain("Broken Precon");
+    expect(state.errors[1]).toMatch(/^Test Precon: not for bots/);
     expect(mtgjsonCalls.filter((u) => u === MTGJSON_DECK_LIST_URL)).toHaveLength(1);
 
     const list = (await ctx.app.inject({ method: "GET", url: "/api/library", headers: asOwner() })).json() as LibraryListResponse;
