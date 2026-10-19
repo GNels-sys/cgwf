@@ -1,4 +1,5 @@
 import type {
+  AdminOpenTable,
   DeckOptionsResponse,
   AddAgentsResponse,
   AdminStatsQuery,
@@ -184,6 +185,9 @@ export const api = {
       return request<AdminStatsResponse>(`/api/admin/stats${s ? `?${s}` : ""}`, { ...(signal ? { signal } : {}) });
     },
     user: (id: string) => request<AdminUserDetail>(`/api/admin/users/${encodeURIComponent(id)}`),
+    tables: () => request<{ tables: AdminOpenTable[] }>("/api/admin/tables"),
+    closeTable: (code: string) => request<{ closed: boolean }>(`/api/admin/tables/${encodeURIComponent(code)}/close`, { method: "POST", json: {} }),
+    closeIdle: (hours: number) => request<{ open: number; closed: number; codes: string[] }>("/api/admin/tables/close-idle", { method: "POST", json: { hours } }),
   },
 
   /** Phase 8: friends, invites, the bell and the agent deck queue. */
@@ -271,6 +275,8 @@ export const api = {
     get: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}`),
     join: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}/join`, { method: "POST", json: {} }),
     mine: () => request<MyRoomsResponse>("/api/rooms/mine"),
+    /** Host (or owner): close a table without a result. */
+    end: (code: string) => request<{ closed: boolean }>(`/api/rooms/${encodeURIComponent(code)}/end`, { method: "POST", json: {} }),
     decks: () => request<{ decks: Array<{ id: string; name: string; commanders: string[] }> }>("/api/rooms/decks"),
     /** The lobby deck picker: own decks OR the deck library, filtered by bracket (null = any), alphabetical. */
     deckOptions: (bracket: number | null) => request<DeckOptionsResponse>(`/api/rooms/deck-options${bracket ? `?bracket=${bracket}` : ""}`),

@@ -1186,6 +1186,55 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   precons to completion); redeploy `cgwf-engine` from `engine/` with
   `fly deploy --remote-only --ha=false`, then `fly machine start` if it comes up stopped.
 
+## Deck statistics: game results, test games, closing tables (2026-10-19)
+
+Owner request: track each deck's performance (overall, per table bracket and player count, head to head),
+mark games as "Test" so they are not counted, treat every earlier game as a test game, and close tables
+that never finished. Decisions (the parent session's, recorded here):
+
+- **Table bracket** = a lobby setting (B1-B5) agreed before the game. Default: the highest suggested
+  bracket among the seated decks (library decks: stored bracket; own decks: the analysis engine's
+  suggestion; a bot's library copy: its library deck's bracket). The host may pick one until the game
+  starts (`{t:"tableSettings", tableBracket}`; null = automatic); it is frozen at start.
+- **Test game**: lobby toggle, off by default, host-editable until start (`{t:"tableSettings", testGame}`),
+  shown to everyone (`RoomInfo.testGame`), tagged "Test" in Recent tables.
+- **Counted** only when: an engine game, not a test game, and Forge reported a result (a winner, or
+  Forge's own draw). A concede is a loss for that seat. A table closed without a finish is
+  "abandoned" (recorded, never counted); an engine failure with no outcome is "abandoned" too.
+- **Frozen per seat at start**: the user (or bot user, `is_bot`), the deck reference (own deck id, or
+  `library:<id>`; a bot's copy of a library deck is recorded as the library deck), deck name and
+  commanders as text (history survives deletions), the deck's bracket at that moment, seat count, table
+  bracket. Personal decks carry `deck_owner_id` (their stats are visible only to that owner); library
+  decks have none (aggregated across everyone).
+
+**Data** (migration 0011): `rooms.test_game`, `rooms.table_bracket`; `game_results` (id = room id,
+room code, started/ended, table bracket, player count, test, counted, end_reason win|draw|abandoned,
+detail = Forge's end reason or why it was closed, turns) and `game_result_seats` (seat, user id, is_bot,
+deck_ref, deck_owner_id, deck_name, commanders, deck_bracket, place, won, conceded). The migration marks
+EVERY existing room `test_game = 1` and backfills a `game_results` row (test, never counted) for every
+room that had started. Written only by the engine relay (`server/src/stats/results.ts` `GameResults`:
+`recordStart` in `EngineTable.start`, `recordFinish` on the engine's `gameOver`, `abandon` on close or
+an engine restart); the classic table never writes results.
+
+**Places from Forge.** The engine's `gameOver` frame now carries `results` per seat
+(`GameSession.results()`): place 1 = the winner, then in reverse order of elimination (seats out
+together share a place; `GameSession.noteEliminations` watches `Player.hasLost()` on every game event),
+`won`, `conceded`, `lossReason`. A draw leaves every seat still in at place 1, none won. Engine test:
+`GameResultsTest` (a real game: the human concedes, Forge's AI wins). Note: a concede only takes effect
+at the seat's next priority (Forge asks pregame questions first).
+
+**Closing tables (no result recorded).** `LiveRoom.closeTable(reason)`: an engine game is torn down
+(`EngineTable.close`: endGame to the engine, the room ends at once with an EngineGameOver line, the
+result is "abandoned"; the engine's later draw frame is ignored); a lobby just ends. Who: the host
+("End table" in the lobby, `{t:"endTable"}`, or `POST /api/rooms/:code/end` from Recent tables; the
+owner may too), the owner from Admin -> Open tables (`GET /api/admin/tables`,
+`POST /api/admin/tables/:code/close`, `POST /api/admin/tables/close-idle {hours: 24}`), and the server
+itself: `RoomManager.startIdleSweep` closes tables idle for `TABLE_IDLE_CLOSE_HOURS` (48) one minute
+after boot and hourly. For operations, `GET /api/admin/machine/open-tables` and
+`POST /api/admin/machine/close-idle-tables {hours}` answer loopback (fly ssh) or `x-admin-token`.
+Tests: engine.test (counted win with places and a concede, test game not counted, End table + late
+draw ignored, idle close), `stats/backfill.test.ts`, deckOptions.test (owner-only admin close, host end).
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**

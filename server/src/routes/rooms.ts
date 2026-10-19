@@ -53,6 +53,16 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
     },
   );
 
+  /** Host (or the owner): close a table without a result, e.g. from Recent tables. */
+  app.post<{ Params: { code: string } }>("/api/rooms/:code/end", { preHandler: auth }, async (req, reply) => {
+    const room = findRoom(req.params.code);
+    if (!room) return reply.code(404).send({ error: "no room with that code" });
+    const row = room.refreshRow();
+    if (row.hostUserId !== req.user!.id && !req.user!.isOwner) return reply.code(403).send({ error: "only the host can end the table" });
+    const closed = room.closeTable(`${req.user!.displayName} closed the table (no result recorded).`);
+    return { closed };
+  });
+
   app.get("/api/rooms/mine", { preHandler: auth }, async (req): Promise<MyRoomsResponse> => {
     return { rooms: roomsManager.listForUser(req.user!.id) };
   });
@@ -134,6 +144,16 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
           case "revert":
             room.revert(user.id, Number(msg.toSeq));
             break;
+          case "tableSettings":
+            room.setTableSettings(user.id, { testGame: msg.testGame, tableBracket: msg.tableBracket });
+            room.broadcastRoom();
+            break;
+          case "endTable": {
+            const row = room.refreshRow();
+            if (row.hostUserId !== user.id && !user.isOwner) throw new RoomError("only the host can end the table");
+            room.closeTable(`${user.displayName} closed the table (no result recorded).`);
+            break;
+          }
           case "rematch": {
             const next = roomsManager.rematch(room, user.id);
             next.broadcastRoom();

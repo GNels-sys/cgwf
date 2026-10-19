@@ -2466,3 +2466,19 @@ button.engine-row { cursor: pointer; width: 100%; }
 @media (max-width: 900px) { .phase-turn-text.has-round { max-width: 170px; } }
 .game-log-line.is-round { margin-top: 10px; padding: 4px 0 2px; border-top: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); font: 500 0.82rem var(--font-display); letter-spacing: 0.04em; }
 .game-log-line.is-round + .game-log-line.is-turn { margin-top: 2px; border-top: 0; padding-top: 0; }
+
+/* lobby: table settings (TableSettings.tsx), End table */
+.table-settings { margin: 18px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.table-settings-test { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.table-settings-test input { width: 20px; height: 20px; }
+.table-settings-test.is-on strong { color: var(--accent); }
+.table-settings .field { margin-block: 8px; }
+.table-settings-bracket select { width: 100%; max-width: 360px; }
+.table-settings-note { margin: 4px 0 0; }
+.lobby-end { margin: 12px 0; }
+.room-list li { display: flex; align-items: center; gap: 8px; }
+.room-list li > .room-row { flex: 1; min-width: 0; }
+.table-kind-tag.is-test { opacity: 0.8; }
+.admin-open-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.admin-open-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin-open-list .muted { flex: 1; min-width: 200px; }

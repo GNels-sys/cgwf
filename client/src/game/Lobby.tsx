@@ -5,6 +5,7 @@ import { Avatar } from "../components/Avatar";
 import { isOwner, useUser } from "../user";
 import type { RoomSocket } from "./socket";
 import { DeckPicker } from "./DeckPicker";
+import { TableSettings } from "./TableSettings";
 
 /** Seat picking before the game: each player sits down with one of their own decks or a library deck; the host starts. */
 export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
@@ -84,7 +85,10 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
                     {m.isAgent && <span className="bot-chip">BOT</span>}
                     {!m.online && !m.isAgent && <span className="muted small"> &middot; offline</span>}
                     <br />
-                    <span className="muted small">{m.deckName ? `${m.deckName}${m.commanders.length ? ` - ${m.commanders.join(" / ")}` : ""}` : "no deck yet"}</span>
+                    <span className="muted small">
+                      {m.deckName ? `${m.deckName}${m.commanders.length ? ` - ${m.commanders.join(" / ")}` : ""}` : "no deck yet"}
+                      {room.engine && m.deckName && <span className="seat-deck-bracket">{m.deckBracket ? ` · B${m.deckBracket}` : " · bracket unknown"}</span>}
+                    </span>
                     {m.deckProblems.length > 0 && (
                       <>
                         <br />
@@ -113,6 +117,8 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
         })}
       </ul>
 
+      {room.engine && <TableSettings room={room} sock={sock} isHost={isHost} />}
+
       {myMember?.role === "player" && <DeckPicker deckId={myMember.deckId} onPick={pickDeck} />}
 
       {sock.error && <p className="error small">{sock.error}</p>}
@@ -124,6 +130,19 @@ export function Lobby({ room, sock }: { room: RoomInfo; sock: RoomSocket }) {
       {spectators.length > 0 && (
         <p className="muted small">
           Watching: {spectators.map((m) => m.name).join(", ")}
+        </p>
+      )}
+
+      {isHost && (
+        <p className="lobby-end">
+          <button
+            className="btn btn-small btn-danger"
+            onClick={() => {
+              if (window.confirm("End this table? Nobody can play at it afterwards, and no result is recorded.")) sock.send({ t: "endTable" });
+            }}
+          >
+            End table
+          </button>
         </p>
       )}
 

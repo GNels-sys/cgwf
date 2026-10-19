@@ -39,6 +39,21 @@ function PlayHome() {
     }
   };
 
+  /** Host: close a table that never finished (no result is recorded). */
+  const endTable = async (tableCode: string) => {
+    if (!window.confirm(`End table ${tableCode}? Nobody can play at it afterwards, and no result is recorded.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.rooms.end(tableCode);
+      setRecent((list) => list.map((x) => (x.code === tableCode ? { ...x, status: "ended" } : x)));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const join = async (e: FormEvent) => {
     e.preventDefault();
     const clean = code.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -108,10 +123,16 @@ function PlayHome() {
                 <Link to={`/room/${r.code}`} className="room-row">
                   <span className="room-code">{r.code}</span>
                   <span className={`table-kind-tag${r.engine ? " is-engine" : ""}`}>{r.engine ? "Rules engine" : "Casual (legacy)"}</span>
+                  {r.testGame && r.engine && <span className="table-kind-tag is-test">Test</span>}
                   <span className="muted small">
                     {r.status === "lobby" ? "Waiting" : r.status === "playing" ? "In progress" : "Finished"} &middot; {r.players} player{r.players === 1 ? "" : "s"} &middot; host {r.hostName}
                   </span>
                 </Link>
+                {r.isHost && r.status !== "ended" && (
+                  <button className="btn btn-small btn-danger room-end" onClick={() => void endTable(r.code)} disabled={busy}>
+                    End table
+                  </button>
+                )}
               </li>
             ))}
           </ul>

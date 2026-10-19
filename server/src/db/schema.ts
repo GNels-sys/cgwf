@@ -172,10 +172,68 @@ export const rooms = sqliteTable(
     engine: integer("engine", { mode: "boolean" }).notNull().default(false),
     /** JSON (seats with Forge player ids, card id -> printing id map) so a restart can still render the table. */
     engineState: text("engine_state"),
+    /** Lobby setting "Test game": the game is played normally but never counted in deck statistics. */
+    testGame: integer("test_game", { mode: "boolean" }).notNull().default(false),
+    /** Lobby setting "Table bracket" chosen by the host (null = the highest suggested bracket among seated decks). */
+    tableBracket: integer("table_bracket"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (t) => [uniqueIndex("rooms_code_idx").on(t.code), index("rooms_updated_idx").on(t.updatedAt)],
+);
+
+/**
+ * One rules-engine game (one per room), frozen at game start and finished at game over. COUNTED in deck
+ * statistics only when it is an engine game, not a test game, and Forge reported a result (a winner or a
+ * draw). Tables closed without a finish are "abandoned" and never counted. Never written by the classic table.
+ */
+export const gameResults = sqliteTable(
+  "game_results",
+  {
+    /** = rooms.id */
+    id: text("id").primaryKey(),
+    roomCode: text("room_code").notNull(),
+    startedAt: text("started_at").notNull(),
+    endedAt: text("ended_at"),
+    /** The table bracket agreed in the lobby, frozen at start (1-5). */
+    tableBracket: integer("table_bracket"),
+    playerCount: integer("player_count").notNull(),
+    test: integer("test", { mode: "boolean" }).notNull().default(false),
+    counted: integer("counted", { mode: "boolean" }).notNull().default(false),
+    /** "win" | "draw" | "abandoned"; null while the game runs. */
+    endReason: text("end_reason"),
+    /** Forge's own end reason (AllOpponentsLost, Draw, ...) or why the table was closed. */
+    detail: text("detail"),
+    turns: integer("turns"),
+  },
+  (t) => [index("game_results_counted_idx").on(t.counted)],
+);
+
+/** One seat of a recorded game: who, with which deck (snapshot survives deletions), and how it went. */
+export const gameResultSeats = sqliteTable(
+  "game_result_seats",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    gameId: text("game_id")
+      .notNull()
+      .references(() => gameResults.id, { onDelete: "cascade" }),
+    seat: integer("seat").notNull(),
+    /** users.id of the player (or of the bot user); no FK so history survives a deleted profile. */
+    userId: text("user_id"),
+    isBot: integer("is_bot", { mode: "boolean" }).notNull().default(false),
+    /** The deck: a user deck id, or "library:<library_decks.id>" (bots' library copies map to their library deck). */
+    deckRef: text("deck_ref"),
+    /** Owner of a personal deck (null for library decks): personal-deck stats are visible only to them. */
+    deckOwnerId: text("deck_owner_id"),
+    deckName: text("deck_name").notNull(),
+    commanders: text("commanders", { mode: "json" }).$type<string[]>().notNull(),
+    /** The deck's bracket at game start (library: stored; own deck: the analysis suggestion). */
+    deckBracket: integer("deck_bracket"),
+    place: integer("place"),
+    won: integer("won", { mode: "boolean" }).notNull().default(false),
+    conceded: integer("conceded", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [index("game_result_seats_game_idx").on(t.gameId), index("game_result_seats_deck_idx").on(t.deckRef)],
 );
 
 export const roomMembers = sqliteTable(

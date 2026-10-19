@@ -119,3 +119,14 @@ export interface AdminStatsResponse {
 export function isAdminUserSort(v: unknown): v is AdminUserSort {
   return typeof v === "string" && (ADMIN_USER_SORTS as readonly string[]).includes(v);
 }
+
+/** Owner, Admin page: a table still open (lobby or playing). */
+export interface AdminOpenTable {
+  code: string;
+  status: "lobby" | "playing";
+  engine: boolean;
+  hostName: string;
+  players: number;
+  updatedAt: string;
+  createdAt: string;
+}
