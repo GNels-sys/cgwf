@@ -77,7 +77,10 @@ awake. A finished download survives an interrupted import.
 
 Search: `NameIndex` keeps one best printing per oracle id (paper > promo-free > in boosters >
 hi-res scan > newest) plus aliases for each face name; tiers exact > prefix > word > substring >
-bounded edit distance.
+bounded edit distance. Names are normalised without punctuation, so two different cards can share
+an exact key ("Rampant Growth" and the playtest card "Rampant, Growth"): the first in printing
+preference order keeps it, which is the paper, in-booster card (fixed 2026-10-19; it had sent 23 EDHREC
+decks to Forge with a card Forge does not know).
 
 ## Identity and decks (Phase 2)
 
