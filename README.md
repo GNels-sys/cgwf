@@ -22,6 +22,8 @@ Coast LLC. Card data and images courtesy of [Scryfall](https://scryfall.com).
   and a suggested bracket, with the reasons card by card (Game Changers, mass land denial, extra
   turns, two-card infinite combos found by Commander Spellbook), strategy tags and a summary.
   No AI involved; the Game Changers list is a dated file you can edit by hand.
+- A deck library with 175 EDHREC average decks (75 Bracket 3, 75 Bracket 4, 25 cEDH, varied in
+  colours and strategies; average deck data from EDHREC, synthesised from many players' lists).
 - Owner only: a deck library of every Commander precon (imported from MTGJSON) plus your own
   decks, each with a bracket, tags and a primer, for the computer opponents to pilot.
 - Owner only: computer opponents driven by Claude. Add one to three to a table from the lobby;
@@ -103,6 +105,9 @@ rate-limited and logged. Without the secret, claiming is disabled.
 
 Accounts have no email verification or password reset yet (there is no email provider), so
 keep your password somewhere safe. Notifications are polled in the app (no browser push yet).
+
+EDHREC decks: `fly ssh console -C "node server/dist/cli.js import-edhrec"` (15-20 minutes the first
+time, safe to rerun; `--dry-run` only writes the report). The report lands in `/data/reports/`.
 
 Deck library: once you are the owner, open **Library** in the top bar and press "Import precons"
 (about 200 decks, five minutes, safe to run again), or from the machine:

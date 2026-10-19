@@ -1577,3 +1577,23 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
 .deck-stats-name { color: var(--accent); }
 .deck-stats-detail > td { padding: 0; }
 @media (max-width: 600px) { .perf-overall { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* ---- EDHREC average decks in the library ---- */
+.edhrec-credit {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+}
+.edhrec-credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tag-chip.is-warn {
+  border-color: var(--warn, #c9893a);
+}
+.edhrec-credit-box p {
+  margin: 4px 0;
+}

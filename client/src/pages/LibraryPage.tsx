@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type LibraryDeckSummary, type LibraryImportState, type SubmissionInfo } from "@cgwf/shared";
 import { api } from "../api";
+import { EdhrecCredit } from "../components/EdhrecCredit";
 import { RequireUser } from "../components/RequireUser";
 import { isOwner, useUser } from "../user";
 
@@ -257,8 +258,9 @@ function LibraryList() {
           ))}
         </select>
         <select value={source} onChange={(e) => setSource(e.target.value)} aria-label="Source">
-          <option value="">Precons + mine</option>
+          <option value="">All sources</option>
           <option value="precon">Precons</option>
+          <option value="edhrec">EDHREC averages</option>
           <option value="user">Mine</option>
         </select>
         <select value={agent} onChange={(e) => setAgent(e.target.value)} aria-label="Agent eligible">
@@ -289,6 +291,7 @@ function LibraryList() {
                       {d.createdByName ? ` · from ${d.createdByName}` : ""} · {d.cardCount} cards
                       {d.floor !== null && d.suggested !== null ? ` · floor ${d.floor}, suggested ${d.suggested}` : ""}
                     </span>
+                    <EdhrecCredit deck={d} compact />
                   </span>
                   <span className="library-row-tags">
                     {d.tags.slice(0, 3).map((t) => (

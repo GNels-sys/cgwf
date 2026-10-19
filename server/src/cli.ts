@@ -3,6 +3,12 @@
  *   node server/dist/cli.js ingest [--force] [--file path/to/cards.json]
  *   node server/dist/cli.js import-precons [--force] [--no-combos]
  *   node server/dist/cli.js agent-game [--agents 2] [--bracket 2] [--rounds 3]
+ *   node server/dist/cli.js import-edhrec [--dry-run] [--refresh] [--recheck-coverage]
+ *
+ * `import-edhrec` adds EDHREC average decks to the deck library (75 Bracket 3, 75 Bracket 4,
+ * 25 cEDH; see server/src/library/edhrec). With the server running it asks the server (which holds
+ * the rules-engine connection used for the Forge coverage check) and prints progress and the final
+ * report; without one it runs in this process (no engine, so coverage stays unchecked).
  *
  * `agent-game` is the Phase 7 smoke test: it opens the database in this
  * process, seats a scripted human plus N computer opponents on a fresh table,
@@ -26,8 +32,8 @@ const file = fileIdx >= 0 ? rest[fileIdx + 1] : undefined;
 const force = flags.has("--force");
 const base = `http://127.0.0.1:${config.port}`;
 
-if (command !== "ingest" && command !== "import-precons" && command !== "agent-game") {
-  console.error("usage: cli ingest [--force] [--file cards.json] | cli import-precons [--force] [--no-combos] | cli agent-game [--agents N] [--bracket B] [--rounds R]");
+if (command !== "ingest" && command !== "import-precons" && command !== "agent-game" && command !== "import-edhrec") {
+  console.error("usage: cli ingest [--force] [--file cards.json] | cli import-precons [--force] [--no-combos] | cli agent-game [--agents N] [--bracket B] [--rounds R] | cli import-edhrec [--dry-run] [--refresh] [--recheck-coverage]");
   process.exit(2);
 }
 
@@ -114,6 +120,54 @@ async function agentGame(): Promise<void> {
 
 if (command === "agent-game") {
   await agentGame();
+  process.exit(0);
+}
+
+async function importEdhrec(): Promise<void> {
+  const fs = await import("node:fs");
+  const body = { dryRun: flags.has("--dry-run"), refresh: flags.has("--refresh"), recheckCoverage: flags.has("--recheck-coverage") };
+  type State = { running: boolean; phase: string; message: string; requests: number; cacheHits: number; error: string | null; reportPath: string | null };
+  const printReport = (s: State) => {
+    if (s.reportPath && fs.existsSync(s.reportPath)) {
+      console.log(`\nreport: ${s.reportPath}\n`);
+      console.log(fs.readFileSync(s.reportPath, "utf8"));
+    }
+  };
+  let res: Response | null = null;
+  try {
+    res = await fetch(`${base}/api/admin/import-edhrec`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  } catch {
+    res = null;
+  }
+  if (res && (res.status === 202 || res.status === 409)) {
+    console.log(res.status === 409 ? "an EDHREC import is already running; following it" : "EDHREC import started on the running server");
+    let last = "";
+    for (;;) {
+      await new Promise((r) => setTimeout(r, 5000));
+      const s = ((await (await fetch(`${base}/api/admin/import-edhrec`)).json()) as { state: State }).state;
+      const line = `${s.phase}: ${s.message} (requests ${s.requests}, cached ${s.cacheHits})`;
+      if (line !== last) console.log(line);
+      last = line;
+      if (!s.running) {
+        printReport(s);
+        if (s.error) {
+          console.error(`import failed: ${s.error}`);
+          process.exit(1);
+        }
+        return;
+      }
+    }
+  }
+  console.log("no running server answered; running the import in this process (no rules engine: coverage stays unchecked)");
+  const ctx = await buildApp({ logger: "plain", edhrecCoverage: null });
+  await ctx.edhrec.run(body);
+  printReport(ctx.edhrec.state);
+  await ctx.app.close();
+  if (ctx.edhrec.state.error) process.exit(1);
+}
+
+if (command === "import-edhrec") {
+  await importEdhrec();
   process.exit(0);
 }
 

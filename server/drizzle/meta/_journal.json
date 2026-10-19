@@ -85,6 +85,13 @@
       "when": 1792381932511,
       "tag": "0011_happy_shiva",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1792387492000,
+      "tag": "0012_old_squadron_sinister",
+      "breakpoints": true
     }
   ]
 }

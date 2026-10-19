@@ -3,12 +3,15 @@ import { and, asc, desc, eq, inArray, like, or, type SQL } from "drizzle-orm";
 import {
   isArchetypeTag,
   isBracket,
+  isLibrarySource,
   type ArchetypeTag,
   type Bracket,
   type DeckAnalysis,
   type LibraryDeckDetail,
   type LibraryDeckSummary,
+  type LibraryImportInfo,
   type LibraryPatchRequest,
+  type LibrarySource,
 } from "@cgwf/shared";
 import type { DeckAnalyzer } from "../analysis/service.js";
 import { primerSkeleton } from "../analysis/index.js";
@@ -28,7 +31,7 @@ export interface LibraryEntry {
 
 export interface CreateLibraryDeck {
   name: string;
-  source: "precon" | "user";
+  source: LibrarySource;
   sourceKey: string | null;
   setCode?: string | null;
   setName?: string | null;
@@ -42,7 +45,7 @@ export interface ListFilters {
   bracket?: Bracket | undefined;
   tag?: ArchetypeTag | undefined;
   q?: string | undefined;
-  source?: "precon" | "user" | undefined;
+  source?: LibrarySource | undefined;
   agentEligible?: boolean | undefined;
 }
 
@@ -60,7 +63,9 @@ export class LibraryService {
       createdByName,
       id: row.id,
       name: row.name,
-      source: row.source as "precon" | "user",
+      source: isLibrarySource(row.source) ? row.source : "user",
+      sourceUrl: row.sourceUrl ?? null,
+      importInfo: (row.importMeta as LibraryImportInfo | null) ?? null,
       setCode: row.setCode,
       setName: row.setName,
       releaseDate: row.releaseDate,
@@ -193,6 +198,97 @@ export class LibraryService {
       });
     })();
     return this.detail(id)!;
+  }
+
+  /**
+   * Insert or update an imported deck by its source key (EDHREC importer). An update replaces the
+   * card list, analysis, tags, commanders and import details; it keeps the owner's primer unless the
+   * stored one is still the importer's own skeleton, and never turns agent eligibility on (the caller
+   * sets it after the Forge coverage check).
+   */
+  upsertImported(input: {
+    sourceKey: string;
+    source: LibrarySource;
+    name: string;
+    bracket: Bracket;
+    sourceUrl: string;
+    entries: LibraryEntry[];
+    analysis: DeckAnalysis;
+    commanders: string[];
+    primer: string;
+    importMeta: LibraryImportInfo;
+  }): { id: string; created: boolean } {
+    const now = new Date().toISOString();
+    const a = input.analysis;
+    const existing = this.bySourceKey(input.sourceKey);
+    const id = existing?.id ?? randomUUID();
+    const oldMeta = (existing?.importMeta as (LibraryImportInfo & { autoPrimer?: string }) | null) ?? null;
+    const keepPrimer = existing && existing.primer.trim() !== "" && existing.primer !== oldMeta?.autoPrimer;
+    const meta = { ...input.importMeta, autoPrimer: input.primer };
+    this.handle.sqlite.transaction(() => {
+      if (existing) {
+        this.handle.db
+          .update(libraryDecks)
+          .set({
+            name: input.name,
+            source: input.source,
+            sourceUrl: input.sourceUrl,
+            commanders: input.commanders,
+            bracket: input.bracket,
+            bracketFloor: a.floor,
+            bracketSuggested: a.suggested,
+            tags: a.archetypes.map((t) => t.tag),
+            primer: keepPrimer ? existing.primer : input.primer,
+            analysis: a,
+            importMeta: meta,
+            updatedAt: now,
+          })
+          .where(eq(libraryDecks.id, id))
+          .run();
+        this.handle.db.delete(libraryDeckCards).where(eq(libraryDeckCards.libraryDeckId, id)).run();
+      } else {
+        this.handle.db
+          .insert(libraryDecks)
+          .values({
+            id,
+            name: input.name,
+            source: input.source,
+            sourceKey: input.sourceKey,
+            sourceUrl: input.sourceUrl,
+            commanders: input.commanders,
+            bracket: input.bracket,
+            bracketFloor: a.floor,
+            bracketSuggested: a.suggested,
+            tags: a.archetypes.map((t) => t.tag),
+            primer: input.primer,
+            agentEligible: false,
+            analysis: a,
+            importMeta: meta,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .run();
+      }
+      input.entries.forEach((e, position) => {
+        this.handle.db.insert(libraryDeckCards).values({ libraryDeckId: id, cardId: e.cardId, quantity: e.quantity, board: e.board, position }).run();
+      });
+    })();
+    return { id, created: !existing };
+  }
+
+  /** Record a Forge coverage result and set agent eligibility from it (imported decks only). */
+  setCoverage(id: string, coverage: { missing: string[] | null; error?: string | undefined }, eligibleWhenClean: boolean): void {
+    const row = this.getRow(id);
+    if (!row) return;
+    const meta = { ...((row.importMeta as Record<string, unknown> | null) ?? {}) };
+    if (coverage.missing) {
+      meta.coverage = { checkedAt: new Date().toISOString(), missing: coverage.missing };
+      meta.coverageError = null;
+    } else {
+      meta.coverageError = coverage.error ?? "not checked";
+    }
+    const eligible = Boolean(coverage.missing && coverage.missing.length === 0 && eligibleWhenClean);
+    this.handle.db.update(libraryDecks).set({ importMeta: meta, agentEligible: eligible, updatedAt: new Date().toISOString() }).where(eq(libraryDecks.id, id)).run();
   }
 
   /** Re-run the engine (and re-ask Spellbook) for a library deck; keeps the owner's bracket, tags and primer. */

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type ArchetypeTag, type Bracket, type LibraryDeckDetail } from "@cgwf/shared";
 import { api } from "../api";
+import { EdhrecCredit } from "../components/EdhrecCredit";
 import { AnalysisBody } from "../components/BracketPanel";
 import { ShoppingPanel } from "../components/LocalStores";
 import { RequireUser } from "../components/RequireUser";
@@ -122,9 +123,12 @@ function Editor({ id }: { id: string }) {
         </div>
       </header>
       <p className="muted small">
-        {deck.commanders.join(" / ") || "no commander"} · {deck.cardCount} cards · {deck.source === "precon" ? `precon${deck.setCode ? ` (${deck.setCode.toUpperCase()}` : ""}${deck.releaseDate ? `, ${deck.releaseDate})` : ")"}` : "from a player's deck"}
+        {deck.commanders.join(" / ") || "no commander"} · {deck.cardCount} cards ·{" "}
+        {deck.source === "precon" ? `precon${deck.setCode ? ` (${deck.setCode.toUpperCase()}` : ""}${deck.releaseDate ? `, ${deck.releaseDate})` : ")"}` : deck.source === "edhrec" ? "EDHREC average deck" : "from a player's deck"}
         {a ? ` · engine says floor ${a.floor}, suggested ${a.suggested}` : ""}
       </p>
+
+      <EdhrecCredit deck={deck} />
 
       <section className="library-edit surface">
         <label className="field">

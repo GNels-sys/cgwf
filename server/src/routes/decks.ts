@@ -30,6 +30,16 @@ interface Deps {
   index: NameIndex;
 }
 
+const NUMBER_WORDS: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+
+/** Copies a Commander deck may hold: 1, or N for "A deck can have up to N cards named ~" (Nazgûl 9, Seven Dwarves 7). */
+export function copiesAllowed(oracleText: string): number {
+  const m = /a deck can have up to (\w+) cards named/i.exec(oracleText);
+  if (!m) return 1;
+  const word = m[1]!.toLowerCase();
+  return NUMBER_WORDS[word] ?? (Number.parseInt(word, 10) || 1);
+}
+
 /** Commander-format sanity checks. Warnings only; nothing is ever blocked. */
 export function deckWarnings(entries: Array<{ row: CardRow; quantity: number; board: Board }>): DeckWarning[] {
   const warnings: DeckWarning[] = [];
@@ -59,7 +69,7 @@ export function deckWarnings(entries: Array<{ row: CardRow; quantity: number; bo
     const key = r.oracleId ?? r.normalizedName;
     const n = (seen.get(key) ?? 0) + e.quantity;
     seen.set(key, n);
-    if (n > 1 && !dupes.includes(r.name)) dupes.push(r.name);
+    if (n > copiesAllowed(r.oracleText) && !dupes.includes(r.name)) dupes.push(r.name);
   }
   if (dupes.length) {
     warnings.push({ code: "singleton", message: `More than one copy of: ${dupes.slice(0, 6).join(", ")}${dupes.length > 6 ? "..." : ""}.` });
