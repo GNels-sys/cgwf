@@ -5,6 +5,10 @@ import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type ArchetypeTag, typ
 import { api } from "../api";
 import { EdhrecCredit } from "../components/EdhrecCredit";
 import { AnalysisBody } from "../components/BracketPanel";
+import { CardDetail } from "../components/CardDetail";
+import { useCardHover } from "../components/CardHoverPreview";
+import { ManaCost } from "../components/ManaCost";
+import { PrintingPicker, printingLabel } from "../components/PrintingPicker";
 import { ShoppingPanel } from "../components/LocalStores";
 import { RequireUser } from "../components/RequireUser";
 import { StatsPanel } from "../components/StatsPanel";
@@ -23,6 +27,9 @@ function Editor({ id }: { id: string }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [draftNote, setDraftNote] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [picking, setPicking] = useState<LibraryDeckDetail["cards"][number] | null>(null);
+  const hover = useCardHover();
 
   const loadStats = useCallback(() => api.library.stats(id), [id]);
   const loadShopping = useCallback(() => api.singles.libraryShopping(id), [id]);
@@ -198,14 +205,52 @@ function Editor({ id }: { id: string }) {
       <section className="deck-group">
         <h3>Cards</h3>
         <ul className="library-cards">
-          {deck.cards.map((c) => (
-            <li key={`${c.cardId}-${c.board}`}>
-              <span className="qty">{c.quantity}</span> {c.name}
-              {c.board !== "main" && <span className="muted small"> · {c.board}</span>}
-            </li>
-          ))}
+          {deck.cards.map((c) => {
+            const label = c.set && c.collectorNumber ? printingLabel({ set: c.set, collectorNumber: c.collectorNumber }) : null;
+            return (
+              <li key={c.entryId ?? `${c.cardId}-${c.board}`} className="deck-card-row">
+                <button className="deck-card-line" onClick={() => setOpen(c.cardId)} {...hover.bind({ id: c.cardId, name: c.name, faceCount: c.faceCount ?? 1 })}>
+                  <span className="qty">{c.quantity}</span>
+                  <span className="deck-card-name">
+                    {c.name}
+                    {c.board !== "main" && <span className="muted small"> · {c.board}</span>}
+                  </span>
+                  <ManaCost cost={c.manaCost} size={13} />
+                </button>
+                {label && c.entryId !== undefined && c.oracleId && (
+                  <button
+                    type="button"
+                    className="printing-chip"
+                    onClick={() => {
+                      hover.hide();
+                      setPicking(c);
+                    }}
+                    title="Change printing"
+                    aria-label={`Change printing of ${c.name}, now ${label}`}
+                  >
+                    {label}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </section>
+      {hover.preview}
+      {picking && picking.oracleId && picking.entryId !== undefined && (
+        <PrintingPicker
+          oracleId={picking.oracleId}
+          cardName={picking.name}
+          currentId={picking.cardId}
+          onClose={() => setPicking(null)}
+          onPick={async (cardId) => {
+            // Only the card list changes: unsaved edits to the name, bracket or primer stay in the form.
+            const r = await api.library.setPrinting(deck.id, picking.entryId!, cardId);
+            setDeck(r.deck);
+          }}
+        />
+      )}
+      {open && <CardDetail id={open} onClose={() => setOpen(null)} />}
     </>
   );
 }

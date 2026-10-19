@@ -135,6 +135,13 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
     return { deck: r.deck };
   });
 
+  /** The printing picker on the library deck page: another printing of the same card for one line. */
+  app.patch<{ Params: { id: string; entry: string }; Body: { cardId?: string } | null }>("/api/library/:id/cards/:entry", { preHandler: owner }, async (req, reply): Promise<{ deck: LibraryDeckDetail } | void> => {
+    const r = library.setPrinting(req.params.id, Number(req.params.entry), req.body?.cardId);
+    if (!r.ok) return reply.code(r.status).send({ error: r.error });
+    return { deck: r.deck };
+  });
+
   app.delete<{ Params: { id: string } }>("/api/library/:id", { preHandler: owner }, async (req, reply) => {
     if (!library.remove(req.params.id)) return reply.code(404).send({ error: "library deck not found" });
     return { ok: true };

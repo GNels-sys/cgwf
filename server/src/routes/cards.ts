@@ -1,11 +1,11 @@
-import { and, asc, desc, eq, inArray, like } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, like, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { normalizeName, type CardResponse, type SearchResponse, type StatusResponse, type TokenSearchResponse, type TokenSummary } from "@cgwf/shared";
+import { normalizeName, type CardResponse, type PrintingsResponse, type SearchResponse, type StatusResponse, type TokenSearchResponse, type TokenSummary } from "@cgwf/shared";
 import type { CardRow } from "../db/schema.js";
 import { config } from "../config.js";
 import type { DbHandle } from "../db/index.js";
 import { cards } from "../db/schema.js";
-import { rowToPrinting, rowToSummary } from "../scryfall/map.js";
+import { rowToPrinting, rowToPrintingOption, rowToSummary } from "../scryfall/map.js";
 import type { Ingestor } from "../scryfall/ingest.js";
 import { META_BULK_UPDATED, META_LAST_INGEST } from "../scryfall/ingest.js";
 import type { NameIndex } from "../search/index.js";
@@ -81,15 +81,19 @@ export function registerCardRoutes(app: FastifyInstance, deps: CardRouteDeps): v
     return { query: raw, tokens: distinctTokens(rows, name).slice(0, limit) };
   });
 
-  /** Every printing of a card, newest first (used by deck import and the printing picker). */
-  app.get<{ Params: { oracleId: string } }>("/api/cards/oracle/:oracleId/printings", async (req) => {
+  /**
+   * Every paper printing of a card, newest first (used by deck import and the printing picker), with
+   * set name, release date, rarity and treatment labels, plus `defaultId`: the printing the card's
+   * bare name resolves to.
+   */
+  app.get<{ Params: { oracleId: string } }>("/api/cards/oracle/:oracleId/printings", async (req): Promise<PrintingsResponse> => {
     const rows = handle.db
       .select()
       .from(cards)
-      .where(and(eq(cards.oracleId, req.params.oracleId), eq(cards.isDigital, false)))
-      .orderBy(desc(cards.releasedAt), asc(cards.collectorNumber))
+      .where(and(eq(cards.oracleId, req.params.oracleId), eq(cards.isDigital, false), eq(cards.isToken, false)))
+      .orderBy(desc(cards.releasedAt), asc(sql`cast(${cards.collectorNumber} as integer)`), asc(cards.collectorNumber))
       .all();
-    return { printings: rows.map(rowToSummary) };
+    return { printings: rows.map(rowToPrintingOption), defaultId: index.defaultFor(req.params.oracleId)?.id ?? null };
   });
 
   /**
@@ -160,7 +164,8 @@ export function parseTokenQuery(raw: string): { name: string; pt: { power: strin
 
 /** Collapse printings into one row per distinct token, best image first. */
 export function distinctTokens(rows: CardRow[], query: string): TokenSummary[] {
-  const score = (r: CardRow) => (r.isDigital ? 4 : 0) + (r.imageStatus === "highres_scan" ? 0 : 2) + (r.imageFront ? 0 : 8);
+  // Same preference as card names: a plain token beats a full-art / special-treatment one.
+  const score = (r: CardRow) => (r.isDigital ? 4 : 0) + (r.imageStatus === "highres_scan" ? 0 : 2) + (r.imageFront ? 0 : 8) + (r.isRegular ? 0 : 1);
   const sorted = rows.slice().sort((a, b) => score(a) - score(b) || b.releasedAt.localeCompare(a.releasedAt));
   const seen = new Map<string, TokenSummary>();
   for (const r of sorted) {

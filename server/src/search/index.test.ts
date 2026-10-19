@@ -26,7 +26,7 @@ describe("name index collisions", () => {
   it("keeps the real card when a playtest card's name differs only by punctuation (Rampant Growth vs Rampant, Growth)", () => {
     const real = ctx.handle.db.select().from(cards).all().find((c) => c.name === "Sol Ring" && c.inBooster)!;
     // A not-in-booster playtest card whose normalised name collides with Sol Ring's.
-    ctx.handle.db.insert(cards).values({ ...real, id: "playtest-sol-ring", oracleId: "playtest-oracle", name: "Sol, Ring", set: "unk", setName: "Unknown Event", collectorNumber: "UG1", inBooster: false, releasedAt: "2030-01-01" }).run();
+    ctx.handle.db.insert(cards).values({ ...real, id: "playtest-sol-ring", oracleId: "playtest-oracle", name: "Sol, Ring", set: "unk", setName: "Unknown Event", setType: "funny", isRegular: false, treatmentCount: 1, collectorNumber: "UG1", inBooster: false, releasedAt: "2030-01-01" }).run();
     ctx.index.build();
     expect(ctx.index.exact("sol ring")?.name).toBe("Sol Ring");
   });

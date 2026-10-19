@@ -184,7 +184,20 @@ export interface LibraryImportInfo {
 export interface LibraryDeckDetail extends LibraryDeckSummary {
   primer: string;
   analysis: DeckAnalysis | null;
-  cards: Array<{ cardId: string; name: string; quantity: number; board: string; typeLine: string; manaCost: string }>;
+  cards: Array<{
+    cardId: string;
+    name: string;
+    quantity: number;
+    board: string;
+    typeLine: string;
+    manaCost: string;
+    /** The line's id (library_deck_cards.id) and the printing's details, for the printing picker. */
+    entryId?: number;
+    oracleId?: string | null;
+    set?: string;
+    collectorNumber?: string;
+    faceCount?: number;
+  }>;
   sourceKey: string | null;
   createdAt: string;
 }

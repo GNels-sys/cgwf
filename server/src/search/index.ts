@@ -27,6 +27,7 @@ export class NameIndex {
   private entries: IndexEntry[] = [];
   private aliases: Array<{ norm: string; entry: IndexEntry }> = [];
   private byNorm = new Map<string, IndexEntry>();
+  private byOracle = new Map<string, IndexEntry>();
   builtAt: string | null = null;
 
   constructor(private readonly handle: DbHandle) {}
@@ -35,7 +36,12 @@ export class NameIndex {
     return this.entries.length;
   }
 
-  /** Pick the best printing per card: paper, non-promo, in boosters, good scan, newest. */
+  /**
+   * Pick the default printing per card: paper and already released first, then the newest REGULAR printing (no special
+   * treatment: see shared/src/printing.ts), then non-promo, newest, good scan, lowest collector
+   * number (so a set's plain card beats its later-numbered variants released the same day).
+   * A card with no regular printing falls back to its least special printing (fewest treatments).
+   */
   build(): void {
     const rows = this.handle.db
       .select({
@@ -49,16 +55,22 @@ export class NameIndex {
       .from(cards)
       .orderBy(
         asc(cards.isDigital),
+        // Previewed sets are in the bulk file before release: never default to a printing nobody owns yet.
+        asc(sql`${cards.releasedAt} > date('now')`),
+        desc(cards.isRegular),
+        asc(cards.treatmentCount),
         asc(cards.isPromo),
-        desc(cards.inBooster),
-        desc(sql`${cards.imageStatus} = 'highres_scan'`),
         desc(cards.releasedAt),
+        desc(sql`${cards.imageStatus} = 'highres_scan'`),
+        asc(sql`cast(${cards.collectorNumber} as integer)`),
+        asc(cards.collectorNumber),
       )
       .all();
 
     const seen = new Set<string>();
     const entries: IndexEntry[] = [];
     const aliases: Array<{ norm: string; entry: IndexEntry }> = [];
+    const byOracle = new Map<string, IndexEntry>();
     for (const r of rows) {
       // Tokens share oracle ids loosely; key them by name + token flag instead.
       const key = r.isToken ? `tok:${r.normalizedName}` : (r.oracleId ?? `name:${r.normalizedName}`);
@@ -66,6 +78,7 @@ export class NameIndex {
       seen.add(key);
       const entry: IndexEntry = { id: r.id, name: r.name, norm: r.normalizedName, isToken: r.isToken };
       entries.push(entry);
+      if (!r.isToken && r.oracleId) byOracle.set(r.oracleId, entry);
       if (entry.norm.includes(" // ")) {
         for (const part of entry.norm.split(" // ")) {
           const p = part.trim();
@@ -78,7 +91,7 @@ export class NameIndex {
     const byNorm = new Map<string, IndexEntry>();
     // Real card names win over face aliases; non-tokens win over tokens. When two DIFFERENT cards share a
     // normalised name (punctuation is dropped: "Rampant Growth" vs the playtest card "Rampant, Growth"),
-    // the first one wins: entries are in printing-preference order, so the paper, in-booster card keeps it.
+    // the first one wins: entries are in printing-preference order, so the paper, regular card keeps it.
     for (const a of aliases) if (!a.entry.isToken && !byNorm.has(a.norm)) byNorm.set(a.norm, a.entry);
     const named = new Set<string>();
     for (const e of entries) {
@@ -87,7 +100,13 @@ export class NameIndex {
       byNorm.set(e.norm, e);
     }
     this.byNorm = byNorm;
+    this.byOracle = byOracle;
     this.builtAt = new Date().toISOString();
+  }
+
+  /** The default printing of a card (what its bare name resolves to), by oracle id. */
+  defaultFor(oracleId: string): IndexEntry | null {
+    return this.byOracle.get(oracleId) ?? null;
   }
 
   /** Exact match on a normalised name or face name (non-token cards). */
