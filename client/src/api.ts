@@ -1,5 +1,7 @@
 import type {
   AdminOpenTable,
+  DeckPerformance,
+  DeckStatsListResponse,
   DeckOptionsResponse,
   AddAgentsResponse,
   AdminStatsQuery,
@@ -270,6 +272,11 @@ export const api = {
   },
 
   features: () => request<FeaturesResponse>("/api/features"),
+  /** Deck statistics from counted rules-engine games (personal decks: owner only; library decks: everyone). */
+  deckStats: {
+    list: (bots: boolean) => request<DeckStatsListResponse>(`/api/deck-stats${bots ? "" : "?bots=0"}`),
+    deck: (ref: string, bots: boolean) => request<DeckPerformance>(`/api/deck-stats/deck/${encodeURIComponent(ref)}${bots ? "" : "?bots=0"}`),
+  },
   rooms: {
     create: (opts: CreateRoomRequest = {}) => request<CreateRoomResponse>("/api/rooms", { method: "POST", json: opts }),
     get: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}`),

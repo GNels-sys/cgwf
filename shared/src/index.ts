@@ -25,3 +25,4 @@ export * from "./admin.js";
 export * from "./singles.js";
 export * from "./engine.js";
 export * from "./deckOptions.js";
+export * from "./deckStats.js";

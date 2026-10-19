@@ -1,3 +1,4 @@
+import { PerformancePanel } from "../components/PerformancePanel";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type ArchetypeTag, type Bracket, type LibraryDeckDetail } from "@cgwf/shared";
@@ -185,6 +186,8 @@ function Editor({ id }: { id: string }) {
         )}
         <StatsPanel load={loadStats} version={deck.updatedAt} />
       </div>
+
+      <PerformancePanel deckRef={`library:${deck.id}`} title="Performance (all players)" />
 
       <ShoppingPanel load={loadShopping} version={deck.updatedAt} />
 

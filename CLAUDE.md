@@ -1235,6 +1235,25 @@ after boot and hourly. For operations, `GET /api/admin/machine/open-tables` and
 Tests: engine.test (counted win with places and a concede, test game not counted, End table + late
 draw ignored, idle close), `stats/backfill.test.ts`, deckOptions.test (owner-only admin close, host end).
 
+**Stats views (part 2).** Pure arithmetic in `shared/src/deckStats.ts` (`deckPerformance`,
+`bracketHint`, `gamesInScope`), rows loaded by `server/src/routes/deckStats.ts` from COUNTED games
+only. `GET /api/deck-stats[?bots=0]` lists the caller's own decks (by `deck_owner_id`) and the library
+decks they have played; `GET /api/deck-stats/deck/:ref[?bots=0]` (own deck id or `library:<id>`)
+returns overall (games, wins, win rate, average place, concedes), the grid of table bracket B1-B5 by
+player count 2/3/4 (wins/games, win rate, `lowSample` under 5 games), a hint and head-to-head (per
+opposing deck: games together, this deck won, lost to it, placed above it; once per game even when
+two opponents played the same deck). Privacy: a personal deck's numbers answer only its owner (404 for
+anyone else, so its existence is not confirmed); library decks aggregate every player's games and are
+open to every signed-in player. "Include games vs bots" (default on) off = any game that had a bot
+seat is left out. The hint is an indication, never a verdict: with at least 5 games at tables above
+the deck's own bracket and wins >= 1.5x an even share (1 / players per game) it says the deck "may
+play stronger than its bracket"; with 5+ games at its bracket or below and wins <= 0.5x an even share,
+"may play weaker". UI: `client/src/components/PerformancePanel.tsx` on the deck page and the library
+deck page ("Performance (all players)"), and the Deck stats page `/stats` (nav "Stats",
+`DeckStatsPage.tsx`: sortable table, tap a deck for its panel). Tests: `shared/src/deckStats.test.ts`
+(grid by players and brackets, head-to-head, bots toggle, hint), `routes/deckStats.test.ts` (test and
+abandoned games excluded, personal-deck privacy, library aggregation).
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
