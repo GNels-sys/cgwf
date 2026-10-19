@@ -53,7 +53,7 @@ describe("settings, uploads and the token finder over HTTP", () => {
   };
 
   beforeAll(async () => {
-    ctx = await buildApp({ logger: false });
+    ctx = await buildApp({ logger: false, casualRooms: true });
     await ctx.ingestor.run({ file: fixture });
     alex = await register("Alex", "10.1.0.1");
     blair = await register("Blair", "10.1.0.2");

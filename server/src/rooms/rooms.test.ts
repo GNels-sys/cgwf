@@ -122,7 +122,7 @@ describe("rooms over WebSocket", () => {
   };
 
   beforeAll(async () => {
-    ctx = await buildApp({ logger: false });
+    ctx = await buildApp({ logger: false, casualRooms: true });
     await ctx.ingestor.run({ file: fixture });
     const address = await ctx.app.listen({ port: 0, host: "127.0.0.1" });
     port = Number(new URL(address).port);
@@ -382,7 +382,7 @@ describe("rooms over WebSocket", () => {
     await casey.close();
     await ctx.app.close();
 
-    ctx = await buildApp({ logger: false });
+    ctx = await buildApp({ logger: false, casualRooms: true });
     const address = await ctx.app.listen({ port: 0, host: "127.0.0.1" });
     port = Number(new URL(address).port);
     const again = new Client("alex2", alex.token);

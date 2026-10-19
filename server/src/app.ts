@@ -23,6 +23,7 @@ import { registerDeckRoutes } from "./routes/decks.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerMeRoutes } from "./routes/me.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
+import { registerDeckOptionRoutes } from "./routes/deckOptions.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerSinglesRoutes } from "./routes/singles.js";
 import { SinglesClient } from "./singles/client.js";
@@ -68,6 +69,11 @@ export interface BuildOptions {
   /** Rules engine: tests point this at a fake engine WebSocket server; production reads config. */
   engineUrl?: string;
   engineToken?: string;
+  /**
+   * Legacy casual (classic, no-rules) tables can no longer be created (owner, 2026-10-18); existing ones
+   * still load. Only the classic table's own tests turn creation back on. Deliberately not an env var.
+   */
+  casualRooms?: boolean;
 }
 
 /** Build the Fastify app with every route wired. Listening is the caller's job. */
@@ -128,7 +134,9 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   registerMeRoutes(app, handle);
   registerAuthRoutes(app, handle);
   registerDeckRoutes(app, { handle, index });
+  roomsManager.casualRooms = opts.casualRooms === true;
   registerRoomRoutes(app, { handle, roomsManager, agents });
+  registerDeckOptionRoutes(app, { handle, analyzer });
   registerSettingsRoutes(app, { handle, onSettingsChanged: (userId) => roomsManager.userChanged(userId) });
   registerSinglesRoutes(app, { handle, singles, library });
 

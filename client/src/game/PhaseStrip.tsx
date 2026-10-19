@@ -204,7 +204,7 @@ export function PhaseStrip({ view, printings, members, me, canAct, dispatch, onA
         <div className="phase-turn" style={member ? ({ "--who": AVATAR_COLORS[member.color] } as React.CSSProperties) : undefined}>
           {member && <Avatar avatar={member.avatar} color={member.color} size={22} />}
           {!engineMode && (
-            <span className="table-kind-tag" title="Casual table: nothing is enforced; players apply the rules themselves">
+            <span className="table-kind-tag" title="Casual (legacy) table: nothing is enforced; players apply the rules themselves">
               Casual
             </span>
           )}
