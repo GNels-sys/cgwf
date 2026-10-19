@@ -29,7 +29,7 @@ export function EdhrecCredit({ deck, compact = false }: { deck: Pick<LibraryDeck
         {link}. EDHREC's synthesised average for this commander at {info ? `its "${info.edhrecBracket}" bracket` : "this bracket"}: the card each slot holds most often across {info ? `${info.decks.toLocaleString()} indexed decks` : "the decks EDHREC indexes"}, not one player's list.
         {info ? ` Win condition: ${info.winCondition}. Picked because: ${info.pickReason}.` : ""}
       </p>
-      {info?.mismatch && <p className="small warn">Bracket check: {info.mismatch}. EDHREC's bracket is kept; change it above if you disagree.</p>}
+      {info?.mismatch && <p className="small warn">Bracket check: {info.mismatch.replace(/\.\s*$/, "")}. EDHREC's bracket is kept; change it above if you disagree.</p>}
       {missing.length > 0 && <p className="small warn">The rules engine cannot play {missing.join(", ")}, so computer opponents never pick this deck. People can still play it.</p>}
       {!info?.coverage && info?.coverageError && <p className="small muted">Rules-engine coverage not checked yet ({info.coverageError}).</p>}
     </div>
