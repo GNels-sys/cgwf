@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AVATAR_COLORS, type EngineAnswer, type EnginePrompt, type PlayerView, type RoomMember, type StackItem, type StackTargetRef, type ViewCard } from "@cgwf/shared";
+import { cardEnergy, ElectricArc } from "./ElectricArc";
 import { CardImage } from "../components/CardImage";
 import { findCard, nameOf, type Printings } from "./model";
 
@@ -71,12 +72,13 @@ function Thumb({ it }: { it: StackItem }) {
 }
 
 /** One row of the stack (shared by the panel and the window). */
-function StackRow({ it, view, printings, members, onZoom, targeted, big = false }: { it: StackItem; targeted: boolean; big?: boolean } & Omit<CommonProps, "stack">) {
+function StackRow({ it, view, printings, members, onZoom, targeted, big = false, shockColor, impactKey }: { it: StackItem; targeted: boolean; big?: boolean; shockColor?: string | undefined; impactKey?: string | undefined } & Omit<CommonProps, "stack">) {
   const who = view.players[it.controller]?.name ?? "?";
   const targets = (it.targets ?? []).map((t) => targetText(t, view, printings));
   const card = stackItemCard(it);
   return (
-    <button className={`stack-item${targeted ? " is-targeted" : ""}${big ? " is-big" : ""}`} onClick={() => card && onZoom(card)} title={it.description} aria-label={`${it.name ?? kindLabel(it)}, ${who}${targets.length ? `, targeting ${targets.join(" and ")}` : ""}. Tap to read the card`}>
+    <button style={{ "--shock-color": shockColor } as React.CSSProperties} className={`stack-item${targeted ? " is-targeted" : ""}${big ? " is-big" : ""}`} onClick={() => card && onZoom(card)} title={it.description} aria-label={`${it.name ?? kindLabel(it)}, ${who}${targets.length ? `, targeting ${targets.join(" and ")}` : ""}. Tap to read the card`}>
+      {targeted && big && <ElectricArc key={impactKey} color={shockColor ?? "var(--danger)"} className="stack-shock" />}
       <Thumb it={it} />
       <span className="stack-item-text">
         <span className="stack-item-name">{it.name ?? it.description}</span>
@@ -131,8 +133,10 @@ export function InteractionStack({ stack, view, printings, members, onZoom, prom
   return (
     <div className="interaction-backdrop" onClick={onMinimize}>
       <section className="interaction" role="dialog" aria-modal="false" aria-label="Interaction stack" onClick={(e) => e.stopPropagation()}>
+        <ElectricArc key={top?.id} className="interaction-impact" />
         <header className="interaction-head">
           <div>
+            <p className="eyebrow interaction-label">Response detected</p>
             <h2>Interaction stack</h2>
             <p className="muted small">{top ? `${view.players[top.controller]?.name ?? "?"}'s ${top.name ?? kindLabel(top)} is on top and resolves first.` : ""}</p>
           </div>
@@ -144,7 +148,7 @@ export function InteractionStack({ stack, view, printings, members, onZoom, prom
           {stack.map((it, i) => (
             <li key={it.id} className="interaction-step">
               {i > 0 && <span className="interaction-arrow" aria-hidden="true">on top of</span>}
-              <StackRow it={it} view={view} printings={printings} members={members} onZoom={onZoom} targeted={targetedIds.has(it.id)} big />
+              <StackRow it={it} view={view} printings={printings} members={members} onZoom={onZoom} targeted={targetedIds.has(it.id)} shockColor={cardEnergy(printings[stack.find((response) => response.targets?.some((target) => target.kind === "stack" && target.id === it.id))?.printingId ?? ""]?.colors)} impactKey={top?.id} big />
             </li>
           ))}
         </ol>

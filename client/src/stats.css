@@ -249,3 +249,14 @@
   .stat-facts > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .stat-facts dd { overflow-wrap: anywhere; }
 }
+
+/* Analysis instruments: softer cards, crisp numbers, quiet circuit accents. */
+.analysis-row > .bracket-panel, .analysis-row > .stats-panel { border-radius: 5px 22px 5px 22px; border-color: var(--tech-line); background: linear-gradient(140deg, color-mix(in srgb, var(--signal) 5%, var(--bg-elev)), var(--bg-elev)); box-shadow: 0 12px 30px #0002; }
+.bracket-badge { border-radius: 4px 18px 4px 18px; box-shadow: inset 0 1px #ffffff12; }
+.bracket-badge-num { font-variant-numeric: tabular-nums; }
+.stat-facts { border: 1px solid var(--tech-line); border-radius: 14px; background: color-mix(in srgb, var(--signal) 5%, var(--bg-elev)); }
+.stat-facts > div { padding-block: 4px; }
+.stat-section > summary { border-bottom: 1px solid var(--border); font-weight: 600; }
+.stat-bar-track { border-radius: 99px; }
+.stat-bar-fill { border-radius: 99px; background-image: linear-gradient(90deg, #ffffff10, #ffffff30); }
+.stat-functional-count { border-radius: 4px 10px 4px 10px; border-color: var(--tech-line); color: var(--signal); }

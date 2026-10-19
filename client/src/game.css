@@ -2453,3 +2453,72 @@ button.engine-row { cursor: pointer; width: 100%; }
 @media (max-width: 900px) { .phase-turn-text.has-round { max-width: 170px; } }
 .game-log-line.is-round { margin-top: 10px; padding: 4px 0 2px; border-top: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); color: var(--accent); font: 500 0.82rem var(--font-display); letter-spacing: 0.04em; }
 .game-log-line.is-round + .game-log-line.is-turn { margin-top: 2px; border-top: 0; padding-top: 0; }
+
+/* Pass 2: arcane console surfaces. Preserve all table geometry and overlay rules. */
+.table { --console-edge: color-mix(in srgb, var(--signal) 38%, var(--border)); }
+:root .table :is(.engine-bar, .engine-sheet, .engine-abilities, .stops-panel, .engine-mulligan, .engine-notice, .pay-with, .stack-panel, .active-board, .game-log) { border-color: var(--console-edge); background-color: var(--glass-strong, var(--bg-elev)); box-shadow: inset 0 1px #ffffff12, 0 10px 30px #0004; }
+.engine-bar { border-radius: 3px 14px 3px 14px; border-left: 3px solid var(--accent); background-image: linear-gradient(105deg, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%); }
+.engine-bar-head > strong { color: var(--accent); letter-spacing: .02em; }
+.engine-bar-actions .btn, .interaction-foot .btn { border-radius: 3px 11px 3px 11px; }
+.engine-sheet, .sheet.engine-abilities { border-radius: 5px 22px 5px 22px; }
+.engine-option, .engine-row, .pay-with-source { border-radius: 3px 13px 3px 13px; border-color: var(--console-edge); background-image: linear-gradient(110deg, color-mix(in srgb, var(--signal) 5%, transparent), transparent); }
+.engine-option.is-selected, .engine-row.is-selected, .pay-with-source.is-picked { box-shadow: inset 3px 0 var(--accent); }
+.engine-option:hover, .engine-row:hover { border-color: var(--accent); }
+.engine-badge { border-radius: 4px 18px 4px 18px; border-color: var(--tech-line); background: linear-gradient(110deg, color-mix(in srgb, var(--signal) 9%, var(--bg-elev)), var(--bg-elev)); }
+.stack-panel { border-radius: 3px 15px 3px 15px; border-top: 2px solid var(--accent); }
+.stack-panel-head { letter-spacing: .06em; text-transform: uppercase; font-size: .75rem; }
+.stack-item { position: relative; border-radius: 3px 12px 3px 12px; background: linear-gradient(120deg, color-mix(in srgb, var(--signal) 5%, var(--bg-elev)), var(--bg-elev)); }
+.stack-item.is-targeted { border-color: var(--shock-color, var(--accent)); box-shadow: inset 3px 0 var(--shock-color, var(--accent)); }
+.stack-item-targets { color: var(--signal); }
+.interaction { position: relative; border-radius: 3px 24px 3px 24px; border-color: var(--accent); background-image: linear-gradient(130deg, color-mix(in srgb, var(--danger) 7%, transparent), transparent 55%); }
+.interaction-label { color: var(--danger); margin: 0 0 5px; font: 600 .62rem ui-monospace, monospace; letter-spacing: .16em; }
+.interaction-head { border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); padding-bottom: 10px; }
+.interaction-head h2 { font-size: 1.35rem; }
+.interaction-arrow { color: var(--signal); font: 600 .62rem ui-monospace, monospace; padding-block: 4px; }
+.interaction-foot { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.phase-strip { border: 1px solid var(--console-edge); border-radius: 3px 16px 3px 16px; background-image: linear-gradient(100deg, color-mix(in srgb, var(--signal) 9%, transparent), transparent 50%); box-shadow: inset 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 5px 16px #0004; }
+.phase-round-line { letter-spacing: .02em; }
+.phase-gameturn { font-family: ui-monospace, monospace; letter-spacing: .04em; }
+.phase-step { border-radius: 2px 8px 2px 8px; }
+.phase-step.is-current { box-shadow: inset 0 -2px var(--accent), 0 0 10px color-mix(in srgb, var(--accent) 15%, transparent); }
+.edge-tab { min-width: 44px; border-color: var(--accent); background: linear-gradient(160deg, color-mix(in srgb, var(--signal) 16%, var(--bg-elev)), var(--bg-elev)); box-shadow: 0 0 14px #0005, inset 0 2px var(--accent); }
+.edge-tab.is-left { border-radius: 0 16px 3px 0; clip-path: polygon(0 0, 70% 0, 100% 12px, 100% calc(100% - 12px), 70% 100%, 0 100%); }
+.edge-tab.is-right { border-radius: 3px 0 0 16px; clip-path: polygon(30% 0, 100% 0, 100% 100%, 30% 100%, 0 calc(100% - 12px), 0 12px); }
+.edge-tab-label { color: var(--fg); font: 600 .65rem ui-monospace, monospace; letter-spacing: .12em; }
+.edge-tab-arrow { color: var(--signal); }
+.active-board { border-radius: 0 18px 3px 0; }
+.game-log { border-radius: 3px 0 0 18px; }
+.active-board-head, .game-log-head { background: linear-gradient(100deg, color-mix(in srgb, var(--signal) 10%, transparent), transparent); border-color: var(--console-edge); }
+.active-board-facts { gap: 6px 12px; }
+.log-toast { border-radius: 3px 14px 3px 14px; border-color: var(--console-edge); border-left: 3px solid var(--signal); }
+.tile-inspect { position: absolute; z-index: 4; left: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; padding: 11px; border: 1px solid var(--console-edge); border-radius: 5px 3px 14px 3px; background: var(--glass-strong, var(--bg-elev)); color: var(--fg); cursor: zoom-in; touch-action: manipulation; box-shadow: 0 2px 8px #0006; }
+.tile-inspect svg { width: 21px; height: 21px; }
+.tile-inspect:hover, .tile-inspect:focus-visible { color: var(--accent); border-color: var(--accent); }
+.zoom { border-radius: 4px 20px 4px 20px; border-color: var(--tech-line); background: var(--glass-strong, var(--bg-elev)); backdrop-filter: blur(22px); }
+.zoom-command { margin: 0 0 16px; padding-bottom: 16px; border-bottom: 1px solid var(--tech-line); }
+.zoom-browse { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.zoom-browse .btn { min-width: 44px; min-height: 44px; }
+.zoom-browse > span { flex: 1; text-align: center; color: var(--signal); font-variant-numeric: tabular-nums; }
+.zoom-decisions { display: grid; gap: 9px; }
+.zoom-decisions > p { margin: 0; }
+.zoom-play-option { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 100%; min-height: 52px; padding: 12px; border: 1px solid var(--accent); border-radius: 3px 14px 3px 14px; background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 13%, var(--bg-elev)), var(--bg-elev)); color: var(--fg); text-align: left; cursor: pointer; font: inherit; }
+.zoom-play-option:hover { background: var(--bg-elev-2); }
+.zoom-option-verb { display: flex; justify-content: space-between; color: var(--accent); font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
+.zoom-option-cost { display: flex; gap: 8px; align-items: center; color: var(--fg-muted); }
+.zoom-exit { width: 100%; margin-top: 10px; min-height: 44px; }
+.zoom.has-actions .zoom-text { overscroll-behavior: contain; }
+/* One discharge, not a flashing loop. All effects are decorative and nonblocking. */
+.electric-arc { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 3; stroke: var(--shock-color); stroke-width: 2; vector-effect: non-scaling-stroke; opacity: 0; filter: drop-shadow(0 0 3px var(--shock-color)); }
+.electric-arc path { vector-effect: non-scaling-stroke; }
+@media (prefers-reduced-motion: no-preference) {
+  .interaction { animation: interaction-slam 320ms cubic-bezier(.15,.8,.25,1) both; transform-origin: center 65%; }
+  .electric-arc { animation: electric-discharge 750ms ease-out both; }
+  @keyframes interaction-slam { 0% { transform: translateY(-22px) scale(1.07); } 65% { transform: translateY(2px) scale(.995); } 100% { transform: none; } }
+  @keyframes electric-discharge { 0% { opacity: 0; stroke-dasharray: 40 14; stroke-dashoffset: 80; } 15% { opacity: .95; } 65% { opacity: .6; } 100% { opacity: 0; stroke-dasharray: 40 14; stroke-dashoffset: 0; } }
+}
+@media (prefers-reduced-motion: reduce) { .interaction-impact { opacity: .35; } .stack-shock { opacity: .3; } .counter-shock { display: none; } }
+/* Leave the angled edge controls a lane so inspect targets stay reachable. */
+.table-mid.side-panels > .bf { padding-inline: 44px; }
+.engine-notice { border-radius: 3px 14px 3px 14px; border-color: var(--console-edge); background-color: var(--glass-strong); }
+.tile-play-target { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
+.tile-play-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -67,10 +67,10 @@ function PlayHome() {
           <p className="muted">Choose your deck in the lobby, then share the table code.</p>
           <fieldset className="table-kind" aria-label="Kind of table">
             {engineAvailable && (
-              <label className={`table-kind-opt${useEngine ? " is-on" : ""}`}>
+              <label className={`table-kind-opt is-engine${useEngine ? " is-on" : ""}`}>
                 <input type="radio" name="table-kind" checked={useEngine} onChange={() => setUseEngine(true)} />
                 <span>
-                  <strong>Rules engine (beta)</strong>
+                  <span className="mode-glyph" aria-hidden="true">◇</span><strong>Rules engine (beta)</strong>
                   <span className="muted small">The rules are enforced: one land per turn, mana, the stack, combat, untap and draw happen on their own. Decks must be legal Commander decks.</span>
                 </span>
               </label>
@@ -78,11 +78,12 @@ function PlayHome() {
             <label className={`table-kind-opt${!useEngine || !engineAvailable ? " is-on" : ""}`}>
               <input type="radio" name="table-kind" checked={!useEngine || !engineAvailable} onChange={() => setUseEngine(false)} />
               <span>
-                <strong>Casual (no rules)</strong>
+                <span className="mode-glyph" aria-hidden="true">✦</span><strong>Casual (no rules)</strong>
                 <span className="muted small">Nothing is enforced: like a real table, players move, tap and count land drops themselves. Any deck.</span>
               </span>
             </label>
           </fieldset>
+          {useEngine && engineAvailable && <div className="rules-capabilities" aria-label="Rules engine features"><span>Mana & timing</span><span>Combat & stack</span><span>Legal Commander</span></div>}
           <button className="btn btn-primary btn-big" onClick={() => void create()} disabled={busy}>
             {useEngine && engineAvailable ? "New rules-engine table" : "New casual table"}
           </button>

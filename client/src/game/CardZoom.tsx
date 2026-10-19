@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { hasBackFace, type DerivedCard, type PlayerView, type ViewCard } from "@cgwf/shared";
 import { CardImage } from "../components/CardImage";
 import { ManaCost, OracleText } from "../components/ManaCost";
@@ -25,6 +25,8 @@ export function CardZoom({
   derived,
   attachments = [],
   onClose,
+  actions,
+  navigation,
 }: {
   card: ViewCard;
   printings: Printings;
@@ -33,14 +35,24 @@ export function CardZoom({
   derived?: DerivedCard | undefined;
   attachments?: ViewCard[];
   onClose: () => void;
+  actions?: ReactNode;
+  navigation?: { previous: (() => void) | null; next: (() => void) | null; label: string } | undefined;
 }) {
   const printing = printingOf(card, printings);
   const [face, setFace] = useState<0 | 1>(imageFace(card, printing));
+  useEffect(() => setFace(imageFace(card, printing)), [card.iid, card.face, printing]);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.stopImmediatePropagation(); onClose(); }
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || (e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]"))) return;
+      if (navigation && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+        e.preventDefault();
+        (e.key === "ArrowLeft" ? navigation.previous : navigation.next)?.();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose, navigation]);
 
   const twoFaced = printing ? hasBackFace(printing.layout) : false;
   const faces = printing?.faces.length ? printing.faces : printing ? [{ name: printing.name, manaCost: printing.manaCost, typeLine: printing.typeLine, oracleText: printing.oracleText, power: printing.power, toughness: printing.toughness, loyalty: printing.loyalty, defense: printing.defense }] : [];
@@ -52,10 +64,10 @@ export function CardZoom({
 
   return (
     <div className="modal-backdrop zoom-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-label={nameOf(card, printings)}>
-      <div className="zoom" onClick={(e) => e.stopPropagation()}>
+      <div className={`zoom${actions || navigation ? " has-actions" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="zoom-image">
           {printing ? (
-            <CardImage id={printing.id} name={printing.name} size={bigScreen() ? "large" : "normal"} face={face} loading="eager" />
+            <CardImage key={`${printing.id}:${face}`} id={printing.id} name={printing.name} size={bigScreen() ? "large" : "normal"} face={face} loading="eager" />
           ) : (
             <div className={`tile-back zoom-custom ${card.custom ? "is-custom" : (sleeve?.className ?? "sleeve-classic")}`} style={card.custom ? undefined : sleeve?.style}>
               <strong>{card.custom?.name ?? "Face-down card"}</strong>
@@ -79,6 +91,15 @@ export function CardZoom({
           )}
         </div>
         <div className="zoom-text">
+          {(actions || navigation) && <div className="zoom-command">
+            {navigation && <nav className="zoom-browse" aria-label="Browse playable hand cards">
+              <button className="btn" aria-label="Previous playable card" disabled={!navigation.previous} onClick={() => navigation.previous?.()}>←</button>
+              <span className="small" aria-live="polite">{navigation.label}</span>
+              <button className="btn" aria-label="Next playable card" disabled={!navigation.next} onClick={() => navigation.next?.()}>→</button>
+            </nav>}
+            {actions}
+            <button className="btn zoom-exit" onClick={onClose}>Exit view</button>
+          </div>}
           {derived && card.zone.kind === "battlefield" && (
             <section className="zoom-now">
               {derived.isCreature && derived.power !== null && (

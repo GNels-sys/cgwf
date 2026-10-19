@@ -6,6 +6,8 @@
   --fg-muted: #b4c0b7;
   --accent: #dfb76d;
   --accent-ink: #1a1408;
+  --signal: #83d4cf;
+  --tech-line: color-mix(in srgb, var(--signal) 32%, var(--border));
   --danger: #e06c5b;
   --border: #40514a;
   --radius: 12px;
@@ -23,6 +25,7 @@
 }
 /* Light interface (Personalize -> Interface). Table themes and playmats keep their own colours. */
 :root[data-ui="light"] {
+  --signal: #176d73;
   --bg: #f3efe4;
   --bg-elev: #ffffff;
   --bg-elev-2: #e9e3d3;

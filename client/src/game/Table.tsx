@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { useNavigate } from "react-router-dom";
 import { DndContext, MouseSensor, TouchSensor, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { isOut, type EngineAnswer, type EngineOption, type PlayerView, type RoomInfo, type Row, type ViewCard, type ViewPlayer } from "@cgwf/shared";
-import { EngineAbilitySheet, EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
+import { EngineBar, EngineListSheet, EngineMulligan, NO_PICK, cardOptionIndex, initialPick, promptHighlights, refKey, type EnginePick } from "./Engine";
 import { EnginePromptSheet, SHEET_PROMPT_KINDS, PayWithSheet } from "./EnginePrompts";
 import { InteractionStack, StackPanel, isInteraction } from "./StackPanel";
 import { ActiveBoard, EdgeTab, GameLog, LogToasts, printingAsCard } from "./Overlays";
@@ -18,6 +18,7 @@ import { setAmbient, stopAmbient } from "./ambient";
 import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
 import { CardZoom } from "./CardZoom";
+import { playableHand, zoomOptions, ZoomActions } from "./ZoomActions";
 import { CombatBar, attackTargets, colorOf, targetKey, type AttackTarget, type CombatMode } from "./CombatBar";
 import { DamageSheet } from "./DamageSheet";
 import { PhaseStrip } from "./PhaseStrip";
@@ -427,6 +428,33 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const canAct = Boolean(mePlayer && !mePlayer.conceded && !ended && !(engineMode && mePlayer.eliminated));
   /** Classic-table actions (events) are off on engine tables. */
   const canEdit = canAct && !engineMode;
+
+  const legalPrompt = canAct && !engine?.engineDown ? prompt : null;
+  const availableHand = engineMode ? playableHand(mePlayer?.hand.cards ?? [], legalPrompt) : canEdit ? mePlayer?.hand.cards ?? [] : [];
+  const zoomInHand = zoom ? mePlayer?.hand.cards.some((card) => card.iid === zoom.iid) : false;
+  const zoomIndex = availableHand.findIndex((card) => card.iid === zoom?.iid);
+  const otherPlayable = availableHand.filter((card) => card.iid !== zoom?.iid);
+  const zoomNavigation = zoomInHand ? {
+    label: zoomIndex >= 0 ? `Playable ${zoomIndex + 1} of ${availableHand.length}` : `${availableHand.length} playable`,
+    previous: otherPlayable.length ? () => setZoom(availableHand[zoomIndex < 0 ? availableHand.length - 1 : (zoomIndex - 1 + availableHand.length) % availableHand.length] ?? otherPlayable[otherPlayable.length - 1]!) : null,
+    next: otherPlayable.length ? () => setZoom(availableHand[(zoomIndex + 1) % availableHand.length] ?? otherPlayable[0]!) : null,
+  } : undefined;
+  function zoomActions(card: ViewCard, done: () => void) {
+    const hand = Boolean(mePlayer?.hand.cards.some((entry) => entry.iid === card.iid));
+    if (engineMode) {
+      const options = zoomOptions(legalPrompt, card.iid);
+      if (!hand && !options.length && !((card.printingId && printings[card.printingId]?.typeLine.includes("Planeswalker")) && card.owner === me)) return undefined;
+      return <ZoomActions options={options} hand={hand} onPick={(index) => {
+        // Use only this frame's prompt and options; the server validates again.
+        if (legalPrompt?.kind !== "priority" || !options.some((option) => option.index === index)) return;
+        done(); closeSheet(); answerEngine({ promptId: legalPrompt.promptId, option: index });
+      }} />;
+    }
+    if (!hand || !canEdit) return undefined;
+    const play = cardActions(ctx, card).find((action) => action.label === "Play");
+    return play ? <div className="zoom-decisions"><p className="eyebrow">Casual table · You enforce the rules</p><button className="btn btn-primary" onClick={() => { done(); play.run(); }}>Play now</button></div> : undefined;
+  }
+
   const isHost = me !== null && room.hostId === me;
 
   // ---- combat picking (attackers / blockers) --------------------------------
@@ -532,17 +560,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       const p = view.players[sheet.player.id] ?? sheet.player;
       sheetView = <ActionSheet title={p.id === me ? "Anthems on your creatures" : `Anthems on ${p.name}'s creatures`} subtitle="Detected from card text; hide conditional ones, add what the parser misses" actions={anthemActions(ctx, p)} onClose={closeSheet} />;
     } else if (sheet.kind === "engineAbilities" && prompt) {
-      sheetView = (
-        <EngineAbilitySheet
-          name={nameOf(sheet.card, printings)}
-          options={sheet.options}
-          onPick={(index) => {
-            closeSheet();
-            answerEngine({ promptId: prompt.promptId, option: index });
-          }}
-          onClose={closeSheet}
-        />
-      );
+      sheetView = <CardZoom card={sheet.card} printings={printings} view={view} onClose={closeSheet}
+        actions={zoomActions(sheet.card, closeSheet)} />;
     } else if (sheet.kind === "payWith" && prompt?.kind === "priority") {
       sheetView = <PayWithSheet card={sheet.card} options={sheet.options} view={view} printings={printings} promptId={prompt.promptId} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     } else if (sheet.kind === "engineList" && prompt) {
@@ -692,6 +711,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               derived={myDerived}
               onTap={tapCard}
               onHold={engineMode ? engineHold : holdCard}
+              onZoom={holdCard}
               draggable={canEdit}
               droppable={canEdit}
               highlighted={highlighted}
@@ -735,7 +755,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
             <DropRow id="zone:hand" className="hand">
               {mePlayer.hand.cards.length === 0 && <span className="muted small">Empty hand</span>}
               {mePlayer.hand.cards.map((c) => (
-                <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={engineMode ? engineHold : holdCard} draggable={canEdit} highlight={highlighted.has(c.iid)} selected={combatSelected.has(c.iid)} />
+                <CardTile key={c.iid} card={c} printings={printings} onTap={tapCard} onHold={engineMode ? engineHold : holdCard} onZoom={holdCard} draggable={canEdit} highlight={highlighted.has(c.iid)} selected={combatSelected.has(c.iid)} />
               ))}
             </DropRow>
             <LifeWidget
@@ -856,7 +876,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       {sheetView}
       {showDamage && <DamageSheet view={view} printings={printings} dispatch={sock.dispatch} onClose={() => setShowDamage(false)} />}
       {dialogState && <DialogView key={dialogState.key} dialog={dialogState.d} onClose={() => setDialog(null)} />}
-      {zoom && <CardZoom card={zoom} printings={printings} view={view} sleeve={sleeveOf(zoom.owner)} derived={zoomExtras.derived} attachments={zoomExtras.attachments} onClose={() => setZoom(null)} />}
+      {zoom && <CardZoom card={zoom} printings={printings} view={view} sleeve={sleeveOf(zoom.owner)} derived={zoomExtras.derived} attachments={zoomExtras.attachments} actions={zoomActions(zoom, () => setZoom(null))} navigation={zoomNavigation} onClose={() => setZoom(null)} />}
       {liveCardsPanel && (
         <Panel title={liveCardsPanel.title} {...(liveCardsPanel.subtitle ? { subtitle: liveCardsPanel.subtitle } : {})} onClose={() => setCardsPanel(null)} wide>
           {liveCardsPanel.follow === "library" && me && (
