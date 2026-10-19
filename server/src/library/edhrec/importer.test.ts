@@ -74,6 +74,9 @@ describe("EDHREC import into the deck library", () => {
     "average-decks/atraxa-b/upgraded": averageDeck(["Atraxa, Praetors' Voice"], atraxaGroups()),
     "average-decks/atraxa-b/optimized": averageDeck(["Atraxa, Praetors' Voice"], atraxaGroups()),
     "average-decks/partners/upgraded": averageDeck(["Atraxa, Praetors' Voice", "Sol Ring"], { Creature: [["Lotus Cobra", 1]], Land: [["Forest", 97]] }),
+    // EDHREC averages sometimes leave slots empty: 97 cards (padded) and 94 (too short).
+    "average-decks/short/upgraded": averageDeck(["Atraxa, Praetors' Voice"], { ...atraxaGroups(), Land: [["Forest", 88]] }),
+    "average-decks/tooshort/upgraded": averageDeck(["Atraxa, Praetors' Voice"], { ...atraxaGroups(), Land: [["Forest", 85]] }),
   };
   for (const id of IDENTITIES) table[`commanders/${id.slug}`] = listPage([]);
   const fetcher = fixtureFetch(table);
@@ -109,6 +112,15 @@ describe("EDHREC import into the deck library", () => {
     const ev = await ctx.edhrec.evaluate({ slug: "partners", name: "pair", identity: "WUBG", bracketCounts: { 1: 0, 2: 0, 3: 900, 4: 0, 5: 0 } }, 3);
     expect(ev.ok).toBe(false);
     if (!ev.ok) expect(ev.reason).toMatch(/not a legal Commander deck as averaged/);
+  });
+
+  it("fills up to four empty slots of a short average with the commander's basics, and refuses a shorter one", async () => {
+    const cand = (slug: string) => ({ slug, name: slug, identity: "WUBG", bracketCounts: { 1: 0, 2: 0, 3: 100, 4: 0, 5: 0 } as const });
+    const ok = await ctx.edhrec.evaluate(cand("short"), 3);
+    expect(ok.ok).toBe(true);
+    const bad = await ctx.edhrec.evaluate(cand("tooshort"), 3);
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason).toBe("the average deck has 94 cards, not 100");
   });
 
   it("imports the picks with name, source, URL, bracket, tags, primer; coverage decides agent eligibility", async () => {

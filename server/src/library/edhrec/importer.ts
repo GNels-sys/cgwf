@@ -65,10 +65,16 @@ export interface EdhrecImportState {
   finishedAt: string | null;
 }
 
+/** EDHREC's average can leave a few slots empty; up to this many are filled with basic lands. */
+export const MAX_PADDING = 4;
+const BASIC_FOR: Record<string, string> = { W: "Plains", U: "Island", B: "Swamp", R: "Mountain", G: "Forest", "": "Wastes" };
+
 interface Evaluated {
   candidate: Candidate;
   bracket: EdhrecBracket;
   deck: AverageDeck;
+  /** Basic lands added because the average left slots empty. */
+  padded: string[];
   entries: LibraryEntry[];
   analysisCards: AnalysisCard[];
   analysis: DeckAnalysis;
@@ -178,9 +184,12 @@ export class EdhrecImporter {
   async evaluate(c: Candidate, bracket: EdhrecBracket, refresh = false): Promise<Evaluation> {
     const deck = parseAverageDeck(c.slug, await this.client.get(`average-decks/${c.slug}/${EDHREC_BRACKET_NAMES[bracket]}`, { refresh }));
     if (!deck) return { ok: false, reason: `EDHREC has no ${EDHREC_BRACKET_NAMES[bracket]} average deck` };
-    if (totalCards(deck) !== 100) return { ok: false, reason: `the average deck has ${totalCards(deck)} cards, not 100` };
+    const total = totalCards(deck);
+    if (total > 100 || 100 - total > MAX_PADDING) return { ok: false, reason: `the average deck has ${total} cards, not 100` };
     const resolved = this.resolve(deck);
     if (!resolved.ok) return { ok: false, reason: resolved.reason };
+    const padded = this.pad(resolved.entries, c.identity, 100 - total);
+    if (!padded) return { ok: false, reason: `the average deck has ${total} cards and no basic land to fill the gap` };
     const rowIds = [...new Set(resolved.entries.map((e) => e.cardId))];
     const rows = this.handle.db.select().from(cards).where(inArray(cards.id, rowIds)).all();
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -189,8 +198,30 @@ export class EdhrecImporter {
     const analysisCards = this.analyzer.loadCardsByIds(resolved.entries);
     const analysis = (await this.analyzer.analyze(analysisCards, { combos: "cached" })).analysis;
     const winCondition = classifyWinCondition(analysis, analysisCards);
-    this.evaluated.set(edhrecSourceKey(c.slug, bracket), { candidate: c, bracket, deck, entries: resolved.entries, analysisCards, analysis, winCondition });
+    this.evaluated.set(edhrecSourceKey(c.slug, bracket), { candidate: c, bracket, deck, padded, entries: resolved.entries, analysisCards, analysis, winCondition });
     return { ok: true, primary: primaryArchetype(analysis), winCondition };
+  }
+
+  /** Add `n` basic lands of the identity's colours (round robin; Wastes when colourless). Mutates `entries`. */
+  private pad(entries: LibraryEntry[], identity: string, n: number): string[] | null {
+    if (n <= 0) return [];
+    const colours = identity === "" ? [""] : identity.split("");
+    const basics = colours.flatMap((c) => {
+      const name = BASIC_FOR[c]!;
+      const hit = this.index.exact(normalizeName(name));
+      return hit ? [{ name, id: hit.id }] : [];
+    });
+    if (basics.length === 0) return null;
+    const added: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const { name, id } = basics[i % basics.length]!;
+      const hit = { id };
+      const prev = entries.find((e) => e.cardId === hit.id && e.board === "main");
+      if (prev) prev.quantity++;
+      else entries.push({ cardId: hit.id, quantity: 1, board: "main" });
+      added.push(name);
+    }
+    return added;
   }
 
   /**
@@ -261,7 +292,7 @@ export class EdhrecImporter {
             rank: p.rank,
             winCondition: WIN_CONDITION_LABELS[p.winCondition],
             fetchedAt: new Date().toISOString(),
-            pickReason: p.reason,
+            pickReason: ev.padded.length ? `${p.reason}; EDHREC's average left ${ev.padded.length} slot(s) empty, filled with ${ev.padded.join(", ")}` : p.reason,
             mismatch,
             coverage: null,
             coverageError: null,
@@ -281,7 +312,7 @@ export class EdhrecImporter {
           });
           if (created) this.state.imported++;
           else this.state.updated++;
-          imported.push({ id, key, name, bracket: r.bracket, mismatch, created });
+          imported.push({ id, key, name, bracket: r.bracket, mismatch, created, padded: ev.padded });
         }
       }
     }
@@ -344,6 +375,7 @@ interface ImportedDeck {
   bracket: EdhrecBracket;
   mismatch: string | null;
   created: boolean;
+  padded: string[];
 }
 
 interface CoverageLine {
@@ -395,6 +427,13 @@ export function renderReport(r: Report): string {
       lines.push(`Rejected while choosing (${s.rejected.length}):`);
       for (const x of s.rejected) lines.push(`- ${x.name}: ${x.reason}`);
     }
+    lines.push("");
+  }
+  const padded = r.imported.filter((d) => d.padded.length);
+  if (padded.length) {
+    lines.push(`## Short averages filled with basic lands (${padded.length})`);
+    lines.push("");
+    for (const d of padded) lines.push(`- ${d.name}: ${d.padded.join(", ")}`);
     lines.push("");
   }
   const mism = r.imported.filter((d) => d.mismatch);

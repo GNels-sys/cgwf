@@ -4,7 +4,10 @@ import { IDENTITIES, identityKey } from "./identity.js";
 import { averageDeckText, parseAverageDeck, parseCommanderPage, parseList, totalCards } from "./parse.js";
 import { diversitySummary, rankCandidates, selectBracket, type Candidate, type Evaluation, type SelectionRules } from "./select.js";
 import { averageDeck, commanderPage, listPage } from "./fixtures.js";
-import type { WinCondition } from "./wincon.js";
+import { classifyWinCondition, type WinCondition } from "./wincon.js";
+import { copiesAllowed } from "../../routes/decks.js";
+import type { DeckAnalysis } from "@cgwf/shared";
+import type { AnalysisCard } from "../../analysis/index.js";
 
 const ARCHS: ArchetypeTag[] = ["tokens", "counters", "aristocrats", "voltron", "spellslinger", "reanimator", "lands", "artifacts", "enchantress", "control", "combo", "aggro"];
 const WINS: WinCondition[] = ["combat", "combo", "drain", "alternate", "control"];
@@ -111,5 +114,27 @@ describe("selection per bracket", () => {
     const groups = diversitySummary(r.picks).groups;
     for (const g of ["mono-colour", "two-colour", "three-colour", "four-colour", "five-colour", "colourless"]) expect(groups[g] ?? 0, g).toBeGreaterThanOrEqual(1);
     expect(Math.max(...Object.values(diversitySummary(r.picks).identities))).toBeLessThanOrEqual(3);
+  });
+});
+
+describe("win conditions and deck legality details", () => {
+  const analysis = (primary: ArchetypeTag | null, combos: Array<{ cards: string[]; early: boolean }> = []) =>
+    ({ archetypes: primary ? [{ tag: primary, confidence: 0.9, evidence: [] }] : [], combos: combos.map((c) => ({ ...c, twoCard: true, produces: ["Win the game"] })) }) as unknown as DeckAnalysis;
+  const card = (name: string, oracleText: string): AnalysisCard => ({ name, oracleText, typeLine: "Sorcery", manaCost: "", cmc: 0, keywords: [], colorIdentity: [], quantity: 1, board: "main" });
+
+  it("calls a deck a combo deck only when combo is its plan, not for one incidental infinite", () => {
+    expect(classifyWinCondition(analysis("combo"), [])).toBe("combo");
+    expect(classifyWinCondition(analysis("tokens", [{ cards: ["A", "B"], early: true }]), [])).toBe("combat");
+    expect(classifyWinCondition(analysis("tokens", [{ cards: ["A", "B"], early: true }, { cards: ["C", "D"], early: true }]), [])).toBe("combo");
+    expect(classifyWinCondition(analysis("control"), [card("Approach of the Second Sun", "If this spell was cast from your hand and you've cast another spell named Approach of the Second Sun this game, you win the game.")])).toBe("alternate");
+    expect(classifyWinCondition(analysis("control", [{ cards: ["Thassa's Oracle", "X"], early: false }]), [card("Thassa's Oracle", "... you win the game.")])).toBe("control");
+    expect(classifyWinCondition(analysis("aristocrats"), [])).toBe("drain");
+    expect(classifyWinCondition(analysis("voltron"), [])).toBe("combat");
+  });
+
+  it("knows the cards that allow several copies (Nazgûl nine, Seven Dwarves seven)", () => {
+    expect(copiesAllowed("A deck can have up to nine cards named Nazgûl.")).toBe(9);
+    expect(copiesAllowed("Seven Dwarves gets +1/+1 for each other creature named Seven Dwarves you control. A deck can have up to seven cards named Seven Dwarves.")).toBe(7);
+    expect(copiesAllowed("Flying")).toBe(1);
   });
 });

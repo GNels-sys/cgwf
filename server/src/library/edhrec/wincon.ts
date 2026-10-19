@@ -4,7 +4,10 @@ import type { AnalysisCard } from "../../analysis/index.js";
 /**
  * One win-condition class per deck, so a bracket's selection can mix them. Derived from the
  * analysis engine's output and the cards' rules text; a heuristic, labelled as such in the report.
- * Priority when several apply: combo > alternate win > drain/burn > control/value > combat.
+ * Order: a combo deck (primary archetype combo/storm, or two or more cheap two-card game-ending
+ * combos) > an alternate win card that is not part of a detected combo (Approach, Revel in Riches;
+ * primary mill too) > drain/burn > control/value > combat. A single incidental two-card infinite in an
+ * otherwise creature deck does not make it a combo deck.
  */
 export type WinCondition = "combo" | "alternate" | "drain" | "control" | "combat";
 
@@ -31,9 +34,11 @@ export function primaryArchetype(a: DeckAnalysis): ArchetypeTag | null {
 export function classifyWinCondition(a: DeckAnalysis, cards: AnalysisCard[]): WinCondition {
   const primary = primaryArchetype(a);
   const tags = new Set(a.archetypes.filter((t) => t.confidence >= 0.5).map((t) => t.tag));
-  const gameEndingCombo = a.combos.some((c) => c.twoCard);
-  if (gameEndingCombo || primary === "combo") return "combo";
-  if (primary === "mill" || cards.some((c) => c.board === "main" && ALT_WIN.test(c.oracleText))) return "alternate";
+  const earlyCombos = a.combos.filter((c) => c.twoCard && c.early).length;
+  if (primary === "combo" || primary === "storm" || earlyCombos >= 2) return "combo";
+  const comboPieces = new Set(a.combos.flatMap((c) => c.cards));
+  const altWin = cards.some((c) => c.board === "main" && ALT_WIN.test(c.oracleText) && !comboPieces.has(c.name));
+  if (primary === "mill" || altWin) return "alternate";
   const drainCards = cards.filter((c) => DRAIN.test(c.oracleText)).length;
   if ((primary && DRAIN_TAGS.has(primary)) || drainCards >= 6 || (tags.has("aristocrats") && drainCards >= 3)) return "drain";
   if (primary && CONTROL_TAGS.has(primary)) return "control";
