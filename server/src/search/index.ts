@@ -76,9 +76,16 @@ export class NameIndex {
     this.entries = entries;
     this.aliases = aliases;
     const byNorm = new Map<string, IndexEntry>();
-    // Real card names win over face aliases; non-tokens win over tokens.
+    // Real card names win over face aliases; non-tokens win over tokens. When two DIFFERENT cards share a
+    // normalised name (punctuation is dropped: "Rampant Growth" vs the playtest card "Rampant, Growth"),
+    // the first one wins: entries are in printing-preference order, so the paper, in-booster card keeps it.
     for (const a of aliases) if (!a.entry.isToken && !byNorm.has(a.norm)) byNorm.set(a.norm, a.entry);
-    for (const e of entries) if (!e.isToken) byNorm.set(e.norm, e);
+    const named = new Set<string>();
+    for (const e of entries) {
+      if (e.isToken || named.has(e.norm)) continue;
+      named.add(e.norm);
+      byNorm.set(e.norm, e);
+    }
     this.byNorm = byNorm;
     this.builtAt = new Date().toISOString();
   }
