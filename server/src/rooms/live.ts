@@ -36,6 +36,8 @@ import type { NameIndex } from "../search/index.js";
 import { EngineRoomError, EngineTable, type RoomPort } from "./engineTable.js";
 import { deckForEngine } from "../engine/deck.js";
 import type { GameResults } from "../stats/results.js";
+import type { DiscordVoice } from "../discord/voice.js";
+import { normaliseInvite, type RoomVoice } from "@cgwf/shared";
 import type { AdminOpenTable, EngineAnswer, EngineStops } from "@cgwf/shared";
 
 /** What the rules-engine integration needs (null when no engine is configured). */
@@ -161,8 +163,41 @@ export class LiveRoom {
   // ------------------------------------------------------------ loading
 
   refreshRow(): RoomRow {
+    const before = this.row.status;
     this.row = this.handle.db.select().from(rooms).where(eq(rooms.id, this.id)).get() ?? this.row;
+    // Discord voice: a game that ended on its own keeps its channel for a rematch grace, then loses it
+    if (before !== this.row.status && this.voice) {
+      if (this.row.status === "ended") this.voice.scheduleRelease(this.id);
+      else if (before === "ended") this.voice.keep(this.id);
+    }
     return this.row;
+  }
+
+  /** Discord voice service (null when the server has none); set by the RoomManager. */
+  voice: DiscordVoice | null = null;
+
+  /** Members of this table only: the voice invite (the bot's channel, else the host's manual link). */
+  private voiceFor(row: RoomRow, isMember: boolean): RoomVoice | null {
+    if (!isMember) return null;
+    const bot = this.voice?.usable ?? false;
+    if (row.voiceInviteUrl) return { url: row.voiceInviteUrl, source: "discord", unavailable: false, botEnabled: bot };
+    const failed = bot && (this.voice?.failed.has(this.id) ?? false);
+    if (row.voiceManualUrl) return { url: row.voiceManualUrl, source: "manual", unavailable: failed, botEnabled: bot };
+    return { url: null, source: null, unavailable: failed || (!bot && this.voice !== null && this.voice.status.state === "error"), botEnabled: bot };
+  }
+
+  /** Host: the manual voice link (a Discord invite), or null to clear it. */
+  setVoiceLink(userId: string, raw: unknown): void {
+    const row = this.refreshRow();
+    if (row.hostUserId !== userId) throw new RoomError("only the host can set the voice link");
+    if (row.status === "ended") throw new RoomError("this table has ended");
+    let url: string | null = null;
+    if (raw !== null && raw !== "" && raw !== undefined) {
+      url = normaliseInvite(raw);
+      if (!url) throw new RoomError("That is not a Discord invite link (discord.gg/... or discord.com/invite/...).");
+    }
+    this.handle.db.update(rooms).set({ voiceManualUrl: url }).where(eq(rooms.id, this.id)).run();
+    this.touch();
   }
 
   private ensureLoaded(): void {
@@ -239,6 +274,7 @@ export class LiveRoom {
       testGame: Boolean(row.testGame),
       tableBracket: row.tableBracket ?? this.autoTableBracket(members),
       tableBracketChosen: row.tableBracket !== null && row.tableBracket !== undefined,
+      voice: this.voiceFor(row, Boolean(forUserId && rows.some((m) => m.userId === forUserId))),
     };
   }
 
@@ -282,6 +318,7 @@ export class LiveRoom {
       this.refreshRow();
       this.engineTable?.dispose();
     }
+    this.voice?.release(this.id);
     this.lastActivity = Date.now();
     this.broadcastRoom();
     return true;
@@ -623,6 +660,14 @@ export class RoomManager {
   casualRooms = false;
   /** Deck-statistics recorder (set by the app once the analyzer exists). */
   results: GameResults | null = null;
+  /** Discord voice: one temporary channel per table (null = no service wired, e.g. some tests). */
+  voice: DiscordVoice | null = null;
+
+  setVoice(v: DiscordVoice): void {
+    this.voice = v;
+    v.onChange = (roomId) => this.live.get(roomId)?.broadcastRoom();
+    for (const room of this.live.values()) room.voice = v;
+  }
   /** Tables with no activity for this long are closed automatically (no result recorded). */
   idleCloseMs = Number(process.env.TABLE_IDLE_CLOSE_HOURS ?? 48) * 3600_000;
   private idleTimer: NodeJS.Timeout | null = null;
@@ -729,6 +774,7 @@ export class RoomManager {
     const row = this.handle.db.select().from(rooms).where(eq(rooms.id, id)).get();
     if (!row) return null;
     room = new LiveRoom(this.handle, this.log, row, this.engine);
+    room.voice = this.voice;
     this.live.set(row.id, room);
     return room;
   }
@@ -766,6 +812,10 @@ export class RoomManager {
       this.handle.db.insert(rooms).values({ id, code, hostUserId, status: "lobby", format: "commander", seed, lastSeq: 0, engine, createdAt: ts, updatedAt: ts }).run();
       this.handle.db.insert(roomMembers).values({ roomId: id, userId: hostUserId, role: "player", seat: 0, deckId: null, joinedAt: ts }).run();
     })();
+    // Discord voice: the bot's channel (async; the table never waits), else the host's saved invite
+    const fallback = loadSettings(this.handle, hostUserId).discordInvite;
+    if (fallback) this.handle.db.update(rooms).set({ voiceManualUrl: fallback }).where(eq(rooms.id, id)).run();
+    this.voice?.onRoomCreated(id, code);
     return this.get(code)!;
   }
 
@@ -810,6 +860,9 @@ export class RoomManager {
       }
     }
     // Engine rematches open as a lobby: the host presses Start (the engine call is asynchronous).
+    // Discord voice: the rematch keeps the same channel (renamed to the new code)
+    this.voice?.onRematch(old.id, id, code);
+    next.refreshRow();
     old.broadcastRoom();
     return next;
   }
@@ -839,6 +892,7 @@ export class RoomManager {
     let room = this.live.get(row.id);
     if (!room) {
       room = new LiveRoom(this.handle, this.log, row, this.engine);
+      room.voice = this.voice;
       this.live.set(row.id, room);
     }
     return room;

@@ -30,6 +30,8 @@ import { registerDeckOptionRoutes } from "./routes/deckOptions.js";
 import { registerDeckStatsRoutes } from "./routes/deckStats.js";
 import { DeckBrackets } from "./stats/brackets.js";
 import { GameResults } from "./stats/results.js";
+import { DiscordVoice, type VoiceConfig } from "./discord/voice.js";
+import type { FetchLike as DiscordFetch } from "./discord/client.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerSinglesRoutes } from "./routes/singles.js";
 import { SinglesClient } from "./singles/client.js";
@@ -88,6 +90,12 @@ export interface BuildOptions {
   casualRooms?: boolean;
   /** Hourly auto-close of tables idle for TABLE_IDLE_CLOSE_HOURS (48 h). Tests turn it off. */
   idleSweep?: boolean;
+  /** Discord voice: tests pass a config (or null = off) and a fake Discord API; production reads config. */
+  discord?: VoiceConfig | null;
+  discordFetch?: DiscordFetch;
+  discordClientOpts?: { sleep?: (ms: number) => Promise<void>; maxWaitMs?: number };
+  /** Run the boot check + orphan sweep (default true; tests call verify() themselves). */
+  discordBoot?: boolean;
 }
 
 /** Build the Fastify app with every route wired. Listening is the caller's job. */
@@ -154,6 +162,21 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   const deckBrackets = new DeckBrackets(handle, analyzer);
   roomsManager.setResults(new GameResults(handle, deckBrackets));
   if (opts.idleSweep !== false) roomsManager.startIdleSweep();
+  // Discord voice: one temporary voice channel per table (all three secrets set), else manual links only
+  const dEnv = { token: config.discordBotToken, guildId: config.discordGuildId, categoryId: config.discordCategoryId };
+  const dSet = [dEnv.token, dEnv.guildId, dEnv.categoryId].filter(Boolean).length;
+  const voice = new DiscordVoice(handle, app.log, opts.discord !== undefined ? opts.discord : dSet === 3 ? dEnv : null, opts.discordFetch, opts.discordClientOpts);
+  if (opts.discord === undefined && dSet > 0 && dSet < 3) {
+    const missing = (["DISCORD_BOT_TOKEN", "DISCORD_GUILD_ID", "DISCORD_CATEGORY_ID"] as const).filter((k, i) => ![dEnv.token, dEnv.guildId, dEnv.categoryId][i]);
+    voice.status = { state: "error", botName: null, categoryName: null, problem: `${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} not set (fly secrets set ...).` };
+  }
+  roomsManager.setVoice(voice);
+  if (opts.discordBoot !== false && voice.status.state === "checking") {
+    void voice.verify().then(() => voice.sweepOrphans()).catch((err: unknown) => app.log.warn({ err: (err as Error).message }, "discord boot sweep failed"));
+    const sweep = setInterval(() => void voice.sweepOrphans().catch(() => undefined), 60 * 60 * 1000);
+    sweep.unref();
+    app.addHook("onClose", async () => clearInterval(sweep));
+  }
   registerRoomRoutes(app, { handle, roomsManager, agents });
   registerDeckOptionRoutes(app, { handle, brackets: deckBrackets });
   registerDeckStatsRoutes(app, { handle });

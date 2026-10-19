@@ -57,6 +57,7 @@ const CONTROLS: Array<[string, string]> = [
   ["Game Log minimise", ".game-log-head .sheet-close"],
   ["Stack panel", ".stack-panel-head"],
   ["menu", "button[aria-label='Menu']"],
+  ["voice", "a[aria-label='Join voice on Discord']"],
 ];
 
 function boxOf(el: Element): Box {

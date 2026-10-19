@@ -4,6 +4,7 @@ import type { Look } from "../settings.js";
 import type { EventInput, PlayerId } from "./types.js";
 import type { PlayerView } from "./view.js";
 import type { EngineAnswer, EngineNotice, EngineStops } from "../engine.js";
+import type { RoomVoice } from "../discord.js";
 
 /**
  * Room + WebSocket protocol. The socket is opened at
@@ -60,6 +61,8 @@ export interface RoomInfo {
   tableBracket: number | null;
   /** True when the host picked the table bracket (false = the automatic default above). */
   tableBracketChosen: boolean;
+  /** Voice on Discord: only members of this table get it (null for anyone else). */
+  voice: RoomVoice | null;
 }
 
 export const ROOM_CODE_LENGTH = 6;
@@ -79,6 +82,8 @@ export type ClientMessage =
   | { t: "tableSettings"; testGame?: boolean; tableBracket?: number | null }
   /** Host only (or the owner): close the table without recording a result. */
   | { t: "endTable" }
+  /** Host only: the manual voice link (a Discord invite), or null to clear it. */
+  | { t: "voiceLink"; url: string | null }
   | { t: "leave" }
   /** Engine tables: answer the prompt the engine is waiting on (see shared/engine.ts). */
   | { t: "engine"; answer: EngineAnswer; cid?: string }

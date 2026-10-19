@@ -176,6 +176,11 @@ export const rooms = sqliteTable(
     testGame: integer("test_game", { mode: "boolean" }).notNull().default(false),
     /** Lobby setting "Table bracket" chosen by the host (null = the highest suggested bracket among seated decks). */
     tableBracket: integer("table_bracket"),
+    /** Discord voice (2026-10-19): the bot's temporary voice channel for this table and its invite URL. */
+    voiceChannelId: text("voice_channel_id"),
+    voiceInviteUrl: text("voice_invite_url"),
+    /** Manual fallback: a Discord invite the host pasted (or their saved default), when the bot is off. */
+    voiceManualUrl: text("voice_manual_url"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

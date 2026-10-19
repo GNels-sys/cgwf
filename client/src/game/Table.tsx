@@ -1,3 +1,4 @@
+import { VoiceButton } from "./Voice";
 import { useTableMotion } from "./useTableMotion";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -636,6 +637,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           <div className="opp-strip">{topOpponents.map((p) => renderChip(p, false))}</div>
           <div className="turn-bar">
             {mePlayer && <ManaBank player={mePlayer} dispatch={sock.dispatch} disabled={!canEdit} />}
+            <VoiceButton room={room} />
             <button className="btn btn-small menu-btn" onClick={() => setShowMenu(true)} aria-label="Menu">
               &#8942;
             </button>
