@@ -16,6 +16,7 @@ interface Props {
   derived: DerivedBattlefield;
   onTap: (c: ViewCard) => void;
   onHold: (c: ViewCard) => void;
+  onZoom?: ((c: ViewCard) => void) | undefined;
   draggable?: boolean;
   droppable?: boolean;
   highlighted?: ReadonlySet<string>;
@@ -29,7 +30,7 @@ interface Props {
   selected?: ReadonlySet<string> | undefined;
 }
 
-function SectionView({ section, player, printings, derived, onTap, onHold, draggable, droppable, highlighted, onAnthems, sleeveOf, marks, selected, wide }: Props & { section: Section; wide: boolean }) {
+function SectionView({ section, player, printings, derived, onTap, onHold, onZoom, draggable, droppable, highlighted, onAnthems, sleeveOf, marks, selected, wide }: Props & { section: Section; wide: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `row:${section}`, disabled: !droppable });
   const all = battlefieldCards(player);
   const stacks = stacksOf(player.battlefield[section], all);
@@ -47,7 +48,7 @@ function SectionView({ section, player, printings, derived, onTap, onHold, dragg
       <div className="bf-cards">
         {stacks.map(({ host, attachments }) => (
           <div key={host.iid} className={`stack${attachments.length ? " has-attachments" : ""}`} style={{ "--n": attachments.length } as React.CSSProperties}>
-            <CardTile card={host} printings={printings} onTap={onTap} onHold={onHold} draggable={draggable} derived={derived.cards.get(host.iid)} highlight={highlighted?.has(host.iid)} sleeve={sleeveOf?.(host.owner)} mark={marks?.get(host.iid)} selected={selected?.has(host.iid) ?? false} />
+            <CardTile card={host} printings={printings} onTap={onTap} onHold={onHold} onZoom={host.printingId && printings[host.printingId]?.typeLine.includes("Planeswalker") ? onZoom : undefined} draggable={draggable} derived={derived.cards.get(host.iid)} highlight={highlighted?.has(host.iid)} sleeve={sleeveOf?.(host.owner)} mark={marks?.get(host.iid)} selected={selected?.has(host.iid) ?? false} />
             {attachments.map((a, i) => (
               <div key={a.iid} className="stack-attachment" style={{ "--i": i + 1 } as React.CSSProperties}>
                 <CardTile card={a} printings={printings} onTap={onTap} onHold={onHold} draggable={draggable} attached derived={derived.cards.get(a.iid)} highlight={highlighted?.has(a.iid)} sleeve={sleeveOf?.(a.owner)} />

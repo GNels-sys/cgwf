@@ -1,0 +1,236 @@
+[
+  {
+    "label": "landscape",
+    "ui": "dark",
+    "checks": [
+      {
+        "state": "initial",
+        "problems": []
+      },
+      {
+        "state": "board-open",
+        "problems": []
+      },
+      {
+        "state": "log-open",
+        "problems": []
+      },
+      {
+        "state": "tabs",
+        "problems": []
+      },
+      {
+        "state": "stack-minimized",
+        "problems": []
+      },
+      {
+        "state": "rotated",
+        "problems": []
+      }
+    ],
+    "shock": "var(--mana-U)",
+    "slam": "interaction-slam",
+    "reduced": "none",
+    "inspect": true,
+    "play": true,
+    "loyalty": true,
+    "stalePrompt": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "landscape",
+    "ui": "light",
+    "checks": [
+      {
+        "state": "initial",
+        "problems": []
+      },
+      {
+        "state": "board-open",
+        "problems": []
+      },
+      {
+        "state": "log-open",
+        "problems": []
+      },
+      {
+        "state": "tabs",
+        "problems": []
+      },
+      {
+        "state": "stack-minimized",
+        "problems": []
+      },
+      {
+        "state": "rotated",
+        "problems": []
+      }
+    ],
+    "shock": "var(--mana-U)",
+    "slam": "interaction-slam",
+    "reduced": "none",
+    "inspect": true,
+    "play": true,
+    "loyalty": true,
+    "stalePrompt": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "portrait",
+    "ui": "dark",
+    "checks": [
+      {
+        "state": "initial",
+        "problems": []
+      },
+      {
+        "state": "board-open",
+        "problems": []
+      },
+      {
+        "state": "log-open",
+        "problems": []
+      },
+      {
+        "state": "tabs",
+        "problems": []
+      },
+      {
+        "state": "stack-minimized",
+        "problems": []
+      },
+      {
+        "state": "rotated",
+        "problems": []
+      }
+    ],
+    "shock": "var(--mana-U)",
+    "slam": "interaction-slam",
+    "reduced": "none",
+    "inspect": true,
+    "play": true,
+    "loyalty": true,
+    "stalePrompt": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "portrait",
+    "ui": "light",
+    "checks": [
+      {
+        "state": "initial",
+        "problems": []
+      },
+      {
+        "state": "board-open",
+        "problems": []
+      },
+      {
+        "state": "log-open",
+        "problems": []
+      },
+      {
+        "state": "tabs",
+        "problems": []
+      },
+      {
+        "state": "stack-minimized",
+        "problems": []
+      },
+      {
+        "state": "rotated",
+        "problems": []
+      }
+    ],
+    "shock": "var(--mana-U)",
+    "slam": "interaction-slam",
+    "reduced": "none",
+    "inspect": true,
+    "play": true,
+    "loyalty": true,
+    "stalePrompt": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "desktop",
+    "ui": "dark",
+    "checks": [
+      {
+        "state": "initial",
+        "problems": []
+      },
+      {
+        "state": "board-open",
+        "problems": []
+      },
+      {
+        "state": "log-open",
+        "problems": []
+      },
+      {
+        "state": "tabs",
+        "problems": []
+      },
+      {
+        "state": "stack-minimized",
+        "problems": []
+      },
+      {
+        "state": "rotated",
+        "problems": []
+      }
+    ],
+    "shock": "var(--mana-U)",
+    "slam": "interaction-slam",
+    "reduced": "none",
+    "inspect": true,
+    "play": true,
+    "loyalty": true,
+    "stalePrompt": true,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "label": "desktop",
+    "ui": "light",
+    "checks": [
+      {
+        "state": "initial",
+        "problems": []
+      },
+      {
+        "state": "board-open",
+        "problems": []
+      },
+      {
+        "state": "log-open",
+        "problems": []
+      },
+      {
+        "state": "tabs",
+        "problems": []
+      },
+      {
+        "state": "stack-minimized",
+        "problems": []
+      },
+      {
+        "state": "rotated",
+        "problems": []
+      }
+    ],
+    "shock": "var(--mana-U)",
+    "slam": "interaction-slam",
+    "reduced": "none",
+    "inspect": true,
+    "play": true,
+    "loyalty": true,
+    "stalePrompt": true,
+    "overflow": false,
+    "errors": []
+  }
+]

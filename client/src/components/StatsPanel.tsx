@@ -49,8 +49,8 @@ function Bars({ rows, max, unit = "" }: { rows: BarRow[]; max?: number; unit?: s
         <li key={r.key} className={r.secondary ? "stat-bar-row has-secondary" : "stat-bar-row"}>
           <span className="stat-bar-label">{r.label}</span>
           <span className="stat-bar-track" aria-hidden="true">
-            <span className="stat-bar-fill" style={{ width: `${(r.value / top) * 100}%`, background: r.color ?? "var(--accent)" }} />
-            {r.secondary && <span className="stat-bar-fill stat-bar-fill-secondary" style={{ width: `${(r.secondary.value / top) * 100}%`, background: r.color ?? "var(--accent)" }} />}
+            <span className="stat-bar-fill" style={{ width: `${(r.value / top) * 100}%`, backgroundColor: r.color ?? "var(--accent)" }} />
+            {r.secondary && <span className="stat-bar-fill stat-bar-fill-secondary" style={{ width: `${(r.secondary.value / top) * 100}%`, backgroundColor: r.color ?? "var(--accent)" }} />}
           </span>
           <span className="stat-bar-value">
             <span className="sr-only">{r.name}: </span>
@@ -356,8 +356,11 @@ export function StatsPanel({ load, version }: { load: () => Promise<DeckStatsRes
 
   return (
     <section className="bracket-panel stats-panel" aria-labelledby="stats-heading">
-      <div className="row-between">
-        <h3 id="stats-heading">Stats</h3>
+      <div className="row-between analysis-panel-heading">
+        <div className="analysis-panel-title">
+          <span className="analysis-panel-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 18V11M12 18V5M19 18V8M3 21h18" /></svg></span>
+          <div><p className="eyebrow">Deck intelligence</p><h3 id="stats-heading">Stats</h3></div>
+        </div>
         {stats && (
           <span className="muted small">
             {stats.manaValue.cardCount} cards{stats.commanders.length ? " incl. commander" : ""}

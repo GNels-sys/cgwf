@@ -83,6 +83,7 @@ function PlayHome() {
           <p className="table-kind-note muted small">
             <strong>Rules engine (beta).</strong> The rules are enforced: one land per turn, mana, the stack, combat, untap and draw happen on their own. Bring a legal Commander deck of your own, or play any deck from the deck library.
           </p>
+          <div className="rules-capabilities" aria-label="Rules engine features"><span>Mana & timing</span><span>Combat & stack</span><span>Legal Commander</span></div>
           <button className="btn btn-primary btn-big" onClick={() => void create()} disabled={busy || engineAvailable !== true}>
             New table
           </button>

@@ -1553,6 +1553,29 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
 .table-kind-tag.is-engine { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
 .engine-badge.is-casual { border-style: dashed; }
 
+/* Pass 2: one fantasy instrument panel language, shared with the game table. */
+.deck-grid .deck-tile { border-radius: 4px 22px 4px 22px; border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); box-shadow: 0 12px 30px #0002, inset 0 1px #ffffff14; }
+.deck-tile-art { border-radius: 12px; background: linear-gradient(140deg, #ffffff08, transparent); }
+.deck-tile-name { font-size: 1.08rem; }
+.deck-bracket { border-radius: 3px 10px 3px 10px; background: color-mix(in srgb, var(--accent) 12%, var(--bg-elev)); }
+.deck-tile-metrics { border-color: color-mix(in srgb, var(--signal) 25%, var(--border)); }
+.deck-columns .deck-group, .library-deck-page > .deck-group { padding: 16px; border: 1px solid var(--tech-line); border-radius: 4px 20px 4px 20px; background: color-mix(in srgb, var(--glass-strong) 88%, transparent); break-inside: avoid; }
+.deck-group h3 { display: flex; align-items: center; gap: 8px; margin-top: 0; }
+.deck-group h3::before { content: ''; width: 7px; height: 7px; background: var(--signal); transform: rotate(45deg); flex: none; }
+.deck-card-line { min-height: 44px; border-radius: 10px; padding: 7px 8px; gap: 8px; border: 1px solid transparent; }
+.deck-card-line:hover, .deck-card-line:focus-visible { background: color-mix(in srgb, var(--signal) 10%, var(--bg-elev)); border-color: var(--tech-line); }
+.deck-card-line .qty { display: grid; place-items: center; min-width: 27px; min-height: 27px; border: 1px solid var(--border); border-radius: 7px; font-variant-numeric: tabular-nums; background: var(--bg-elev-2); }
+.table-kind { gap: 12px; }
+.table-kind-opt { position: relative; padding: 18px; border-radius: 4px 18px 4px 18px; background: linear-gradient(130deg, color-mix(in srgb, var(--signal) 6%, var(--bg-elev)), var(--bg-elev)); }
+.table-kind-opt > span { padding-left: 40px; }
+.table-kind-opt .mode-glyph { position: absolute; left: 44px; top: 18px; color: var(--accent); font-size: 1.6rem; line-height: 1; }
+.table-kind-opt input { accent-color: var(--accent); }
+.table-kind-opt.is-on { border-color: var(--accent); box-shadow: inset 3px 0 var(--accent), 0 5px 24px #0002; }
+.table-kind-opt.is-engine.is-on { background: linear-gradient(130deg, color-mix(in srgb, var(--signal) 14%, var(--bg-elev)), var(--bg-elev)); }
+.table-kind-opt strong { display: block; margin-bottom: 8px; font: 500 1.15rem var(--font-display); }
+.rules-capabilities { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 20px; }
+.rules-capabilities span { font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; padding: 7px 9px; border: 1px solid var(--tech-line); border-radius: 3px 9px 3px 9px; color: var(--signal); }
+@media (prefers-reduced-motion: no-preference) { .deck-tile { transition: transform 180ms ease, box-shadow 180ms ease; } .deck-tile:hover { transform: translateY(-3px); box-shadow: 0 16px 35px #0004; } }
 /* deck performance (PerformancePanel.tsx) and the Deck stats page (DeckStatsPage.tsx) */
 .perf-panel { margin-block: 18px; }
 .perf-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }

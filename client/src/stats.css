@@ -249,3 +249,34 @@
   .stat-facts > div { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .stat-facts dd { overflow-wrap: anywhere; }
 }
+
+/* Analysis instruments: softer cards, crisp numbers, quiet circuit accents. */
+.analysis-row > .bracket-panel, .analysis-row > .stats-panel { border-radius: 5px 22px 5px 22px; border-color: var(--tech-line); background: linear-gradient(140deg, color-mix(in srgb, var(--signal) 5%, var(--bg-elev)), var(--bg-elev)); box-shadow: 0 12px 30px #0002; }
+.bracket-badge { border-radius: 4px 18px 4px 18px; box-shadow: inset 0 1px #ffffff12; }
+.bracket-badge-num { font-variant-numeric: tabular-nums; }
+.stat-facts { border: 1px solid var(--tech-line); border-radius: 14px; background: color-mix(in srgb, var(--signal) 5%, var(--bg-elev)); }
+.stat-facts > div { padding-block: 4px; }
+.stat-section > summary { border-bottom: 1px solid var(--border); font-weight: 600; }
+.stat-bar-track { border-radius: 99px; }
+.stat-bar-fill { border-radius: 99px; background-image: linear-gradient(90deg, #ffffff10, #ffffff30); }
+.stat-functional-count { border-radius: 4px 10px 4px 10px; border-color: var(--tech-line); color: var(--signal); }
+
+/* Use the analysis container in selectors: pages.css loads after this file. */
+.analysis-row > .bracket-panel { position: relative; border-top: 3px solid var(--accent); background: radial-gradient(ellipse at top right, color-mix(in srgb, var(--accent) 10%, transparent), transparent 65%), var(--bg-elev); }
+.analysis-row > .stats-panel { border-top-color: var(--signal); background: radial-gradient(ellipse at top right, color-mix(in srgb, var(--signal) 12%, transparent), transparent 65%), var(--bg-elev); }
+.analysis-row .analysis-panel-heading { gap: 12px; flex-wrap: wrap; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--tech-line); }
+.analysis-panel-title { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.analysis-panel-title .eyebrow { margin: 0 0 4px; font-size: .63rem; letter-spacing: .13em; }
+.analysis-row .analysis-panel-title h3 { font: 500 1.45rem var(--font-display); margin: 0; }
+.analysis-panel-glyph { width: 46px; height: 46px; display: grid; place-items: center; flex: none; border: 1px solid var(--accent); border-radius: 3px 14px 3px 14px; color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--bg-elev)); font-size: 1.8rem; }
+.stats-panel .analysis-panel-glyph { color: var(--signal); border-color: var(--signal); background: color-mix(in srgb, var(--signal) 9%, var(--bg-elev)); }
+.analysis-panel-glyph svg { width: 25px; height: 25px; }
+.analysis-row .bracket-badges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.analysis-row .bracket-badge { min-width: 0; padding: 14px 12px; border-radius: 4px 18px 4px 18px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, var(--bg-elev)), var(--bg-elev-2)); }
+.analysis-row .bracket-badge-num { font-size: 2.4rem; font-variant-numeric: tabular-nums; color: var(--accent); }
+.analysis-row .stat-section { padding: 4px 12px; margin-top: 12px; border: 1px solid var(--tech-line); border-radius: 4px 14px 4px 14px; background: color-mix(in srgb, var(--signal) 3%, var(--bg-elev)); }
+.analysis-row .stat-section[open] { border-color: color-mix(in srgb, var(--signal) 45%, var(--border)); }
+.analysis-row .stat-section > summary { border-bottom: 0; }
+.analysis-row .stat-section[open] > summary { border-bottom: 1px solid var(--border); }
+.analysis-row .stat-facts { background: var(--bg-elev-2); }
+@media (max-width: 440px) { .analysis-row .bracket-badge { column-gap: 8px; padding: 12px 8px; } .analysis-row .bracket-badge-num { font-size: 2rem; } .analysis-row .bracket-badge-name { font-size: .8rem; overflow-wrap: anywhere; } .analysis-row .bracket-badge-label { font-size: .62rem; } }

@@ -1,0 +1,692 @@
+[
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 425.40625
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 524.234375
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 582.296875
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 648.96875
+      }
+    ],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 425.40625
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 524.234375
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 582.296875
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 648.96875
+      }
+    ],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  }
+]
