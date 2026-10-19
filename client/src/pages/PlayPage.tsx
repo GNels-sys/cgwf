@@ -12,8 +12,7 @@ function PlayHome() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recent, setRecent] = useState<MyRoomsResponse["rooms"]>([]);
-  const [engineAvailable, setEngineAvailable] = useState(false);
-  const [useEngine, setUseEngine] = useState(false);
+  const [engineAvailable, setEngineAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     api.rooms
@@ -30,8 +29,24 @@ function PlayHome() {
     setBusy(true);
     setError(null);
     try {
-      const r = await api.rooms.create(useEngine && engineAvailable ? { engine: true } : {});
+      // every new table is a rules-engine table (casual tables are retired; the server refuses them)
+      const r = await api.rooms.create({ engine: true });
       navigate(`/room/${r.room.code}`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Host: close a table that never finished (no result is recorded). */
+  const endTable = async (tableCode: string) => {
+    if (!window.confirm(`End table ${tableCode}? Nobody can play at it afterwards, and no result is recorded.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.rooms.end(tableCode);
+      setRecent((list) => list.map((x) => (x.code === tableCode ? { ...x, status: "ended" } : x)));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -65,28 +80,14 @@ function PlayHome() {
           <p className="eyebrow">01 · Host a game</p>
           <h2>A table for your friends.</h2>
           <p className="muted">Choose your deck in the lobby, then share the table code.</p>
-          <fieldset className="table-kind" aria-label="Kind of table">
-            {engineAvailable && (
-              <label className={`table-kind-opt is-engine${useEngine ? " is-on" : ""}`}>
-                <input type="radio" name="table-kind" checked={useEngine} onChange={() => setUseEngine(true)} />
-                <span>
-                  <span className="mode-glyph" aria-hidden="true">◇</span><strong>Rules engine (beta)</strong>
-                  <span className="muted small">The rules are enforced: one land per turn, mana, the stack, combat, untap and draw happen on their own. Decks must be legal Commander decks.</span>
-                </span>
-              </label>
-            )}
-            <label className={`table-kind-opt${!useEngine || !engineAvailable ? " is-on" : ""}`}>
-              <input type="radio" name="table-kind" checked={!useEngine || !engineAvailable} onChange={() => setUseEngine(false)} />
-              <span>
-                <span className="mode-glyph" aria-hidden="true">✦</span><strong>Casual (no rules)</strong>
-                <span className="muted small">Nothing is enforced: like a real table, players move, tap and count land drops themselves. Any deck.</span>
-              </span>
-            </label>
-          </fieldset>
-          {useEngine && engineAvailable && <div className="rules-capabilities" aria-label="Rules engine features"><span>Mana & timing</span><span>Combat & stack</span><span>Legal Commander</span></div>}
-          <button className="btn btn-primary btn-big" onClick={() => void create()} disabled={busy}>
-            {useEngine && engineAvailable ? "New rules-engine table" : "New casual table"}
+          <p className="table-kind-note muted small">
+            <strong>Rules engine (beta).</strong> The rules are enforced: one land per turn, mana, the stack, combat, untap and draw happen on their own. Bring a legal Commander deck of your own, or play any deck from the deck library.
+          </p>
+          <div className="rules-capabilities" aria-label="Rules engine features"><span>Mana & timing</span><span>Combat & stack</span><span>Legal Commander</span></div>
+          <button className="btn btn-primary btn-big" onClick={() => void create()} disabled={busy || engineAvailable !== true}>
+            New table
           </button>
+          {engineAvailable === false && <p className="muted small">The rules engine is not reachable right now, so new tables cannot open. Try again in a moment.</p>}
         </section>
         <section className="surface play-join">
           <p className="eyebrow">02 · Take your seat</p>
@@ -122,11 +123,17 @@ function PlayHome() {
               <li key={r.code}>
                 <Link to={`/room/${r.code}`} className="room-row">
                   <span className="room-code">{r.code}</span>
-                  <span className={`table-kind-tag${r.engine ? " is-engine" : ""}`}>{r.engine ? "Rules engine" : "Casual (no rules)"}</span>
+                  <span className={`table-kind-tag${r.engine ? " is-engine" : ""}`}>{r.engine ? "Rules engine" : "Casual (legacy)"}</span>
+                  {r.testGame && r.engine && <span className="table-kind-tag is-test">Test</span>}
                   <span className="muted small">
                     {r.status === "lobby" ? "Waiting" : r.status === "playing" ? "In progress" : "Finished"} &middot; {r.players} player{r.players === 1 ? "" : "s"} &middot; host {r.hostName}
                   </span>
                 </Link>
+                {r.isHost && r.status !== "ended" && (
+                  <button className="btn btn-small btn-danger room-end" onClick={() => void endTable(r.code)} disabled={busy}>
+                    End table
+                  </button>
+                )}
               </li>
             ))}
           </ul>

@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { config } from "../config.js";
 import {
   ADMIN_FILTER_MAX,
   ADMIN_ONLINE_MS,
@@ -213,6 +214,41 @@ export function registerAdminRoutes(app: FastifyInstance, deps: Deps): void {
   const { handle, roomsManager, presence } = deps;
   const owner = [requireUser(handle), requireOwner(handle)];
   let cache: Snapshot | null = null;
+
+  // ------------------------------------------------------------ open tables (owner)
+
+  /** The machine itself (fly ssh, loopback) or ADMIN_TOKEN: the same list and bulk close, for operations. */
+  const machine = (req: { ip: string; headers: Record<string, unknown> }): boolean =>
+    req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1" || (config.adminToken !== "" && req.headers["x-admin-token"] === config.adminToken);
+  app.get("/api/admin/machine/open-tables", async (req, reply) => {
+    if (!machine(req)) return reply.code(403).send({ error: "forbidden" });
+    return { tables: deps.roomsManager.openTables() };
+  });
+  app.post<{ Body: { hours?: number } | null }>("/api/admin/machine/close-idle-tables", async (req, reply) => {
+    if (!machine(req)) return reply.code(403).send({ error: "forbidden" });
+    const hours = Math.max(1, Number(req.body?.hours ?? 24) || 24);
+    const before = deps.roomsManager.openTables().length;
+    const closed = deps.roomsManager.closeIdle(hours * 3600_000, `Closed during maintenance: idle for more than ${hours} hours (no result recorded).`);
+    return { open: before, closed: closed.length, codes: closed };
+  });
+
+  /** Tables still open (lobby or playing), least recently active first. */
+  app.get("/api/admin/tables", { preHandler: owner }, async () => ({ tables: deps.roomsManager.openTables() }));
+
+  /** Close one table without a result (an engine game is torn down and recorded as abandoned). */
+  app.post<{ Params: { code: string } }>("/api/admin/tables/:code/close", { preHandler: owner }, async (req, reply) => {
+    const closed = deps.roomsManager.closeTable(req.params.code.toUpperCase(), "The owner closed the table (no result recorded).");
+    if (!closed) return reply.code(404).send({ error: "no open table with that code" });
+    return { closed: true };
+  });
+
+  /** Close every table idle for more than `hours` (default 24). */
+  app.post<{ Body: { hours?: number } | null }>("/api/admin/tables/close-idle", { preHandler: owner }, async (req) => {
+    const hours = Math.max(1, Number(req.body?.hours ?? 24) || 24);
+    const before = deps.roomsManager.openTables().length;
+    const closed = deps.roomsManager.closeIdle(hours * 3600_000, `The owner closed tables idle for more than ${hours} hours (no result recorded).`);
+    return { open: before, closed: closed.length, codes: closed };
+  });
 
   app.get<{ Querystring: { sort?: string; q?: string; limit?: string; refresh?: string } }>("/api/admin/stats", { preHandler: owner }, async (req): Promise<AdminStatsResponse> => {
     const now = Date.now();

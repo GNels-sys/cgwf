@@ -416,7 +416,24 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
   with the list date, tutors by kind, fast mana, extra turns, MLD, power signals, stats) and a
   Recompute button; it re-runs whenever the deck's `updatedAt` or card count changes.
 
-### Deck library (owner only; Phase 7 reads it)
+### Deck library (owner edits; every signed-in player can read and play it since 2026-10-18)
+
+- **Read-only for everyone (2026-10-18).** `GET /api/library-decks[?bracket=]` (summaries) and
+  `GET /api/library-decks/:id` (card list) need only a signed-in player; everything below under
+  `/api/library` (edit, primers, import, submissions) and the agents pages stay owner-only.
+  **Lobby deck choice** (`client/src/game/DeckPicker.tsx`): a bracket filter ("Any bracket" or
+  B1-B5) above two separate lists presented as an OR, "Your decks" and "Deck library" (picking in
+  one clears the other, because the seat holds one deck). `GET /api/rooms/deck-options[?bracket=N]`
+  (`server/src/routes/deckOptions.ts`) returns the caller's own decks (bracket = the analysis
+  engine's suggestion, computed with `analyzeSync`, cached per deck id + `updatedAt`; unknown only
+  under "Any bracket") and every library deck (stored bracket), both alphabetical
+  (`filterDeckOptions` / `deckOptionLabel` in `shared/src/deckOptions.ts`). Other players' personal
+  decks are never listed. A library pick is stored in `room_members.deck_id` as
+  `library:<library_decks.id>` (no migration); `describeDeck` shows it to the table as
+  "<name> (library)", and `seatDeckRows` (rooms/deck.ts) feeds `deckForEngine` and the classic
+  `loadDeckForGame` the same boards and legality checks as an own deck. Bot seats still copy an
+  agent-eligible library deck as before. Tests: `routes/deckOptions.test.ts`,
+  `shared/src/deckOptions.test.ts`, engine.test "one of them from the deck library".
 
 - Tables (migration 0006): `library_decks` (name, source precon|user, source_key unique =
   `mtgjson:<fileName>` or `deck:<deckId>`, set_code, set_name, release_date, commanders JSON,
@@ -567,7 +584,8 @@ Measured numbers from real games are in the Phase 7 hand-over note.
 
 `node scripts/seed-field.mjs <base-url> <code> <token> "Lotus Cobra" "Rancor" ...` pulls named
 cards from that player's library straight onto their battlefield (for testing bookkeeping).
-`node scripts/bots.mjs http://localhost:8080` registers "Georgie" + three bots with small decks,
+(Classic-table harness: since casual tables were retired on 2026-10-18 it cannot open a room; use
+`scripts/engine-bot.mjs` for engine tables.) `node scripts/bots.mjs http://localhost:8080` registers "Georgie" + three bots with small decks,
 creates a room, seats the bots and prints a device token: put it in localStorage as `cgwf.token`
 and open `/room/<code>` to play seat 1. Bots keep, play a land and pass on their turns; press
 Enter in that terminal to force-drop and rejoin Blair (reconnect drill). Works against
@@ -909,10 +927,14 @@ them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.
 
 ## Rules engine tables (Forge, Stage 1)
 
-An opt-in second kind of table: the open-source Forge rules engine runs the game (untap, draw,
-mana, the stack, combat, win conditions) and humans answer its prompts. The classic manual table
-is untouched; engine tables are per room ("Rules engine (beta)" on the Play page, shown only
-when the server has an engine configured). Design and effort plan: `docs/FORGE-ENGINE.md`;
+The open-source Forge rules engine runs the game (untap, draw, mana, the stack, combat, win
+conditions) and humans answer its prompts. **Since 2026-10-18 every new table is an engine table**
+(owner: casual tables "tend to be chaos"): the Play page has one "New table" button, and
+`POST /api/rooms` without `engine: true` answers 400 "Casual tables are retired", as does a rematch
+of an old casual room. The classic table code stays: existing casual rooms still load and show as
+"Casual (legacy)" in recent tables, the lobby and the phase strip. `BuildOptions.casualRooms`
+(tests of the classic table only, deliberately not an env var) turns creation back on. With no
+reachable engine the Play page disables "New table" and says why. Design and effort plan: `docs/FORGE-ENGINE.md`;
 the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge): `engine/README.md`.
 
 - **Topology.** Browser -> CGwF server (same room socket as always) -> ONE control WebSocket ->
@@ -1089,8 +1111,8 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   ordinary effects, not land plays. The relay refuses classic events on engine tables, so nothing
   else can move a card. Test: `PromptRoundTripTest.landDropsFollowForgesLimitAndExplorationGrantsOneMore`.
   The owner's "two lands in a turn" came from a Casual table (FHWK6D), where nothing is enforced;
-  the Play page now asks "Rules engine (beta)" vs "Casual (no rules)" explicitly, the recent-table
-  list and the lobby name the kind, and the phase strip shows a "Casual" tag on classic tables.
+  casual tables were retired later the same day (new tables are always engine tables; old ones show
+  "Casual (legacy)", and the phase strip shows a "Casual" tag on them).
 - **Planeswalkers and the human's own triggers (2026-10-18).** Loyalty limits are Forge's, per card:
   `SpellAbilityRestriction` compares that walker's `getPlaneswalkerAbilityActivated()` with 1 (2 under
   `NumLoyaltyAct` statics such as Oath of Teferi; The Chain Veil adds more), and the priority list is
@@ -1163,6 +1185,74 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   run `mvn -Dforge.assets=... package` (the audit) and `node engine/spike/client.mjs` (four
   precons to completion); redeploy `cgwf-engine` from `engine/` with
   `fly deploy --remote-only --ha=false`, then `fly machine start` if it comes up stopped.
+
+## Deck statistics: game results, test games, closing tables (2026-10-19)
+
+Owner request: track each deck's performance (overall, per table bracket and player count, head to head),
+mark games as "Test" so they are not counted, treat every earlier game as a test game, and close tables
+that never finished. Decisions (the parent session's, recorded here):
+
+- **Table bracket** = a lobby setting (B1-B5) agreed before the game. Default: the highest suggested
+  bracket among the seated decks (library decks: stored bracket; own decks: the analysis engine's
+  suggestion; a bot's library copy: its library deck's bracket). The host may pick one until the game
+  starts (`{t:"tableSettings", tableBracket}`; null = automatic); it is frozen at start.
+- **Test game**: lobby toggle, off by default, host-editable until start (`{t:"tableSettings", testGame}`),
+  shown to everyone (`RoomInfo.testGame`), tagged "Test" in Recent tables.
+- **Counted** only when: an engine game, not a test game, and Forge reported a result (a winner, or
+  Forge's own draw). A concede is a loss for that seat. A table closed without a finish is
+  "abandoned" (recorded, never counted); an engine failure with no outcome is "abandoned" too.
+- **Frozen per seat at start**: the user (or bot user, `is_bot`), the deck reference (own deck id, or
+  `library:<id>`; a bot's copy of a library deck is recorded as the library deck), deck name and
+  commanders as text (history survives deletions), the deck's bracket at that moment, seat count, table
+  bracket. Personal decks carry `deck_owner_id` (their stats are visible only to that owner); library
+  decks have none (aggregated across everyone).
+
+**Data** (migration 0011): `rooms.test_game`, `rooms.table_bracket`; `game_results` (id = room id,
+room code, started/ended, table bracket, player count, test, counted, end_reason win|draw|abandoned,
+detail = Forge's end reason or why it was closed, turns) and `game_result_seats` (seat, user id, is_bot,
+deck_ref, deck_owner_id, deck_name, commanders, deck_bracket, place, won, conceded). The migration marks
+EVERY existing room `test_game = 1` and backfills a `game_results` row (test, never counted) for every
+room that had started. Written only by the engine relay (`server/src/stats/results.ts` `GameResults`:
+`recordStart` in `EngineTable.start`, `recordFinish` on the engine's `gameOver`, `abandon` on close or
+an engine restart); the classic table never writes results.
+
+**Places from Forge.** The engine's `gameOver` frame now carries `results` per seat
+(`GameSession.results()`): place 1 = the winner, then in reverse order of elimination (seats out
+together share a place; `GameSession.noteEliminations` watches `Player.hasLost()` on every game event),
+`won`, `conceded`, `lossReason`. A draw leaves every seat still in at place 1, none won. Engine test:
+`GameResultsTest` (a real game: the human concedes, Forge's AI wins). Note: a concede only takes effect
+at the seat's next priority (Forge asks pregame questions first).
+
+**Closing tables (no result recorded).** `LiveRoom.closeTable(reason)`: an engine game is torn down
+(`EngineTable.close`: endGame to the engine, the room ends at once with an EngineGameOver line, the
+result is "abandoned"; the engine's later draw frame is ignored); a lobby just ends. Who: the host
+("End table" in the lobby, `{t:"endTable"}`, or `POST /api/rooms/:code/end` from Recent tables; the
+owner may too), the owner from Admin -> Open tables (`GET /api/admin/tables`,
+`POST /api/admin/tables/:code/close`, `POST /api/admin/tables/close-idle {hours: 24}`), and the server
+itself: `RoomManager.startIdleSweep` closes tables idle for `TABLE_IDLE_CLOSE_HOURS` (48) one minute
+after boot and hourly. For operations, `GET /api/admin/machine/open-tables` and
+`POST /api/admin/machine/close-idle-tables {hours}` answer loopback (fly ssh) or `x-admin-token`.
+Tests: engine.test (counted win with places and a concede, test game not counted, End table + late
+draw ignored, idle close), `stats/backfill.test.ts`, deckOptions.test (owner-only admin close, host end).
+
+**Stats views (part 2).** Pure arithmetic in `shared/src/deckStats.ts` (`deckPerformance`,
+`bracketHint`, `gamesInScope`), rows loaded by `server/src/routes/deckStats.ts` from COUNTED games
+only. `GET /api/deck-stats[?bots=0]` lists the caller's own decks (by `deck_owner_id`) and the library
+decks they have played; `GET /api/deck-stats/deck/:ref[?bots=0]` (own deck id or `library:<id>`)
+returns overall (games, wins, win rate, average place, concedes), the grid of table bracket B1-B5 by
+player count 2/3/4 (wins/games, win rate, `lowSample` under 5 games), a hint and head-to-head (per
+opposing deck: games together, this deck won, lost to it, placed above it; once per game even when
+two opponents played the same deck). Privacy: a personal deck's numbers answer only its owner (404 for
+anyone else, so its existence is not confirmed); library decks aggregate every player's games and are
+open to every signed-in player. "Include games vs bots" (default on) off = any game that had a bot
+seat is left out. The hint is an indication, never a verdict: with at least 5 games at tables above
+the deck's own bracket and wins >= 1.5x an even share (1 / players per game) it says the deck "may
+play stronger than its bracket"; with 5+ games at its bracket or below and wins <= 0.5x an even share,
+"may play weaker". UI: `client/src/components/PerformancePanel.tsx` on the deck page and the library
+deck page ("Performance (all players)"), and the Deck stats page `/stats` (nav "Stats",
+`DeckStatsPage.tsx`: sortable table, tap a deck for its panel). Tests: `shared/src/deckStats.test.ts`
+(grid by players and brackets, head-to-head, bots toggle, hint), `routes/deckStats.test.ts` (test and
+abandoned games excluded, personal-deck privacy, library aggregation).
 
 ## Phases
 

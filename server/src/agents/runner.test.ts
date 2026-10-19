@@ -46,7 +46,7 @@ describe("computer opponents play through the normal event path", () => {
   let ownerDeckId = "";
 
   beforeAll(async () => {
-    ctx = await buildApp({ logger: false, agentLlm: null, agentsEnabled: true, spellbookFetch: async () => new Response(JSON.stringify({ results: { included: [] } }), { status: 200 }) });
+    ctx = await buildApp({ logger: false, casualRooms: true, agentLlm: null, agentsEnabled: true, spellbookFetch: async () => new Response(JSON.stringify({ results: { included: [] } }), { status: 200 }) });
     await ctx.ingestor.run({ file: fixture });
     const reg = await ctx.app.inject({ method: "POST", url: "/api/me/register", payload: { displayName: "Owner", avatar: "dragon", color: "gold" } });
     const owner = reg.json() as RegisterResponse;

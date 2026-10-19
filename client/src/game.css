@@ -1938,6 +1938,19 @@
 .seat.is-mine { background: linear-gradient(100deg, #c69c4520, transparent), var(--bg-elev); }
 .seat-no { border: 1px solid var(--border); color: var(--accent); font-family: var(--font-display); }
 .lobby > .row-between { border-bottom: 1px solid var(--border); padding-bottom: 18px; }
+/* lobby deck choice: bracket filter, then own decks OR the deck library (DeckPicker.tsx) */
+.deck-picker { border: 0; padding: 0; margin: 18px 0; min-width: 0; }
+.deck-picker legend { padding: 0; margin-bottom: 4px; font-weight: 600; }
+.deck-picker .field { margin-block: 8px; }
+.deck-picker select { width: 100%; min-width: 0; }
+.deck-picker-bracket { max-width: 280px; }
+.deck-picker-lists { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.deck-picker-or { align-self: center; padding-top: 22px; color: var(--fg-muted); font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.deck-picker-note { margin: 4px 0 0; }
+@media (max-width: 600px) {
+  .deck-picker-lists { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .deck-picker-or { padding: 0; text-align: center; }
+}
 .tile-back { position: relative; }
 .tile-back.is-custom { color: #f3eee2; }
 .tile-back:not(.is-custom):not(.sleeve-upload)::before { content: ""; position: absolute; inset: 8%; border: 1px solid #dfb76d88; border-radius: 28% 3%; pointer-events: none; }
@@ -2522,3 +2535,18 @@ button.engine-row { cursor: pointer; width: 100%; }
 .engine-notice { border-radius: 3px 14px 3px 14px; border-color: var(--console-edge); background-color: var(--glass-strong); }
 .tile-play-target { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
 .tile-play-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* lobby: table settings (TableSettings.tsx), End table */
+.table-settings { margin: 18px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.table-settings-test { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.table-settings-test input { width: 20px; height: 20px; }
+.table-settings-test.is-on strong { color: var(--accent); }
+.table-settings .field { margin-block: 8px; }
+.table-settings-bracket select { width: 100%; max-width: 360px; }
+.table-settings-note { margin: 4px 0 0; }
+.lobby-end { margin: 12px 0; }
+.room-list li { display: flex; align-items: center; gap: 8px; }
+.room-list li > .room-row { flex: 1; min-width: 0; }
+.table-kind-tag.is-test { opacity: 0.8; }
+.admin-open-list { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
+.admin-open-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.admin-open-list .muted { flex: 1; min-width: 200px; }

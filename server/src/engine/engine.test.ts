@@ -172,7 +172,7 @@ describe("engine tables (relay to the rules engine)", () => {
   beforeAll(async () => {
     engine = new FakeEngine();
     await engine.start(TOKEN);
-    ctx = await buildApp({ logger: false, engineUrl: `ws://127.0.0.1:${engine.port}`, engineToken: TOKEN });
+    ctx = await buildApp({ logger: false, idleSweep: false, engineUrl: `ws://127.0.0.1:${engine.port}`, engineToken: TOKEN });
     await ctx.ingestor.run({ file: fixture });
     const address = await ctx.app.listen({ port: 0, host: "127.0.0.1" });
     port = Number(new URL(address).port);
@@ -224,10 +224,18 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(engine.received.find((f) => f.type === "createGame")).toBeUndefined();
   });
 
-  it("starts the game through the engine with decks by set and collector number", async () => {
+  it("starts the game through the engine with decks by set and collector number, one of them from the deck library", async () => {
     const good = await makeDeck(alex.token, "Forests A", legal);
     alex.send({ t: "seat", seat: 0, deckId: good });
-    await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.members.every((x) => x.role !== "player" || x.deckName?.startsWith("Forests") === true));
+    // Blair sits down with a library deck instead of one of their own (owner-approved decks are open to everyone)
+    const lib = await ctx.library.create({ name: "Library Forests", source: "user", sourceKey: "test:library-forests", bracket: 2, entries: legal.map((e) => ({ cardId: e.cardId, quantity: e.quantity, board: e.board as "main" | "commander" })) }, { combos: "skip" });
+    blair.send({ t: "seat", seat: 1, deckId: `library:${lib.id}` });
+    const seatedRoom = await alex.waitFor(
+      (f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.members.some((x) => x.deckName === "Forests A") && f.room.members.some((x) => x.deckName === "Library Forests (library)"),
+    );
+    const blairSeat = seatedRoom.room.members.find((x) => x.deckName === "Library Forests (library)")!;
+    expect(blairSeat.commanders).toEqual(["Atraxa, Praetors' Voice"]);
+    expect(blairSeat.deckProblems).toEqual([]); // the same legality checks as an own deck
     const m = alex.mark();
     alex.send({ t: "start" });
     const created = await engine.waitFor((f) => f.type === "createGame");
@@ -239,6 +247,10 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(seats[0]!.deck.commanders[0]!.name).toBe("Atraxa, Praetors' Voice");
     expect(seats[0]!.deck.commanders[0]!.setCode).toBeTruthy();
     expect(seats[0]!.deck.main[0]!.count).toBe(99);
+    const libSeat = seats.find((x) => x.name === "Blair")!;
+    expect((libSeat.deck as unknown as { name: string }).name).toBe("Library Forests");
+    expect(libSeat.deck.commanders[0]!.name).toBe("Atraxa, Praetors' Voice");
+    expect(libSeat.deck.main[0]!.count).toBe(99);
     const room = await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "playing", m);
     expect(room.room.status).toBe("playing");
     const infos = ctx.roomsManager.get(code)!.engineTable!.seatInfos();
@@ -593,6 +605,10 @@ describe("engine tables (relay to the rules engine)", () => {
     await host.connect(port, code2);
     host.send({ t: "seat", seat: 0, deckId: good });
     await host.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.members.some((m) => m.deckId === good));
+    // lobby settings: a test game at table bracket 3 (host only, frozen at start)
+    host.send({ t: "tableSettings", testGame: true, tableBracket: 3 });
+    const set = await host.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.testGame && f.room.tableBracket === 3);
+    expect(set.room.tableBracketChosen).toBe(true);
     const m = host.mark();
     host.send({ t: "start" });
     const created = await engine.waitFor((f) => f.type === "createGame" && (f.gameId as string) === room.id);
@@ -600,7 +616,68 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(seats.find((s) => s.seat === 2)).toMatchObject({ kind: "ai", name: "Krenko bot" });
     expect(seats.find((s) => s.seat === 0)?.kind).toBe("human");
     await host.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "playing", m);
+    const bad = host.mark();
+    host.send({ t: "tableSettings", testGame: false });
+    expect(await host.errorSince(bad)).toMatch(/frozen/);
+    // a test game is recorded but never counted, even with a winner
+    engine.send({ type: "gameOver", gameId: room.id, seat: -1, winnerSeat: 2, winner: "Krenko bot", endReason: "AllOpponentsLost", turns: 5, results: [{ seat: 0, place: 2, won: false, conceded: false }, { seat: 2, place: 1, won: true, conceded: false }] });
+    await host.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "ended");
+    const { gameResults, gameResultSeats } = await import("../db/schema.js");
+    const { eq } = await import("drizzle-orm");
+    expect(ctx.handle.db.select().from(gameResults).where(eq(gameResults.id, room.id)).get()).toMatchObject({ test: true, counted: false, endReason: "win", tableBracket: 3, playerCount: 2 });
+    const botSeat = ctx.handle.db.select().from(gameResultSeats).where(eq(gameResultSeats.gameId, room.id)).all().find((r) => r.seat === 2)!;
+    expect(botSeat).toMatchObject({ isBot: true, won: true, deckName: "Bot forests", deckOwnerId: null });
     await host.close();
+  });
+
+  it("End table closes a running engine game without a result; the engine's late draw is ignored", async () => {
+    const res = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(blair.token), payload: { engine: true } });
+    const code3 = (res.json() as { room: { code: string } }).room.code;
+    const room = ctx.roomsManager.get(code3)!;
+    await ctx.app.inject({ method: "POST", url: `/api/rooms/${code3}/join`, headers: auth(alex.token) });
+    const b = new Client("blair3", blair.token);
+    const a = new Client("alex3", alex.token);
+    await b.connect(port, code3);
+    await a.connect(port, code3);
+    b.send({ t: "seat", seat: 0, deckId: await makeDeck(blair.token, "Forests B3", legal) });
+    a.send({ t: "seat", seat: 1, deckId: await makeDeck(alex.token, "Forests A3", legal) });
+    await b.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.members.filter((x) => x.deckId).length === 2);
+    b.send({ t: "start" });
+    await b.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "playing");
+    // only the host may end it
+    const notHost = await ctx.app.inject({ method: "POST", url: `/api/rooms/${code3}/end`, headers: auth(alex.token) });
+    expect(notHost.statusCode).toBe(403);
+    const before = engine.received.length;
+    const mb = b.mark();
+    b.send({ t: "endTable" });
+    await b.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "ended", mb);
+    await engine.waitFor((f) => engine.received.indexOf(f) >= before && f.type === "endGame" && f.gameId === room.id);
+    const { gameResults, roomEvents } = await import("../db/schema.js");
+    const { and, eq } = await import("drizzle-orm");
+    const g = () => ctx.handle.db.select().from(gameResults).where(eq(gameResults.id, room.id)).get()!;
+    expect(g()).toMatchObject({ endReason: "abandoned", counted: false });
+    // Forge then ends the torn-down game as a draw: nothing changes, no second game-over line
+    const overs = () => ctx.handle.db.select().from(roomEvents).where(and(eq(roomEvents.roomId, room.id), eq(roomEvents.type, "EngineGameOver"))).all().length;
+    expect(overs()).toBe(1);
+    engine.send({ type: "gameOver", gameId: room.id, seat: -1, winnerSeat: null, endReason: "Draw", turns: 1, results: [] });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(g()).toMatchObject({ endReason: "abandoned", counted: false });
+    expect(overs()).toBe(1);
+    await Promise.all([a.close(), b.close()]);
+  });
+
+  it("closes tables idle for 48 hours (lobbies and games), with no result", async () => {
+    const res = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(alex.token), payload: { engine: true } });
+    const idle = (res.json() as { room: { code: string } }).room.code;
+    const { rooms } = await import("../db/schema.js");
+    const { eq } = await import("drizzle-orm");
+    const old = new Date(Date.now() - 49 * 3600_000).toISOString();
+    ctx.handle.db.update(rooms).set({ updatedAt: old }).where(eq(rooms.code, idle)).run();
+    const fresh = (await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(alex.token), payload: { engine: true } })).json() as { room: { code: string } };
+    const closed = ctx.roomsManager.closeIdle(48 * 3600_000, "idle");
+    expect(closed).toContain(idle);
+    expect(closed).not.toContain(fresh.room.code);
+    expect(ctx.handle.db.select().from(rooms).where(eq(rooms.code, idle)).get()!.status).toBe("ended");
   });
 
   it("after a reload mid-game, a seat nobody holds is handed to the AI once the grace is over", async () => {
@@ -652,9 +729,29 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(sc.viewer).toBeNull();
     for (const p of Object.values(sc.players)) expect(p.hand.cards.length).toBe(0);
     const ma = alex.mark();
-    engine.send({ type: "gameOver", gameId, seat: -1, winnerSeat: 1, winner: "Blair", endReason: "AllOpponentsLost", turns: 9 });
+    engine.send({
+      type: "gameOver", gameId, seat: -1, winnerSeat: 1, winner: "Blair", endReason: "AllOpponentsLost", turns: 9,
+      results: [{ seat: 0, place: 2, won: false, conceded: true, lossReason: "Conceded" }, { seat: 1, place: 1, won: true, conceded: false, lossReason: null }],
+    });
     const room = await alex.waitFor((f): f is Extract<ServerMessage, { t: "room" }> => f.t === "room" && f.room.status === "ended", ma);
     expect(room.room.status).toBe("ended");
+    // deck statistics: a counted win, frozen at start, finished from Forge's result
+    const { gameResults, gameResultSeats } = await import("../db/schema.js");
+    const { eq } = await import("drizzle-orm");
+    const g = ctx.handle.db.select().from(gameResults).where(eq(gameResults.id, gameId)).get()!;
+    expect(g).toMatchObject({ endReason: "win", counted: true, test: false, playerCount: 2, turns: 9, detail: "AllOpponentsLost" });
+    expect(g.tableBracket).not.toBeNull(); // the highest suggested bracket of the two decks
+    const rs = ctx.handle.db.select().from(gameResultSeats).where(eq(gameResultSeats.gameId, gameId)).all().sort((a, b) => a.seat - b.seat);
+    expect(rs.map((r) => ({ seat: r.seat, place: r.place, won: r.won, conceded: r.conceded, isBot: r.isBot }))).toEqual([
+      { seat: 0, place: 2, won: false, conceded: true, isBot: false },
+      { seat: 1, place: 1, won: true, conceded: false, isBot: false },
+    ]);
+    expect(rs[0]!.deckName).toBe("Forests A");
+    expect(rs[0]!.deckOwnerId).not.toBeNull(); // a personal deck: only its owner sees its stats
+    expect(rs[1]!.deckRef).toMatch(/^library:/);
+    expect(rs[1]!.deckName).toBe("Library Forests");
+    expect(rs[1]!.deckOwnerId).toBeNull();
+    expect(rs[1]!.commanders).toEqual(["Atraxa, Praetors' Voice"]);
     const res = await ctx.app.inject({ method: "GET", url: `/api/rooms/${code}`, headers: auth(alex.token) });
     expect((res.json() as { room: { status: string } }).room.status).toBe("ended");
     await Promise.all([alex.close(), blair.close(), casey.close()]);

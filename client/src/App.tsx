@@ -14,6 +14,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StoresPage } from "./pages/StoresPage";
+import { DeckStatsPage } from "./pages/DeckStatsPage";
 import { SignInPage, SignUpPage } from "./pages/AccountPages";
 import { FriendsPage } from "./pages/FriendsPage";
 import { Landing, StartPage, WelcomePage } from "./pages/WelcomePage";
@@ -44,6 +45,7 @@ export function App() {
             <Route path="/room/:code" element={<RoomPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/stores" element={<StoresPage />} />
+            <Route path="/stats" element={<DeckStatsPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/library" element={<LibraryPage />} />
             <Route path="/admin/library/:id" element={<LibraryDeckPage />} />

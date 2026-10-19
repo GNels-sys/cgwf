@@ -1,4 +1,8 @@
 import type {
+  AdminOpenTable,
+  DeckPerformance,
+  DeckStatsListResponse,
+  DeckOptionsResponse,
   AddAgentsResponse,
   AdminStatsQuery,
   AdminStatsResponse,
@@ -183,6 +187,9 @@ export const api = {
       return request<AdminStatsResponse>(`/api/admin/stats${s ? `?${s}` : ""}`, { ...(signal ? { signal } : {}) });
     },
     user: (id: string) => request<AdminUserDetail>(`/api/admin/users/${encodeURIComponent(id)}`),
+    tables: () => request<{ tables: AdminOpenTable[] }>("/api/admin/tables"),
+    closeTable: (code: string) => request<{ closed: boolean }>(`/api/admin/tables/${encodeURIComponent(code)}/close`, { method: "POST", json: {} }),
+    closeIdle: (hours: number) => request<{ open: number; closed: number; codes: string[] }>("/api/admin/tables/close-idle", { method: "POST", json: { hours } }),
   },
 
   /** Phase 8: friends, invites, the bell and the agent deck queue. */
@@ -265,11 +272,20 @@ export const api = {
   },
 
   features: () => request<FeaturesResponse>("/api/features"),
+  /** Deck statistics from counted rules-engine games (personal decks: owner only; library decks: everyone). */
+  deckStats: {
+    list: (bots: boolean) => request<DeckStatsListResponse>(`/api/deck-stats${bots ? "" : "?bots=0"}`),
+    deck: (ref: string, bots: boolean) => request<DeckPerformance>(`/api/deck-stats/deck/${encodeURIComponent(ref)}${bots ? "" : "?bots=0"}`),
+  },
   rooms: {
     create: (opts: CreateRoomRequest = {}) => request<CreateRoomResponse>("/api/rooms", { method: "POST", json: opts }),
     get: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}`),
     join: (code: string) => request<RoomResponse>(`/api/rooms/${encodeURIComponent(code)}/join`, { method: "POST", json: {} }),
     mine: () => request<MyRoomsResponse>("/api/rooms/mine"),
+    /** Host (or owner): close a table without a result. */
+    end: (code: string) => request<{ closed: boolean }>(`/api/rooms/${encodeURIComponent(code)}/end`, { method: "POST", json: {} }),
     decks: () => request<{ decks: Array<{ id: string; name: string; commanders: string[] }> }>("/api/rooms/decks"),
+    /** The lobby deck picker: own decks OR the deck library, filtered by bracket (null = any), alphabetical. */
+    deckOptions: (bracket: number | null) => request<DeckOptionsResponse>(`/api/rooms/deck-options${bracket ? `?bracket=${bracket}` : ""}`),
   },
 };

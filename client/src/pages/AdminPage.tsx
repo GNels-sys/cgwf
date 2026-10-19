@@ -7,6 +7,7 @@ import { Avatar } from "../components/Avatar";
 import { RequireUser } from "../components/RequireUser";
 import { isOwner, useUser } from "../user";
 import "../admin.css";
+import { OpenTables } from "./OpenTables";
 
 /**
  * Owner-only: who is on the platform and who is using it. Everything comes
@@ -369,6 +370,7 @@ function Overview() {
         game: no hands, libraries or face-down cards are involved, only who signed up, when they were last around and what they built.
       </p>
       <Tiles t={data.totals} />
+      <OpenTables />
       <section className="admin-charts" aria-label="Twelve-week trends">
         <WeeklyChart title="Sign-ups per week" points={data.signupsPerWeek} unit="sign-ups" summary="total" />
         <WeeklyChart title="Active players per week" points={data.activePerWeek} unit="players" summary="latest" />

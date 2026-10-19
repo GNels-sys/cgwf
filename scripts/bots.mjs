@@ -1,4 +1,5 @@
 // Test harness: registers bot players with decks, joins a room, seats them and plays along.
+// NOTE (2026-10-18): casual tables are retired, so POST /api/rooms refuses this harness; use scripts/engine-bot.mjs for engine tables.
 // Usage: node scripts/bots.mjs <BASE_URL> [join-code]
 // Without a code it creates a room as "Georgie" and prints a device token you can paste into
 // localStorage ("cgwf.token") to play seat 1 from a browser. Three bots take seats 2-4, keep their

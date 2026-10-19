@@ -24,6 +24,7 @@ import { deckForEngine } from "../engine/deck.js";
 import type { EngineCardRef, PrintingMapper } from "../engine/mapping.js";
 import { cleanEngineText, engineToView, toEngineAnswer, toEnginePrompt, type ConvertContext, type EngineCardJson, type EngineStateJson, type SeatInfo } from "../engine/view.js";
 import { loadSettings, saveEngineStops } from "../settings.js";
+import type { GameResults } from "../stats/results.js";
 
 /**
  * The engine side of a LiveRoom: talks to the rules engine for one table and turns its frames into
@@ -52,6 +53,8 @@ export interface RoomPort {
   userName(userId: string): string;
   /** Phase 7 computer-opponent users seated here (on engine tables they become Forge AI seats). */
   agentIds(): Set<string>;
+  /** Deck-statistics recorder (null when the server has none wired, e.g. some tests). */
+  results(): GameResults | null;
 }
 
 interface PersistedState {
@@ -77,6 +80,8 @@ export class EngineTable {
   private log: LogEntry[] = [];
   private seq = 0;
   private noticeSeq = 0;
+  /** Set when the table was closed without a result (see close()). */
+  private closedReason: string | null = null;
   private loaded = false;
   private cardsPersisted = 0;
   engineDown = false;
@@ -167,6 +172,15 @@ export class EngineTable {
     }
     this.seats = infos.map((i) => ({ ...i, playerId: created.players.find((p) => p.seat === i.seat)?.playerId ?? -1 }));
     this.persist();
+    // deck statistics: freeze the table bracket, the test flag and every seat's deck now
+    try {
+      this.room.results()?.recordStart(
+        { id: row.id, code: row.code, testGame: Boolean(row.testGame), tableBracket: row.tableBracket ?? null },
+        seated.map((m) => ({ seat: m.seat as number, userId: m.userId, isBot: bots.has(m.userId), deckId: m.deckId as string })),
+      );
+    } catch (err) {
+      this.room.log.error({ err }, "recording the game start failed");
+    }
     // Each player's remembered stops (Personalize / the table's Stops panel) apply from the first priority.
     for (const s of this.seats) {
       const stops = loadSettings(this.room.handle, s.userId).engineStops;
@@ -235,6 +249,13 @@ export class EngineTable {
         const winnerSeat = typeof frame.winnerSeat === "number" ? frame.winnerSeat : null;
         const winner = winnerSeat === null ? null : (this.seats.find((s) => s.seat === winnerSeat)?.userId ?? null);
         const payload = { winner, endReason: frame.endReason == null ? null : String(frame.endReason), turns: Number(frame.turns ?? 0) };
+        try {
+          const results = Array.isArray(frame.results) ? (frame.results as Array<{ seat: number; place?: number; won?: boolean; conceded?: boolean }>) : [];
+          this.room.results()?.recordFinish(this.room.id, { winnerSeat, endReason: payload.endReason, turns: payload.turns, results }, this.closedReason);
+        } catch (err) {
+          this.room.log.error({ err }, "recording the game result failed");
+        }
+        if (this.closedReason || this.room.row().status === "ended") break; // the table was closed first: already ended
         this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineGameOver", payload }, "ended");
         this.prompts.clear();
         this.dispose();
@@ -281,8 +302,32 @@ export class EngineTable {
     }
   }
 
+  /**
+   * Close the table without a result (host "End table", the owner, or the idle sweep): the engine game is
+   * torn down (Forge ends it as a draw on its own thread; that frame is ignored here), the room ends now
+   * (the engine may be unreachable), and the game is recorded as abandoned, never counted.
+   */
+  close(reason: string): void {
+    this.ensureLoaded();
+    const row = this.room.row();
+    if (row.status === "ended") return;
+    this.closedReason = reason;
+    if (row.status === "playing") this.client.trySend({ type: "endGame", gameId: this.room.id });
+    this.room.results()?.abandon(this.room.id, reason);
+    const payload = { winner: null, endReason: reason, turns: this.lastState.get(SPECTATOR)?.turn ?? 0 };
+    this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineGameOver", payload }, "ended");
+    this.log.push({ seq: this.seq + 1, actor: SYSTEM_ACTOR, text: reason, ts: Date.now() });
+    this.prompts.clear();
+    this.dispose();
+    this.persist({ gameOver: payload });
+    this.seq++;
+    this.broadcast();
+    this.room.broadcastRoom();
+  }
+
   /** The engine forgot the game (it restarted): end the table honestly. */
   private lostGame(): void {
+    this.room.results()?.abandon(this.room.id, "the rules engine restarted");
     const payload = { winner: null, endReason: "The rules engine restarted and lost this game.", turns: this.lastState.get(SPECTATOR)?.turn ?? 0 };
     this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineGameOver", payload }, "ended");
     this.log.push({ seq: this.seq + 1, actor: SYSTEM_ACTOR, text: payload.endReason, ts: Date.now() });

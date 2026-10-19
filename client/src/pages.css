@@ -1576,3 +1576,27 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
 .rules-capabilities { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 20px; }
 .rules-capabilities span { font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; padding: 7px 9px; border: 1px solid var(--tech-line); border-radius: 3px 9px 3px 9px; color: var(--signal); }
 @media (prefers-reduced-motion: no-preference) { .deck-tile { transition: transform 180ms ease, box-shadow 180ms ease; } .deck-tile:hover { transform: translateY(-3px); box-shadow: 0 16px 35px #0004; } }
+/* deck performance (PerformancePanel.tsx) and the Deck stats page (DeckStatsPage.tsx) */
+.perf-panel { margin-block: 18px; }
+.perf-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.perf-head h2 { margin: 0; }
+.perf-bots { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; }
+.perf-overall { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.perf-overall div { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.perf-overall dt { font-size: 0.75rem; color: var(--fg-muted); }
+.perf-overall dd { margin: 2px 0 0; font-size: 1.2rem; font-weight: 600; }
+.perf-hint { padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--bg-elev); border-radius: 0 8px 8px 0; }
+.perf-grid-wrap, .deck-stats-wrap { overflow-x: auto; }
+.perf-grid, .perf-h2h-table, .deck-stats-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.perf-grid caption { text-align: left; padding-bottom: 6px; }
+.perf-grid th, .perf-grid td, .perf-h2h-table th, .perf-h2h-table td, .deck-stats-table th, .deck-stats-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+.perf-grid tr.is-own-bracket th { color: var(--accent); }
+.perf-grid td.is-empty { color: var(--fg-muted); }
+.perf-grid td.is-low { opacity: 0.75; }
+.perf-low { margin-left: 2px; color: var(--accent); }
+.perf-h2h { margin-top: 10px; }
+.deck-stats-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 8px; }
+.deck-stats-sort, .deck-stats-name { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; cursor: pointer; min-height: 32px; text-align: left; }
+.deck-stats-name { color: var(--accent); }
+.deck-stats-detail > td { padding: 0; }
+@media (max-width: 600px) { .perf-overall { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
