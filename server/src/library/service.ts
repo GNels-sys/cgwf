@@ -17,6 +17,7 @@ import type { DeckAnalyzer } from "../analysis/service.js";
 import { primerSkeleton } from "../analysis/index.js";
 import type { DbHandle } from "../db/index.js";
 import { cards, libraryDeckCards, libraryDecks, users, type LibraryDeckRow } from "../db/schema.js";
+import { checkPrintingSwap } from "../decks/printing.js";
 
 /**
  * The owner's deck library. Rows come from the precon importer or from "add my
@@ -129,14 +130,34 @@ export class LibraryService {
     return this.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, key)).get();
   }
 
-  entries(id: string): Array<LibraryEntry & { position: number }> {
+  entries(id: string): Array<LibraryEntry & { position: number; entryId: number }> {
     return this.handle.db
       .select()
       .from(libraryDeckCards)
       .where(eq(libraryDeckCards.libraryDeckId, id))
       .orderBy(asc(libraryDeckCards.position))
       .all()
-      .map((r) => ({ cardId: r.cardId, quantity: r.quantity, board: r.board as LibraryEntry["board"], position: r.position }));
+      .map((r) => ({ entryId: r.id, cardId: r.cardId, quantity: r.quantity, board: r.board as LibraryEntry["board"], position: r.position }));
+  }
+
+  /**
+   * Swap the printing of one library line (owner's printing picker). Same card only; bumps updatedAt so
+   * the Stats and shop panels refresh. Analysis, tags and the primer stay: the card itself is unchanged.
+   */
+  setPrinting(id: string, entryId: number, cardId: unknown): { ok: true; deck: LibraryDeckDetail } | { ok: false; status: number; error: string } {
+    const row = this.getRow(id);
+    if (!row) return { ok: false, status: 404, error: "library deck not found" };
+    const line = Number.isInteger(entryId)
+      ? this.handle.db.select().from(libraryDeckCards).where(and(eq(libraryDeckCards.id, entryId), eq(libraryDeckCards.libraryDeckId, id))).get()
+      : undefined;
+    const current = line ? this.handle.db.select().from(cards).where(eq(cards.id, line.cardId)).get() : undefined;
+    const check = checkPrintingSwap(this.handle, current, cardId);
+    if (!check.ok) return check;
+    this.handle.sqlite.transaction(() => {
+      this.handle.db.update(libraryDeckCards).set({ cardId: check.row.id }).where(eq(libraryDeckCards.id, line!.id)).run();
+      this.handle.db.update(libraryDecks).set({ updatedAt: new Date().toISOString() }).where(eq(libraryDecks.id, id)).run();
+    })();
+    return { ok: true, deck: this.detail(id)! };
   }
 
   detail(id: string): LibraryDeckDetail | null {
@@ -148,7 +169,9 @@ export class LibraryService {
     const byId = new Map(cardRows.map((c) => [c.id, c]));
     const cardsOut = entries.flatMap((e) => {
       const c = byId.get(e.cardId);
-      return c ? [{ cardId: e.cardId, name: c.name, quantity: e.quantity, board: e.board, typeLine: c.typeLine, manaCost: c.manaCost }] : [];
+      return c
+        ? [{ cardId: e.cardId, name: c.name, quantity: e.quantity, board: e.board, typeLine: c.typeLine, manaCost: c.manaCost, entryId: e.entryId, oracleId: c.oracleId, set: c.set, collectorNumber: c.collectorNumber, faceCount: c.imageBack ? 2 : 1 }]
+        : [];
     });
     const cardCount = cardsOut.filter((c) => c.board !== "sideboard").reduce((n, c) => n + c.quantity, 0);
     return {

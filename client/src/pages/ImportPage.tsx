@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import type { Board, CardSummary, ResolveResponse, ResolvedLine } from "@cgwf/shared";
 import { api } from "../api";
 import { CardImage } from "../components/CardImage";
+import { useCardHover } from "../components/CardHoverPreview";
 import { ManaCost } from "../components/ManaCost";
 import { RequireUser } from "../components/RequireUser";
 
@@ -36,17 +37,20 @@ function LineRow({
   line,
   choice,
   onChange,
+  hover,
 }: {
   line: ResolvedLine;
   choice: Choice;
   onChange: (c: Choice) => void;
+  hover: ReturnType<typeof useCardHover>["bind"];
 }) {
+  const peek = (c: CardSummary) => hover({ id: c.id, name: c.name, faceCount: c.faceCount });
   const problem = line.status !== "resolved";
   return (
     <li className={`import-line status-${line.status}${choice.skipped ? " is-skipped" : ""}`}>
       <div className="import-line-main">
         {choice.card ? (
-          <div className="import-thumb">
+          <div className="import-thumb" {...peek(choice.card)}>
             <CardImage id={choice.card.id} name={choice.card.name} size="small" />
           </div>
         ) : (
@@ -55,7 +59,7 @@ function LineRow({
         <div className="import-line-text">
           <div className="import-line-title">
             <span className="qty">{choice.quantity}&times;</span>{" "}
-            <strong>{choice.card ? choice.card.name : line.line.name}</strong>{" "}
+            {choice.card ? <strong {...peek(choice.card)}>{choice.card.name}</strong> : <strong>{line.line.name}</strong>}{" "}
             {choice.card && <ManaCost cost={choice.card.manaCost} size={13} />}
           </div>
           <div className="muted small">
@@ -73,6 +77,7 @@ function LineRow({
                   key={c.id}
                   className={`chip${choice.card?.id === c.id ? " is-selected" : ""}`}
                   onClick={() => onChange({ ...choice, card: c, skipped: false })}
+                  {...peek(c)}
                 >
                   {c.name} <span className="muted">({c.set.toUpperCase()})</span>
                 </button>
@@ -153,6 +158,7 @@ function ImportFlow() {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResolveResponse | null>(null);
   const [choices, setChoices] = useState<Choice[]>([]);
+  const hover = useCardHover();
 
   const check = async (source = text) => {
     setBusy("check");
@@ -216,6 +222,7 @@ function ImportFlow() {
 
   return (
     <>
+      {hover.preview}
       {!result && (
         <section className="import-input surface">
           <label className="field">
@@ -278,7 +285,7 @@ function ImportFlow() {
               <p className="muted small">Pick the right card, type a name to search, or skip the line.</p>
               <ul className="import-lines">
                 {problemIdx.map((i) => (
-                  <LineRow key={i} line={result.lines[i]!} choice={choices[i]!} onChange={(c) => update(i, c)} />
+                  <LineRow key={i} line={result.lines[i]!} choice={choices[i]!} onChange={(c) => update(i, c)} hover={hover.bind} />
                 ))}
               </ul>
             </>
@@ -287,7 +294,7 @@ function ImportFlow() {
           <h3>Matched ({okIdx.length})</h3>
           <ul className="import-lines compact">
             {okIdx.map((i) => (
-              <LineRow key={i} line={result.lines[i]!} choice={choices[i]!} onChange={(c) => update(i, c)} />
+              <LineRow key={i} line={result.lines[i]!} choice={choices[i]!} onChange={(c) => update(i, c)} hover={hover.bind} />
             ))}
           </ul>
 

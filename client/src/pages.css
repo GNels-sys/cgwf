@@ -1620,3 +1620,74 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
 .edhrec-credit-box p {
   margin: 4px 0;
 }
+
+/* Printing picker and hover preview (2026-10-19). Instrument-label chips per design pass 2. */
+.deck-card-row { display: flex; align-items: center; gap: 6px; }
+.deck-card-row > .deck-card-line { flex: 1; min-width: 0; }
+.printing-chip {
+  flex: none;
+  min-height: 44px;
+  min-width: 72px;
+  padding: 0 6px;
+  border: 1px solid var(--tech-line, var(--border));
+  border-radius: 3px 9px 3px 9px;
+  background: color-mix(in srgb, var(--signal, var(--accent)) 6%, var(--bg-elev));
+  color: var(--fg-muted);
+  font: 500 .72rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .04em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.printing-chip:hover, .printing-chip:focus-visible { color: var(--fg); border-color: var(--signal, var(--accent)); }
+@media (max-width: 480px) { .printing-chip { min-width: 60px; font-size: .64rem; letter-spacing: 0; } }
+.commander-slot { width: 180px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.commander-slot .commander-card { width: 100%; }
+@media (max-width: 480px) { .commander-slot { width: calc(50% - 7px); } }
+.library-cards .deck-card-row { padding: 0; }
+
+.printing-picker h2 { margin: 0 0 6px; font-family: var(--font-display, inherit); }
+.printing-picker-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0 14px; }
+.printing-filter { flex: 1 1 240px; min-height: 44px; }
+.printing-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.printing-tile {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px 14px 4px 14px;
+  background: var(--bg-elev);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.printing-tile:hover, .printing-tile:focus-visible { border-color: var(--signal, var(--accent)); }
+.printing-tile.is-current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.printing-tile:disabled { cursor: progress; opacity: .7; }
+.printing-set { font-weight: 600; font-size: .86rem; line-height: 1.25; }
+.printing-meta { color: var(--fg-muted); font: .72rem/1.3 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: none; }
+.printing-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.printing-tags .tag-chip.small { min-height: 22px; font-size: .68rem; }
+.printing-tags .is-current { border-color: var(--accent); color: var(--accent); }
+.printing-tags .is-default { border-color: var(--signal, var(--accent)); color: var(--signal, var(--accent)); }
+
+.card-hover-preview {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  padding: 6px;
+  border: 1px solid var(--tech-line, var(--border));
+  border-radius: 14px;
+  background: var(--glass-strong, var(--bg-elev));
+  box-shadow: 0 14px 40px #0007;
+}
+.card-hover-faces { display: grid; gap: 8px; }
+.card-hover-hint { margin: 6px 2px 0; font-size: .74rem; color: var(--glass-muted, var(--fg-muted)); }
+@media (prefers-reduced-motion: no-preference) {
+  .card-hover-preview { animation: card-hover-in 120ms ease-out; }
+  @keyframes card-hover-in { from { opacity: 0; } to { opacity: 1; } }
+}
+@media (hover: none), (pointer: coarse) { .card-hover-preview { display: none; } }

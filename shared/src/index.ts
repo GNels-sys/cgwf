@@ -27,3 +27,4 @@ export * from "./engine.js";
 export * from "./deckOptions.js";
 export * from "./deckStats.js";
 export * from "./discord.js";
+export * from "./printing.js";

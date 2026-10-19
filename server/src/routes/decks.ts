@@ -12,11 +12,13 @@ import {
   type ImportUrlResponse,
   type ResolveRequest,
   type ResolveResponse,
+  type SetPrintingRequest,
 } from "@cgwf/shared";
 import { rateLimitKey, requireUser } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
 import { cards, deckCards, decks, type CardRow, type DeckRow } from "../db/schema.js";
 import { classifyImportUrl, fetchArchidektDeck } from "../decks/archidekt.js";
+import { checkPrintingSwap } from "../decks/printing.js";
 import { existingCardIds, resolveDecklist } from "../decks/resolve.js";
 import { rowToSummary } from "../scryfall/map.js";
 import type { NameIndex } from "../search/index.js";
@@ -98,7 +100,7 @@ export function registerDeckRoutes(app: FastifyInstance, deps: Deps): void {
       .where(eq(deckCards.deckId, deckId))
       .orderBy(deckCards.position)
       .all();
-    return rows.map((r) => ({ row: r.card, quantity: r.dc.quantity, board: r.dc.board as Board, category: r.dc.category }));
+    return rows.map((r) => ({ entryId: r.dc.id, row: r.card, quantity: r.dc.quantity, board: r.dc.board as Board, category: r.dc.category }));
   };
 
   const toSummary = (deck: DeckRow, entries: ReturnType<typeof loadEntries>): DeckSummary => ({
@@ -118,6 +120,7 @@ export function registerDeckRoutes(app: FastifyInstance, deps: Deps): void {
       board: e.board,
       category: e.category,
       card: rowToSummary(e.row),
+      entryId: e.entryId,
     }));
     return { ...toSummary(deck, entries), cards: cardsOut, warnings: deckWarnings(entries), sourceUrl: deck.sourceUrl, createdAt: deck.createdAt };
   };
@@ -213,6 +216,29 @@ export function registerDeckRoutes(app: FastifyInstance, deps: Deps): void {
     handle.db.update(decks).set({ name, updatedAt: new Date().toISOString() }).where(eq(decks.id, deck.id)).run();
     return { deck: toDetail(ownDeck(req.user!.id, deck.id)!) };
   });
+
+  /**
+   * Swap the printing of one line (the printing picker). Same card only; the deck's updatedAt moves, so
+   * Bracket, Stats, Performance and the shop panel refresh, and commanders show the new art everywhere.
+   */
+  app.patch<{ Params: { id: string; entry: string }; Body: Partial<SetPrintingRequest> | null }>(
+    "/api/decks/:id/cards/:entry",
+    { preHandler: auth, config: { rateLimit: { max: 60, timeWindow: "1 minute", keyGenerator } } },
+    async (req, reply): Promise<{ deck: DeckDetail } | void> => {
+      const deck = ownDeck(req.user!.id, req.params.id);
+      if (!deck) return reply.code(404).send({ error: "deck not found" });
+      const entryId = Number(req.params.entry);
+      const line = Number.isInteger(entryId) ? handle.db.select().from(deckCards).where(and(eq(deckCards.id, entryId), eq(deckCards.deckId, deck.id))).get() : undefined;
+      const current = line ? handle.db.select().from(cards).where(eq(cards.id, line.cardId)).get() : undefined;
+      const check = checkPrintingSwap(handle, line ? current : undefined, req.body?.cardId);
+      if (!check.ok) return reply.code(check.status).send({ error: check.error });
+      handle.sqlite.transaction(() => {
+        handle.db.update(deckCards).set({ cardId: check.row.id }).where(eq(deckCards.id, line!.id)).run();
+        handle.db.update(decks).set({ updatedAt: new Date().toISOString() }).where(eq(decks.id, deck.id)).run();
+      })();
+      return { deck: toDetail(ownDeck(req.user!.id, deck.id)!) };
+    },
+  );
 
   /** Replace the whole card list (used after fixing lines or editing). */
   app.put<{ Params: { id: string }; Body: { cards?: unknown } }>("/api/decks/:id/cards", { preHandler: auth }, async (req, reply): Promise<{ deck: DeckDetail } | void> => {

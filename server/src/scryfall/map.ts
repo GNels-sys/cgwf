@@ -1,12 +1,17 @@
 import {
   CARD_LAYOUTS,
   hasBackFace,
+  isRegularPrinting,
   normalizeName,
+  printingTreatments,
+  treatmentRank,
   type CardFace,
   type CardLayout,
   type CardPrinting,
   type CardSummary,
   type Color,
+  type PrintingOption,
+  type PrintingTraits,
   type PurchaseLinks,
 } from "@cgwf/shared";
 import type { CardRow, NewCardRow } from "../db/schema.js";
@@ -46,6 +51,14 @@ export interface ScryfallCard {
   booster?: boolean;
   scryfall_uri?: string;
   purchase_uris?: Record<string, string>;
+  frame?: string;
+  frame_effects?: string[];
+  border_color?: string;
+  full_art?: boolean;
+  textless?: boolean;
+  promo_types?: string[];
+  finishes?: string[];
+  oversized?: boolean;
 }
 
 export interface ScryfallFace {
@@ -118,6 +131,44 @@ export function isTokenCard(card: ScryfallCard): boolean {
   return (card.type_line ?? "").startsWith("Token");
 }
 
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+
+/** The look of a Scryfall printing, as stored. */
+export function scryfallTraits(card: ScryfallCard): PrintingTraits {
+  return {
+    set: card.set,
+    setType: card.set_type ?? "",
+    frame: card.frame ?? "",
+    frameEffects: strings(card.frame_effects),
+    borderColor: card.border_color ?? "",
+    fullArt: Boolean(card.full_art),
+    textless: Boolean(card.textless),
+    promo: Boolean(card.promo),
+    promoTypes: strings(card.promo_types),
+    finishes: strings(card.finishes),
+    oversized: Boolean(card.oversized),
+    releasedAt: card.released_at ?? "1993-08-05",
+  };
+}
+
+/** The same traits read back from a stored row. */
+export function rowTraits(row: CardRow): PrintingTraits {
+  return {
+    set: row.set,
+    setType: row.setType,
+    frame: row.frame,
+    frameEffects: row.frameEffects ?? [],
+    borderColor: row.borderColor,
+    fullArt: row.fullArt,
+    textless: row.textless,
+    promo: row.isPromo,
+    promoTypes: row.promoTypes ?? [],
+    finishes: row.finishes ?? [],
+    oversized: row.oversized,
+    releasedAt: row.releasedAt,
+  };
+}
+
 /** Convert a raw Scryfall card into a database row. Pure, so it is unit-tested. */
 export function toCardRow(card: ScryfallCard, seenRun: number): NewCardRow {
   const layout = toLayout(card.layout);
@@ -153,6 +204,7 @@ export function toCardRow(card: ScryfallCard, seenRun: number): NewCardRow {
   const typeLine = card.type_line ?? faces.map((f) => f.typeLine).join(" // ");
   const oracleText = card.oracle_text ?? faces.map((f) => f.oracleText).join("\n//\n");
   const oracleId = card.oracle_id ?? rawFaces.find((f) => f.oracle_id)?.oracle_id ?? null;
+  const traits = scryfallTraits(card);
 
   return {
     id: card.id,
@@ -188,6 +240,17 @@ export function toCardRow(card: ScryfallCard, seenRun: number): NewCardRow {
     artist: card.artist ?? faces[0]?.artist ?? null,
     scryfallUri: card.scryfall_uri ?? "",
     purchaseUris: pickPurchaseUris(card.purchase_uris),
+    setType: traits.setType,
+    frame: traits.frame,
+    frameEffects: traits.frameEffects,
+    borderColor: traits.borderColor,
+    fullArt: traits.fullArt,
+    textless: traits.textless,
+    promoTypes: traits.promoTypes,
+    finishes: traits.finishes,
+    oversized: traits.oversized,
+    isRegular: isRegularPrinting(traits),
+    treatmentCount: treatmentRank(traits),
     seenRun,
   };
 }
@@ -239,5 +302,18 @@ export function rowToSummary(row: CardRow): CardSummary {
     isToken: row.isToken,
     faceCount: row.imageBack ? 2 : 1,
     purchaseUris: toPurchaseLinks(row.purchaseUris),
+  };
+}
+
+/** A printing as the printing picker lists it: the summary plus what tells printings apart. */
+export function rowToPrintingOption(row: CardRow): PrintingOption {
+  return {
+    ...rowToSummary(row),
+    setName: row.setName,
+    releasedAt: row.releasedAt,
+    rarity: row.rarity,
+    treatments: printingTreatments(rowTraits(row)),
+    isRegular: row.isRegular,
+    finishes: row.finishes ?? [],
   };
 }

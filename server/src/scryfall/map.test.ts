@@ -45,6 +45,16 @@ describe("toCardRow layouts", () => {
   });
 });
 
+describe("toCardRow printing look", () => {
+  it("stores the treatment fields and marks only plain printings regular", () => {
+    const plain = toCardRow({ ...byName("Sol Ring"), set_type: "commander", frame: "2015", border_color: "black", frame_effects: [], promo: false, finishes: ["nonfoil", "foil"] }, 1);
+    expect(plain).toMatchObject({ setType: "commander", frame: "2015", borderColor: "black", finishes: ["nonfoil", "foil"], isRegular: true });
+    const fancy = toCardRow({ ...byName("Sol Ring"), border_color: "borderless", frame_effects: ["inverted"], promo_types: ["boosterfun"], full_art: true }, 1);
+    expect(fancy).toMatchObject({ borderColor: "borderless", frameEffects: ["inverted"], promoTypes: ["boosterfun"], fullArt: true, isRegular: false });
+    expect(toCardRow({ ...byName("Sol Ring"), set: "sld", set_type: "box" }, 1).isRegular).toBe(false);
+  });
+});
+
 describe("shouldKeep", () => {
   it("drops non-English printings", () => {
     const ja = cards.find((c) => c.lang === "ja")!;

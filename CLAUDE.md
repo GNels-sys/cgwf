@@ -75,12 +75,74 @@ older than `CARD_DATA_MAX_AGE_HOURS`, download Scryfall's `default_cards` (gzipp
 The machine scales to zero, so there is no cron: staleness is checked on boot and hourly while
 awake. A finished download survives an interrupted import.
 
-Search: `NameIndex` keeps one best printing per oracle id (paper > promo-free > in boosters >
-hi-res scan > newest) plus aliases for each face name; tiers exact > prefix > word > substring >
-bounded edit distance. Names are normalised without punctuation, so two different cards can share
-an exact key ("Rampant Growth" and the playtest card "Rampant, Growth"): the first in printing
-preference order keeps it, which is the paper, in-booster card (fixed 2026-10-19; it had sent 23 EDHREC
-decks to Forge with a card Forge does not know).
+Search: `NameIndex` keeps one default printing per oracle id (paper > REGULAR > fewest special
+treatments > not promo > newest > hi-res scan > lowest collector number; see "Printings" below) plus
+aliases for each face name; tiers exact > prefix > word > substring > bounded edit distance. Names
+are normalised without punctuation, so two different cards can share an exact key ("Rampant Growth"
+and the playtest card "Rampant, Growth"): the first in printing preference order keeps it, which is
+the paper, regular card (fixed 2026-10-19; it had sent 23 EDHREC decks to Forge with a card Forge does
+not know).
+
+### Printings: default, picker, hover preview (2026-10-19)
+
+Owner report: decks pasted as plain names ("1 Academy Manufactor") came out with odd printings. The
+old preference (paper > promo-free > in boosters > newest) picked The List reprints (Scryfall marks
+`plst` as in-booster, dated when the card joined The List) and the newest printing of recent cards,
+which is usually a borderless / showcase / extended-art / Secret Lair / full-art version. In the
+owner's Cloud deck (pasted 2026-10-19) 36 of 94 lines were such printings, in the Niv-Mizzet deck 26
+of 77; 35 of the 171 lines were The List.
+
+- **Look fields** (migration 0014, `cards`): `set_type`, `frame`, `frame_effects`, `border_color`,
+  `full_art`, `textless`, `promo_types`, `finishes`, `oversized`, plus the derived `is_regular` and
+  `treatment_count`, all from the bulk file by `toCardRow` (`scryfallTraits`). Rows keep the column
+  defaults until the next ingest: **after deploying 0014 run `node server/dist/cli.js ingest --force`
+  once** (through the running server over `fly ssh console`).
+- **Regular** = `printingTreatments(traits)` in `shared/src/printing.ts` is empty. Treatments (also
+  the picker's labels): Borderless (or another non-black/white border), Showcase, Extended art,
+  Inverted frame, Etched, Shattered glass, Colorshifted, Full art, Textless, Retro frame (1993/1997
+  frame on a card printed from 2004), Future frame, The List (`plst`, `mb1`, `mb2`, `ulst`), set types
+  box (Secret Lair), masterpiece, from_the_vault, memorabilia, funny, minigame, vanguard,
+  treasure_chest, alchemy, promo; promo types Booster Fun, serialized, thick stock, embossed, ... and
+  any `*foil` treatment, Promo, Foil only / Etched only (no non-foil copy), Oversized. **Foil
+  treatments count only when the printing has no non-foil copy**: Scryfall tags every Final Fantasy /
+  Fallout precon card `surgefoil` because its foil copies are surge foil, but the non-foil copy is the
+  plain card. Legendary frames, Universes Beyond, starter-collection and similar promo types are not
+  treatments.
+- **Default printing** = what a bare name resolves to (deck import, search, the token finder's
+  ordering): paper, regular first, then fewest treatments (so a foil-only precon face commander such
+  as Dogmeat beats its showcase versions), then not promo, newest, hi-res, lowest collector number (a
+  set's plain card before its same-day variants). A named set ("1 Sol Ring (FRC)") prefers that set's
+  regular printing; an exact set + number still wins. **Printings already stored in decks are never
+  changed**; owners fix existing lines with the picker. Replaying the owner's two lists: 61 of 94 and
+  36 of 77 lines resolve differently now; the only special printings left are cards with no regular
+  printing at all (Dogmeat PIP 2 foil-only face card, Super State only in Secret Lair).
+- **Printing picker** (`client/src/components/PrintingPicker.tsx`): every deck line (own decks, the
+  owner's library deck page; commanders under their image) has a set-code chip ("FRC 20") = "Change
+  printing". The sheet lists every paper printing (`GET /api/cards/oracle/:oracleId/printings` ->
+  `{printings: PrintingOption[], defaultId}`; set name and code, number, year, rarity, treatment labels,
+  newest first) as a thumbnail grid with "In deck" and "Default" marks, a filter box above 12 printings
+  (set, number, year, rarity, treatment words) and "Reset to default printing". Picking calls
+  `PATCH /api/decks/:id/cards/:entry {cardId}` (own deck, 60/min) or `PATCH /api/library/:id/cards/:entry`
+  (owner): `checkPrintingSwap` (`server/src/decks/printing.ts`) requires the same oracle id (same name
+  for the rare row without one), paper, not a token; only that line changes and the deck's `updatedAt`
+  moves, so Bracket, Stats and the shop panel refetch and commanders show the new art in deck tiles
+  and games. `DeckCardEntry.entryId` and the library detail's `entryId`/`oracleId`/`set`/
+  `collectorNumber`/`faceCount` carry what the picker needs. The library page's card list is now the
+  same clickable lines as the deck page (tap = full card view).
+- **Hover preview** (`client/src/components/hoverPreview.ts` rules + `CardHoverPreview.tsx`): deck
+  page lines, library deck page lines and the import review (thumbnail, name, candidate chips) show the
+  whole card (63:88, `CardImage`, never cropped) beside the cursor after 250 ms, flipped left near the
+  right edge and clamped inside the viewport; moving between lines swaps the card at once and leaving
+  waits 120 ms, so nothing flickers. Only for a mouse or pen on a device matching `(hover: hover) and
+  (pointer: fine)` (checked live per event, plus a CSS guard): touch keeps tap-to-open. The preview
+  has `pointer-events: none`, so a click still opens `CardDetail` (pointerdown hides it); keyboard focus
+  that is `:focus-visible` shows it beside the line; Escape, scroll and window blur hide it; the fade
+  runs only without reduced motion. Two-faced cards show both faces side by side when the window has
+  room, else the front with "Two-faced: click for the back". Tests: `hoverPreview.test.ts` (fake
+  timers: touch never, delay, no flicker, click hides, focus-visible only, placement, short windows),
+  `shared/src/printing.test.ts`, `server/src/routes/printings.test.ts` (fixture printings: regular vs
+  borderless / showcase / extended / surge / Secret Lair / The List / promo / retro / precon surge foil,
+  the fallback, the printings route, both PATCH routes and their refusals), `scryfall/map.test.ts`.
 
 ## Identity and decks (Phase 2)
 

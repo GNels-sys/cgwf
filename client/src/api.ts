@@ -35,6 +35,7 @@ import type {
   LibraryImportState,
   LibraryListResponse,
   LibraryPatchRequest,
+  PrintingsResponse,
   RegisterRequest,
   RegisterResponse,
   ResolveResponse,
@@ -116,6 +117,8 @@ export const api = {
   search: (q: string, tokens: boolean, signal?: AbortSignal) =>
     request<SearchResponse>(`/api/cards/search?q=${encodeURIComponent(q)}&tokens=${tokens ? 1 : 0}&limit=40`, { ...(signal ? { signal } : {}) }),
   card: (id: string, signal?: AbortSignal) => request<CardResponse>(`/api/cards/${encodeURIComponent(id)}`, { ...(signal ? { signal } : {}) }),
+  /** Every paper printing of a card, newest first, plus the default printing (printing picker). */
+  printings: (oracleId: string, signal?: AbortSignal) => request<PrintingsResponse>(`/api/cards/oracle/${encodeURIComponent(oracleId)}/printings`, { ...(signal ? { signal } : {}) }),
 
   register: (body: RegisterRequest) => request<RegisterResponse>("/api/me/register", { json: body }),
   me: () => request<{ user: User }>("/api/me"),
@@ -143,6 +146,8 @@ export const api = {
     analysis: (id: string, refresh = false) => request<DeckAnalysisResponse>(`/api/decks/${encodeURIComponent(id)}/analysis${refresh ? "?refresh=1" : ""}`),
     stats: (id: string) => request<DeckStatsResponse>(`/api/decks/${encodeURIComponent(id)}/stats`),
     importUrl: (url: string) => request<ImportUrlResponse>(`/api/decks/import-url?url=${encodeURIComponent(url)}`),
+    setPrinting: (id: string, entryId: number, cardId: string) =>
+      request<{ deck: DeckDetail }>(`/api/decks/${encodeURIComponent(id)}/cards/${entryId}`, { method: "PATCH", json: { cardId } }),
   },
 
   /** Owner-only deck library (Phase 6). */
@@ -161,6 +166,8 @@ export const api = {
     stats: (id: string) => request<DeckStatsResponse>(`/api/library/${encodeURIComponent(id)}/stats`),
     patch: (id: string, body: LibraryPatchRequest) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}`, { method: "PATCH", json: body }),
     remove: (id: string) => request<{ ok: true }>(`/api/library/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    setPrinting: (id: string, entryId: number, cardId: string) =>
+      request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}/cards/${entryId}`, { method: "PATCH", json: { cardId } }),
     analyze: (id: string) => request<{ deck: LibraryDeckDetail }>(`/api/library/${encodeURIComponent(id)}/analyze`, { method: "POST", json: {} }),
     primerSkeleton: (id: string) => request<{ primer: string }>(`/api/library/${encodeURIComponent(id)}/primer-skeleton`),
     draftPrimer: (id: string, force = false) => request<DraftPrimerResponse>(`/api/library/${encodeURIComponent(id)}/draft-primer`, { json: { force } }),

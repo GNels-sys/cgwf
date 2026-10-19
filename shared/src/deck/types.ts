@@ -52,6 +52,13 @@ export interface CreateDeckRequest {
 
 export interface DeckCardEntry extends DeckCardInput {
   card: CardSummary;
+  /** The deck line's id (deck_cards.id), for PATCH /api/decks/:id/cards/:entry. */
+  entryId?: number;
+}
+
+/** PATCH /api/decks/:id/cards/:entry and PATCH /api/library/:id/cards/:entry: another printing of the same card. */
+export interface SetPrintingRequest {
+  cardId: string;
 }
 
 export interface DeckWarning {

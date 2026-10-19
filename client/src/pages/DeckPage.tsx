@@ -7,6 +7,8 @@ import { api } from "../api";
 import { BracketPanel } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
+import { useCardHover } from "../components/CardHoverPreview";
+import { PrintingPicker, printingLabel } from "../components/PrintingPicker";
 import { ShoppingPanel } from "../components/LocalStores";
 import { ManaCost } from "../components/ManaCost";
 import { RequireUser } from "../components/RequireUser";
@@ -32,14 +34,22 @@ function groupByType(entries: DeckCardEntry[]) {
   return TYPE_ORDER.filter((t) => groups.has(t)).map((t) => ({ type: t, entries: groups.get(t)!.sort((a, b) => a.card.name.localeCompare(b.card.name)) }));
 }
 
-function CardLine({ entry, onOpen }: { entry: DeckCardEntry; onOpen: (id: string) => void }) {
+type HoverBind = ReturnType<typeof useCardHover>["bind"];
+
+function CardLine({ entry, onOpen, onPrinting, hover }: { entry: DeckCardEntry; onOpen: (id: string) => void; onPrinting: ((e: DeckCardEntry) => void) | null; hover: HoverBind }) {
+  const label = printingLabel(entry.card);
   return (
-    <li>
-      <button className="deck-card-line" onClick={() => onOpen(entry.card.id)}>
+    <li className="deck-card-row">
+      <button className="deck-card-line" onClick={() => onOpen(entry.card.id)} {...hover({ id: entry.card.id, name: entry.card.name, faceCount: entry.card.faceCount })}>
         <span className="qty">{entry.quantity}</span>
         <span className="deck-card-name">{entry.card.name}</span>
         <ManaCost cost={entry.card.manaCost} size={13} />
       </button>
+      {onPrinting && (
+        <button type="button" className="printing-chip" onClick={() => onPrinting(entry)} title="Change printing" aria-label={`Change printing of ${entry.card.name}, now ${label}`}>
+          {label}
+        </button>
+      )}
     </li>
   );
 }
@@ -162,6 +172,8 @@ function DeckView({ id }: { id: string }) {
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState("");
   const [libraryNote, setLibraryNote] = useState<string | null>(null);
+  const [picking, setPicking] = useState<DeckCardEntry | null>(null);
+  const hover = useCardHover();
 
   useEffect(() => {
     api.decks
@@ -196,6 +208,12 @@ function DeckView({ id }: { id: string }) {
 
   if (error) return <p className="error">{error}</p>;
   if (!deck || !sections) return <p className="muted">Loading deck...</p>;
+
+  const changePrinting = (e: DeckCardEntry) => (e.entryId !== undefined && e.card.oracleId ? () => setPicking(e) : null);
+  const openPicker = (e: DeckCardEntry) => {
+    hover.hide();
+    setPicking(e);
+  };
 
   const rename = async () => {
     const r = await api.decks.rename(deck.id, newName);
@@ -290,10 +308,17 @@ function DeckView({ id }: { id: string }) {
 
       <section className="commanders">
         {sections.commanders.map((c) => (
-          <button key={c.cardId} className="commander-card" onClick={() => setOpen(c.card.id)}>
-            <CardImage id={c.card.id} name={c.card.name} size="normal" loading="eager" />
-            <span>{c.card.name}</span>
-          </button>
+          <div key={c.entryId ?? c.cardId} className="commander-slot">
+            <button className="commander-card" onClick={() => setOpen(c.card.id)}>
+              <CardImage id={c.card.id} name={c.card.name} size="normal" loading="eager" />
+              <span>{c.card.name}</span>
+            </button>
+            {changePrinting(c) && (
+              <button type="button" className="printing-chip" onClick={() => openPicker(c)} title="Change printing" aria-label={`Change printing of ${c.card.name}, now ${printingLabel(c.card)}`}>
+                {printingLabel(c.card)}
+              </button>
+            )}
+          </div>
         ))}
       </section>
 
@@ -316,7 +341,7 @@ function DeckView({ id }: { id: string }) {
             </h3>
             <ul>
               {g.entries.map((e) => (
-                <CardLine key={e.cardId + e.board} entry={e} onOpen={setOpen} />
+                <CardLine key={e.entryId ?? e.cardId + e.board} entry={e} onOpen={setOpen} onPrinting={changePrinting(e) ? openPicker : null} hover={hover.bind} />
               ))}
             </ul>
           </section>
@@ -327,13 +352,27 @@ function DeckView({ id }: { id: string }) {
               <h3>{b[0]!.toUpperCase() + b.slice(1)}</h3>
               <ul>
                 {sections[b].map((e) => (
-                  <CardLine key={e.cardId + e.board} entry={e} onOpen={setOpen} />
+                  <CardLine key={e.entryId ?? e.cardId + e.board} entry={e} onOpen={setOpen} onPrinting={changePrinting(e) ? openPicker : null} hover={hover.bind} />
                 ))}
               </ul>
             </section>
           ) : null,
         )}
       </div>
+
+      {hover.preview}
+      {picking && picking.card.oracleId && picking.entryId !== undefined && (
+        <PrintingPicker
+          oracleId={picking.card.oracleId}
+          cardName={picking.card.name}
+          currentId={picking.card.id}
+          onClose={() => setPicking(null)}
+          onPick={async (cardId) => {
+            const r = await api.decks.setPrinting(deck.id, picking.entryId!, cardId);
+            setDeck(r.deck);
+          }}
+        />
+      )}
 
       {open && <CardDetail id={open} onClose={() => setOpen(null)} navigation={{
         position: browseIndex + 1,

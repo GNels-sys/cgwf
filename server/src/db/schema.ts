@@ -43,6 +43,24 @@ export const cards = sqliteTable(
     scryfallUri: text("scryfall_uri").notNull().default(""),
     /** Scryfall purchase_uris (tcgplayer, cardmarket, cardhoarder), Phase 10; null when Scryfall lists none. */
     purchaseUris: text("purchase_uris", { mode: "json" }).$type<Record<string, string> | null>(),
+    /**
+     * How the printing looks (2026-10-19, migration 0014): Scryfall's set_type, frame, frame_effects,
+     * border_color, full_art, textless, promo_types, finishes, oversized. `isRegular` = none of the
+     * special treatments in shared/src/printing.ts; `treatmentCount` = how many (0 = regular). The name
+     * index prefers the lowest count, then the newest. Rows ingested before 0014 keep the defaults until
+     * the next ingest (`node server/dist/cli.js ingest --force`).
+     */
+    setType: text("set_type").notNull().default(""),
+    frame: text("frame").notNull().default(""),
+    frameEffects: text("frame_effects", { mode: "json" }).$type<string[]>().notNull().default([]),
+    borderColor: text("border_color").notNull().default(""),
+    fullArt: integer("full_art", { mode: "boolean" }).notNull().default(false),
+    textless: integer("textless", { mode: "boolean" }).notNull().default(false),
+    promoTypes: text("promo_types", { mode: "json" }).$type<string[]>().notNull().default([]),
+    finishes: text("finishes", { mode: "json" }).$type<string[]>().notNull().default([]),
+    oversized: integer("oversized", { mode: "boolean" }).notNull().default(false),
+    isRegular: integer("is_regular", { mode: "boolean" }).notNull().default(false),
+    treatmentCount: integer("treatment_count").notNull().default(0),
     /** Ingest run that last saw this printing; rows from older runs are pruned. */
     seenRun: integer("seen_run").notNull().default(0),
   },
