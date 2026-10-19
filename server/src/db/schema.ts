@@ -327,8 +327,12 @@ export const libraryDecks = sqliteTable(
   {
     id: text("id").primaryKey(),
     name: text("name").notNull(),
-    /** "precon" (MTGJSON import) | "user" (added from a player's deck). */
+    /** "precon" (MTGJSON import) | "user" (added from a player's deck) | "edhrec" (EDHREC average deck). */
     source: text("source").notNull(),
+    /** Where the list came from (EDHREC average-deck page), shown with the attribution. */
+    sourceUrl: text("source_url"),
+    /** Importer details (EDHREC: slug, bracket, deck count, mismatch, Forge coverage), JSON. */
+    importMeta: text("import_meta", { mode: "json" }).$type<unknown>(),
     /** Idempotency key: MTGJSON fileName for precons, the source deck id for user decks. */
     sourceKey: text("source_key"),
     setCode: text("set_code"),

@@ -437,7 +437,7 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
 
 - Tables (migration 0006): `library_decks` (name, source precon|user, source_key unique =
   `mtgjson:<fileName>` or `deck:<deckId>`, set_code, set_name, release_date, commanders JSON,
-  bracket (owner's call, precons default 2, user decks default to the suggestion), bracket_floor,
+  bracket (owner's call, precons default 2, user decks default to the suggestion, EDHREC decks EDHREC's), bracket_floor,
   bracket_suggested, tags JSON, primer text, agent_eligible, analysis JSON, created_by, timestamps),
   `library_deck_cards` (printing id, quantity, board main|commander|sideboard, position),
   `combo_cache`.
@@ -471,6 +471,66 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
   read them by name), write the draft into `library_decks.primer` through the same PATCH, and add
   the model call behind an owner-only route. Agent opponents should pick from
   `library.list({agentEligible: true})`.
+
+### EDHREC average decks (2026-10-18)
+
+175 agent-eligible library decks from EDHREC: 75 Bracket 3 (EDHREC "upgraded"), 75 Bracket 4
+("optimized"), 25 Bracket 5 ("cedh"). Code: `server/src/library/edhrec/`. Run:
+`node server/dist/cli.js import-edhrec [--dry-run] [--refresh] [--recheck-coverage]` (asks the running
+server over loopback, like `import-precons`, prints progress and the final report; without a server it
+runs in-process with no engine, so coverage stays unchecked). Owner route: `POST /api/library/import-edhrec`.
+
+- **Source and terms.** EDHREC's public JSON at `https://json.edhrec.com/pages/` (verified 2026-10-18):
+  `commanders/{week|month|year}.json` and the 32 colour-identity lists (`commanders/<slug>.json`, slugs
+  in `identity.ts`: mono-white ... colorless, azorius ... simic, esper ... temur, yore-tiller, glint-eye,
+  dune-brood, ink-treader, witch-maw, five-color) give the candidate pool (top 100 each; partner and
+  background pairs are one entry "A // B"); `commanders/<slug>.json` carries `bracket_counts` {"1".."5"}
+  (decks per bracket) and `container.json_dict.card.color_identity`; `average-decks/<slug>/<upgraded|
+  optimized|cedh>.json` is the bracket's average deck (`deck.commander[]`, `deck.cards {Type: [[name,
+  qty]]}`, `archidekt [{c, q, u: Scryfall id}]`). Bracket-ranked lists do not exist (403); a 403 means an
+  unknown path. Reference: the owner's skill `~/.claude/skills/mtg-edhrec-fetch`.
+- **Politeness** (`client.ts`): one request per second, one at a time; User-Agent `CGwF/<version>
+  (private card table, deck library import; <CONTACT_EMAIL>)`; every answer (including 403s as
+  "missing") cached under `DATA_DIR/edhrec-cache/`, so reruns make no requests (`--refresh` ignores the
+  cache); 429/5xx back off (Retry-After, else 5/15/45 s) and retry three times. A full first run is about
+  650 commander pages + 35 lists + ~300 average decks: 15-20 minutes.
+- **Selection** (`select.ts`, pure): per bracket, candidates with at least `minDecks` decks in that
+  bracket (20 for B3/B4, 50 for cEDH) ranked by that bracket's deck count. Passes: A coverage (best deck of
+  every colour identity that has one for B3/B4; of every size group - mono, two, three, four, five,
+  colourless - for cEDH), B new primary archetypes until 10, C each win condition up to 3 (B3/B4) or 1
+  (cEDH), D fill by rank, E only if still short: ignore the archetype cap (reported). Caps throughout:
+  4 per colour identity (3 in cEDH), 12 per primary archetype; Bracket 4 may reuse at most a third (25)
+  of the Bracket 3 commanders. Primary archetype = the analysis engine's top tag; win condition
+  (`wincon.ts`, heuristic) = combo > alternate win > drain/burn > control/value > combat.
+- **A candidate is evaluated only when it could be taken**: fetch its average deck for the bracket,
+  resolve it through `resolveDecklist` (exact names; a fuzzy guess is refused; an unresolved name falls
+  back to the Scryfall id EDHREC lists), require exactly 100 cards and zero `deckWarnings` (engine
+  tables block illegal decks), analyse it (Spellbook through the cache). Failures are listed as
+  "rejected" in the report and the next candidate is tried.
+- **Import** (`importer.ts`, `LibraryService.upsertImported`): source `edhrec`, `source_key`
+  `edhrec:<slug>:<upgraded|optimized|cedh>` (idempotent: a rerun replaces cards/analysis/tags/meta of the
+  same row; it keeps an owner-edited primer and keeps earlier imports the new selection dropped, listed
+  in the report), name `<Commander(s)> — <Upgraded|Optimized|cEDH> (EDHREC average)`, `source_url` the
+  edhrec.com page, stored bracket = EDHREC's, tags from the engine, primer = the engine skeleton (no model
+  spend), `import_meta` (migration 0012) = `LibraryImportInfo` {slug, edhrecBracket, decks, rank,
+  winCondition, pickReason, mismatch, coverage, coverageError}. **Mismatch** = the classifier's floor is
+  above EDHREC's bracket (e.g. an "upgraded" average with 4+ Game Changers) or its suggestion is two or
+  more below; EDHREC's bracket is kept and the library flags it.
+- **Forge coverage** (`coverage.ts`): exactly what a real engine table does - `deckForEngine` on the
+  library deck, then a `createGame` whose `gameCreated` lists per seat the cards Forge's DeckLoader cannot
+  resolve. Four decks per check game, all seats "human" (Forge's AI never plays), `endGame` at once, game
+  id `deckcheck-<uuid>` (no room has that id, so the relay ignores its frames); "engine busy" waits and
+  retries. Clean decks become agent-eligible; decks with missing cards stay in the library for people and
+  are listed in the report; unchecked decks (no engine) stay ineligible until `--recheck-coverage`.
+- **Attribution**: "Average deck data from EDHREC" with a link to the deck's EDHREC page on the library
+  deck page (`client/src/components/EdhrecCredit.tsx`; as text in library rows, which are links
+  themselves). Nothing else from EDHREC is republished. The averages are SYNTHESISED (most common card per
+  slot across indexed decks), never one pilot's list; the deck names and the credit say so.
+- Report: `DATA_DIR/reports/edhrec-import-<timestamp>.md` (per-bracket diversity summary, every pick
+  with its reason, rejections, mismatches, coverage exclusions, stale imports). Tests:
+  `edhrec/select.test.ts` (parsers, ranking, every cap, overlap, cEDH groups) and
+  `edhrec/importer.test.ts` (polite client, partner mapping, import, coverage, idempotency) with fixture
+  JSON (`edhrec/fixtures.ts`), no network.
 
 ## Computer opponents (Phase 7, owner only)
 

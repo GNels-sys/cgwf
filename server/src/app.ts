@@ -14,6 +14,9 @@ import { registerAdminRoutes } from "./routes/admin.js";
 import { registerAgentRoutes } from "./routes/agents.js";
 import { SpellbookClient, type FetchLike } from "./analysis/spellbook.js";
 import { PreconImporter } from "./library/precons.js";
+import { EdhrecClient, type FetchLike as EdhrecFetch } from "./library/edhrec/client.js";
+import { EngineCoverageChecker, type CoverageChecker } from "./library/edhrec/coverage.js";
+import { EdhrecImporter } from "./library/edhrec/importer.js";
 import { LibraryService } from "./library/service.js";
 import { registerAnalysisRoutes } from "./routes/analysis.js";
 import { registerLibraryRoutes } from "./routes/library.js";
@@ -48,6 +51,7 @@ export interface AppContext {
   analyzer: DeckAnalyzer;
   library: LibraryService;
   precons: PreconImporter;
+  edhrec: EdhrecImporter;
   agents: AgentManager;
   social: SocialService;
   submissions: SubmissionService;
@@ -63,6 +67,11 @@ export interface BuildOptions {
   spellbookFetch?: FetchLike;
   /** Same for MTGJSON (precon import). */
   mtgjsonFetch?: FetchLike;
+  /** EDHREC import: tests inject fixture JSON, a temp cache dir, no throttle and a fake coverage check. */
+  edhrecFetch?: EdhrecFetch;
+  edhrecCacheDir?: string;
+  edhrecGapMs?: number;
+  edhrecCoverage?: CoverageChecker | null;
   /** Phase 10: tests inject a fake Singles site (and its URL/token); production reads config. */
   singlesFetch?: FetchLike;
   singlesOptions?: Partial<import("./singles/client.js").SinglesClientOptions>;
@@ -113,6 +122,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
 
   const library = new LibraryService(handle, analyzer);
   const precons = new PreconImporter(handle, index, library, app.log, opts.mtgjsonFetch);
+  const edhrecClient = new EdhrecClient({ log: app.log, ...(opts.edhrecFetch ? { fetchImpl: opts.edhrecFetch } : {}), ...(opts.edhrecCacheDir ? { cacheDir: opts.edhrecCacheDir } : {}), ...(opts.edhrecGapMs !== undefined ? { gapMs: opts.edhrecGapMs, backoffMs: [0] } : {}) });
 
   const llm = opts.agentLlm !== undefined ? opts.agentLlm : config.anthropicApiKey ? new AnthropicLlm(config.agentModel, config.anthropicApiKey, config.anthropicWorkspaceId) : null;
   const agents = new AgentManager({ handle, library, analyzer, log: app.log, llm, enabled: opts.agentsEnabled });
@@ -131,7 +141,8 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   registerCardRoutes(app, { handle, index, ingestor });
   registerSocialRoutes(app, { handle, social, submissions, roomsManager });
   registerAnalysisRoutes(app, { handle, analyzer });
-  registerLibraryRoutes(app, { handle, library, precons });
+  const edhrec = new EdhrecImporter(handle, index, library, analyzer, edhrecClient, opts.edhrecCoverage !== undefined ? opts.edhrecCoverage : new EngineCoverageChecker(engine), app.log);
+  registerLibraryRoutes(app, { handle, library, precons, edhrec });
   registerStatsRoutes(app, { handle, analyzer, library });
   registerAgentRoutes(app, { handle, agents, roomsManager });
   registerAdminRoutes(app, { handle, roomsManager, presence });
@@ -180,5 +191,5 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, agents, social, submissions, singles, engine };
+  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, edhrec, agents, social, submissions, singles, engine };
 }

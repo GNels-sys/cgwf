@@ -132,8 +132,12 @@ export interface DeckAnalysisResponse {
 export interface LibraryDeckSummary {
   id: string;
   name: string;
-  /** "precon" (MTGJSON import) or "user" (added from a player's deck). */
-  source: "precon" | "user";
+  /** "precon" (MTGJSON import), "user" (added from a player's deck) or "edhrec" (EDHREC average deck). */
+  source: LibrarySource;
+  /** Source page for imported lists (EDHREC), shown with the attribution. */
+  sourceUrl: string | null;
+  /** Importer details for EDHREC decks; null for precons and player decks. */
+  importInfo: LibraryImportInfo | null;
   setCode: string | null;
   setName: string | null;
   releaseDate: string | null;
@@ -149,6 +153,32 @@ export interface LibraryDeckSummary {
   /** User id credited with a user deck (the submitter, Phase 8), null for precons. */
   createdBy: string | null;
   createdByName: string | null;
+}
+
+export type LibrarySource = "precon" | "user" | "edhrec";
+
+export function isLibrarySource(v: unknown): v is LibrarySource {
+  return v === "precon" || v === "user" || v === "edhrec";
+}
+
+/** What the EDHREC importer recorded about one deck (library_decks.import_meta). */
+export interface LibraryImportInfo {
+  provider: "edhrec";
+  slug: string;
+  edhrecBracket: "upgraded" | "optimized" | "cedh";
+  /** Decks EDHREC averaged for this commander at this bracket when it was imported. */
+  decks: number;
+  /** Rank by that deck count among the import's candidates. */
+  rank: number;
+  winCondition: string;
+  fetchedAt: string;
+  /** Why the importer picked it (diversity pass + reason). */
+  pickReason: string;
+  /** The analysis engine disagrees with EDHREC's bracket (EDHREC's is kept); null when they agree. */
+  mismatch: string | null;
+  /** Forge rules-engine coverage: null = not checked yet; `missing` = cards Forge cannot play. */
+  coverage: { checkedAt: string; missing: string[] } | null;
+  coverageError: string | null;
 }
 
 export interface LibraryDeckDetail extends LibraryDeckSummary {

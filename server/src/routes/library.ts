@@ -1,10 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
-import { isArchetypeTag, isBracket, type LibraryDeckDetail, type LibraryListResponse, type LibraryPatchRequest } from "@cgwf/shared";
+import { isArchetypeTag, isBracket, isLibrarySource, type LibraryDeckDetail, type LibraryListResponse, type LibraryPatchRequest } from "@cgwf/shared";
 import { requireOwner, requireUser } from "../auth.js";
 import { config } from "../config.js";
 import type { DbHandle } from "../db/index.js";
 import { deckCards, decks } from "../db/schema.js";
+import type { EdhrecImporter } from "../library/edhrec/importer.js";
 import type { PreconImporter } from "../library/precons.js";
 import type { LibraryEntry, LibraryService } from "../library/service.js";
 
@@ -12,6 +13,7 @@ interface Deps {
   handle: DbHandle;
   library: LibraryService;
   precons: PreconImporter;
+  edhrec: EdhrecImporter;
 }
 
 /**
@@ -27,7 +29,7 @@ interface Deps {
  *   GET    /api/library/:id/primer-skeleton
  */
 export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
-  const { handle, library, precons } = deps;
+  const { handle, library, precons, edhrec } = deps;
   // requireUser first so req.user is set; requireOwner then checks users.is_owner (Phase 5).
   const owner = [requireUser(handle), requireOwner(handle)];
 
@@ -40,7 +42,7 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
         bracket: isBracket(bracket) ? bracket : undefined,
         tag: isArchetypeTag(tag) ? tag : undefined,
         q: req.query.q?.trim().slice(0, 60) || undefined,
-        source: source === "precon" || source === "user" ? source : undefined,
+        source: isLibrarySource(source) ? source : undefined,
         agentEligible: req.query.agent === "1" ? true : req.query.agent === "0" ? false : undefined,
       }),
       importState: precons.state,
@@ -69,6 +71,32 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
     if (!(isLoopback || (config.adminToken !== "" && token === config.adminToken))) return reply.code(403).send({ error: "forbidden" });
     return { importState: precons.state };
   });
+
+  /**
+   * EDHREC average decks (server/src/library/edhrec): the same background import for the machine
+   * (loopback / ADMIN_TOKEN, driven by `cli import-edhrec`) and for the signed-in owner.
+   * Body: {refresh?, dryRun?, recheckCoverage?}.
+   */
+  type EdhrecBody = { refresh?: boolean; dryRun?: boolean; recheckCoverage?: boolean } | null;
+  const startEdhrec = (body: EdhrecBody) => void edhrec.run({ refresh: Boolean(body?.refresh), dryRun: Boolean(body?.dryRun), recheckCoverage: Boolean(body?.recheckCoverage) });
+  const machine = (req: { ip: string; headers: Record<string, unknown> }) =>
+    req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1" || (config.adminToken !== "" && req.headers["x-admin-token"] === config.adminToken);
+  app.post<{ Body: EdhrecBody }>("/api/admin/import-edhrec", async (req, reply) => {
+    if (!machine(req)) return reply.code(403).send({ error: "forbidden" });
+    if (edhrec.state.running) return reply.code(409).send({ error: "import already running", state: edhrec.state });
+    startEdhrec(req.body);
+    return reply.code(202).send({ started: true, state: edhrec.state });
+  });
+  app.get("/api/admin/import-edhrec", async (req, reply) => {
+    if (!machine(req)) return reply.code(403).send({ error: "forbidden" });
+    return { state: edhrec.state };
+  });
+  app.post<{ Body: EdhrecBody }>("/api/library/import-edhrec", { preHandler: owner }, async (req, reply) => {
+    if (edhrec.state.running) return reply.code(409).send({ error: "import already running", state: edhrec.state });
+    startEdhrec(req.body);
+    return reply.code(202).send({ started: true, state: edhrec.state });
+  });
+  app.get("/api/library/import-edhrec", { preHandler: owner }, async () => ({ state: edhrec.state }));
 
   app.post<{ Body: { force?: boolean; combos?: boolean } | null }>("/api/library/import-precons", { preHandler: owner }, async (req, reply) => {
     if (precons.state.running) return reply.code(409).send({ error: "import already running", importState: precons.state });
