@@ -37,7 +37,7 @@ export class NameIndex {
   }
 
   /**
-   * Pick the default printing per card: paper first, then the newest REGULAR printing (no special
+   * Pick the default printing per card: paper and already released first, then the newest REGULAR printing (no special
    * treatment: see shared/src/printing.ts), then non-promo, newest, good scan, lowest collector
    * number (so a set's plain card beats its later-numbered variants released the same day).
    * A card with no regular printing falls back to its least special printing (fewest treatments).
@@ -55,6 +55,8 @@ export class NameIndex {
       .from(cards)
       .orderBy(
         asc(cards.isDigital),
+        // Previewed sets are in the bulk file before release: never default to a printing nobody owns yet.
+        asc(sql`${cards.releasedAt} > date('now')`),
         desc(cards.isRegular),
         asc(cards.treatmentCount),
         asc(cards.isPromo),

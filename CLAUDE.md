@@ -109,7 +109,7 @@ of 77; 35 of the 171 lines were The List.
   plain card. Legendary frames, Universes Beyond, starter-collection and similar promo types are not
   treatments.
 - **Default printing** = what a bare name resolves to (deck import, search, the token finder's
-  ordering): paper, regular first, then fewest treatments (so a foil-only precon face commander such
+  ordering): paper and already released (previewed sets reach the bulk file early), regular first, then fewest treatments (so a foil-only precon face commander such
   as Dogmeat beats its showcase versions), then not promo, newest, hi-res, lowest collector number (a
   set's plain card before its same-day variants). A named set ("1 Sol Ring (FRC)") prefers that set's
   regular printing; an exact set + number still wins. **Printings already stored in decks are never

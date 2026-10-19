@@ -83,7 +83,7 @@ export function resolveDecklist(deps: ResolveDeps, text: string): ResolveRespons
           .select({ id: cards.id, oracleId: cards.oracleId })
           .from(cards)
           .where(and(eq(cards.set, set), eq(cards.normalizedName, exact.norm), eq(cards.isDigital, false)))
-          .orderBy(desc(cards.isRegular), asc(cards.treatmentCount), asc(cards.isPromo), desc(cards.releasedAt), asc(sql`cast(${cards.collectorNumber} as integer)`))
+          .orderBy(asc(sql`${cards.releasedAt} > date('now')`), desc(cards.isRegular), asc(cards.treatmentCount), asc(cards.isPromo), desc(cards.releasedAt), asc(sql`cast(${cards.collectorNumber} as integer)`))
           .get();
         if (inSet) {
           w.rowId = inSet.id;

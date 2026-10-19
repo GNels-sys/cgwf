@@ -36,7 +36,7 @@ describe("default printings and the printing picker", () => {
       setName: "Test Set",
       setType: "expansion",
       collectorNumber: "1",
-      releasedAt: "2030-01-01",
+      releasedAt: "2025-01-01",
       frame: "2015",
       frameEffects: [],
       borderColor: "black",
@@ -71,24 +71,26 @@ describe("default printings and the printing picker", () => {
 
     // Sol Ring as Scryfall lists a recent card: one plain printing and many special ones, most of them newer.
     printing(solRing, "sol-regular-old", { set: "old", releasedAt: "2010-01-01", collectorNumber: "270", inBooster: true });
-    printing(solRing, "sol-regular-new", { set: "frc", setType: "commander", releasedAt: "2030-01-01", collectorNumber: "20" });
-    printing(solRing, "sol-variant-same-day", { set: "frc", setType: "commander", releasedAt: "2030-01-01", collectorNumber: "120" });
-    printing(solRing, "sol-borderless", { releasedAt: "2031-01-01", borderColor: "borderless", frameEffects: ["inverted"], promoTypes: ["boosterfun"], collectorNumber: "301" });
-    printing(solRing, "sol-showcase", { releasedAt: "2031-01-01", frameEffects: ["showcase"], promoTypes: ["boosterfun"], collectorNumber: "302" });
-    printing(solRing, "sol-extended", { releasedAt: "2031-01-01", frameEffects: ["extendedart"], collectorNumber: "303" });
-    printing(solRing, "sol-surge", { releasedAt: "2031-01-01", promoTypes: ["surgefoil"], finishes: ["foil"], collectorNumber: "304" });
+    printing(solRing, "sol-regular-new", { set: "frc", setType: "commander", releasedAt: "2025-01-01", collectorNumber: "20" });
+    printing(solRing, "sol-variant-same-day", { set: "frc", setType: "commander", releasedAt: "2025-01-01", collectorNumber: "120" });
+    printing(solRing, "sol-borderless", { releasedAt: "2025-06-01", borderColor: "borderless", frameEffects: ["inverted"], promoTypes: ["boosterfun"], collectorNumber: "301" });
+    printing(solRing, "sol-showcase", { releasedAt: "2025-06-01", frameEffects: ["showcase"], promoTypes: ["boosterfun"], collectorNumber: "302" });
+    printing(solRing, "sol-extended", { releasedAt: "2025-06-01", frameEffects: ["extendedart"], collectorNumber: "303" });
+    printing(solRing, "sol-surge", { releasedAt: "2025-06-01", promoTypes: ["surgefoil"], finishes: ["foil"], collectorNumber: "304" });
     // A precon card Scryfall tags "surgefoil" that also exists in non-foil: the plain card, still regular.
-    printing(solRing, "sol-precon-surge-nonfoil", { releasedAt: "2029-01-01", promoTypes: ["surgefoil"], finishes: ["nonfoil", "foil"], collectorNumber: "13" });
-    printing(solRing, "sol-secret-lair", { set: "sld", setType: "box", releasedAt: "2032-01-01", collectorNumber: "999" });
-    printing(solRing, "sol-the-list", { set: "plst", setType: "masters", releasedAt: "2032-01-01", collectorNumber: "C21-263", inBooster: true });
-    printing(solRing, "sol-promo", { set: "psol", setType: "promo", isPromo: true, promoTypes: ["prerelease"], releasedAt: "2032-01-01" });
-    printing(solRing, "sol-retro", { releasedAt: "2031-01-01", frame: "1997", collectorNumber: "305" });
+    printing(solRing, "sol-precon-surge-nonfoil", { releasedAt: "2024-01-01", promoTypes: ["surgefoil"], finishes: ["nonfoil", "foil"], collectorNumber: "13" });
+    printing(solRing, "sol-secret-lair", { set: "sld", setType: "box", releasedAt: "2025-09-01", collectorNumber: "999" });
+    printing(solRing, "sol-the-list", { set: "plst", setType: "masters", releasedAt: "2025-09-01", collectorNumber: "C21-263", inBooster: true });
+    printing(solRing, "sol-promo", { set: "psol", setType: "promo", isPromo: true, promoTypes: ["prerelease"], releasedAt: "2025-09-01" });
+    printing(solRing, "sol-retro", { releasedAt: "2025-06-01", frame: "1997", collectorNumber: "305" });
+    // A previewed set dated after today: regular, but nobody owns it yet, so never the default.
+    printing(solRing, "sol-unreleased", { set: "fut", setType: "expansion", releasedAt: "2099-01-01", collectorNumber: "1" });
     // A card with no regular printing at all (a foil-only precon face commander) falls back to its least
     // special printing: foil-only beats a newer borderless showcase.
     const only = { oracleId: "only-specials", name: "Only Specials", normalizedName: "only specials" };
-    printing(signet, "only-foil-face", { ...only, finishes: ["foil"], releasedAt: "2033-01-01" });
-    printing(signet, "only-showcase", { ...only, frameEffects: ["showcase", "inverted"], releasedAt: "2034-01-01" });
-    printing(signet, "only-promo", { ...only, isPromo: true, releasedAt: "2035-01-01" });
+    printing(signet, "only-foil-face", { ...only, finishes: ["foil"], releasedAt: "2025-02-01" });
+    printing(signet, "only-showcase", { ...only, frameEffects: ["showcase", "inverted"], releasedAt: "2025-03-01" });
+    printing(signet, "only-promo", { ...only, isPromo: true, releasedAt: "2025-04-01" });
     ctx.index.build();
   });
 
@@ -122,7 +124,7 @@ describe("default printings and the printing picker", () => {
     const dates = body.printings.map((p) => p.releasedAt);
     expect(dates).toEqual([...dates].sort().reverse());
     const byId = new Map(body.printings.map((p) => [p.id, p]));
-    expect(byId.get("sol-regular-new")).toMatchObject({ isRegular: true, treatments: [], setName: "Test Set", releasedAt: "2030-01-01", set: "frc", collectorNumber: "20" });
+    expect(byId.get("sol-regular-new")).toMatchObject({ isRegular: true, treatments: [], setName: "Test Set", releasedAt: "2025-01-01", set: "frc", collectorNumber: "20" });
     expect(byId.get("sol-borderless")!.treatments).toEqual(["Borderless", "Inverted frame", "Booster Fun"]);
     expect(byId.get("sol-showcase")!.treatments).toEqual(["Showcase", "Booster Fun"]);
     expect(byId.get("sol-extended")!.treatments).toEqual(["Extended art"]);
