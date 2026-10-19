@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { BRACKET_NAMES, MAX_SEATS, type AgentPick, type Bracket, type FriendInfo, type RoomInfo, type RoomInviteInfo } from "@cgwf/shared";
+import { BRACKET_NAMES, MAX_SEATS, agentPoolIsSmall, agentPoolSize, nearLabel, type AgentBracketChoice, type AgentPick, type AgentPoolCounts, type Bracket, type FriendInfo, type RoomInfo, type RoomInviteInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { Avatar } from "../components/Avatar";
 import { isOwner, useUser } from "../user";
@@ -276,11 +276,34 @@ function AgentsControl({ room }: { room: RoomInfo }) {
   const humans = room.members.filter((m) => m.role === "player" && !m.isAgent).length;
   const free = Math.max(0, MAX_SEATS - humans);
   const [count, setCount] = useState(Math.min(3, free));
-  const [bracket, setBracket] = useState<Bracket>(2);
+  const [bracket, setBracket] = useState<AgentBracketChoice>(2);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [poolNote, setPoolNote] = useState<string | null>(null);
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [picks, setPicks] = useState<AgentPick[] | null>(null);
+  const [pool, setPool] = useState<AgentPoolCounts | null>(null);
+  const [touched, setTouched] = useState(false);
+
+  // Decks per bracket for the options, and the host's deck bracket (the default choice). Re-read when
+  // the host changes deck.
+  const hostDeck = room.members.find((m) => m.userId === room.hostId)?.deckId ?? null;
+  useEffect(() => {
+    let live = true;
+    api.agents
+      .pool(room.code)
+      .then((p) => {
+        if (!live) return;
+        setPool(p);
+        if (!touched && p.hostBracket) setBracket(p.hostBracket);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [room.code, hostDeck]);
+  const poolSize = pool ? agentPoolSize(pool, bracket) : null;
+  const seats = Math.max(1, Math.min(count, free || 1));
 
   useEffect(() => {
     if (room.engine) {
@@ -305,7 +328,7 @@ function AgentsControl({ room }: { room: RoomInfo }) {
     try {
       const r = await api.agents.add(room.code, { count, bracket });
       setPicks(r.agents);
-      if (r.eligible === 0) setNote(`No agent-eligible decks at Bracket ${bracket}; used any eligible deck.`);
+      setPoolNote(r.pool?.note ?? null);
     } catch (e) {
       setNote((e as Error).message);
     } finally {
@@ -331,12 +354,22 @@ function AgentsControl({ room }: { room: RoomInfo }) {
       <div className="agents-form">
         <label>
           Bracket{" "}
-          <select value={bracket} onChange={(e) => setBracket(Number(e.target.value) as Bracket)}>
+          <select
+            value={String(bracket)}
+            onChange={(e) => {
+              setTouched(true);
+              setBracket(e.target.value === "near" ? "near" : (Number(e.target.value) as Bracket));
+            }}
+          >
             {([1, 2, 3, 4, 5] as const).map((b) => (
               <option key={b} value={b}>
                 {b} · {BRACKET_NAMES[b]}
+                {pool ? ` · ${pool.eligible[b]} ${pool.eligible[b] === 1 ? "deck" : "decks"}` : ""}
               </option>
             ))}
+            <option value="near">
+              Any bracket near mine{pool ? ` (${nearLabel(pool.hostBracket)}) · ${agentPoolSize(pool, "near")} decks` : ""}
+            </option>
           </select>
         </label>
         <label>
@@ -358,6 +391,14 @@ function AgentsControl({ room }: { room: RoomInfo }) {
           </button>
         )}
       </div>
+      {poolSize !== null && agentPoolIsSmall(poolSize, seats) && (
+        <p className="small warn">
+          {poolSize === 0
+            ? "No decks for bots at this bracket: they will be dealt from every bracket."
+            : `Only ${poolSize} ${poolSize === 1 ? "deck" : "decks"} at this bracket; re-rolls will repeat.`}
+        </p>
+      )}
+      {poolNote && <p className="small muted">{poolNote}</p>}
       {picks && picks.length > 0 && (
         <ul className="small agents-picks">
           {picks.map((p) => (

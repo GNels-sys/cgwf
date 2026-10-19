@@ -17,6 +17,7 @@ import { PreconImporter } from "./library/precons.js";
 import { EdhrecClient, type FetchLike as EdhrecFetch } from "./library/edhrec/client.js";
 import { EngineCoverageChecker, type CoverageChecker } from "./library/edhrec/coverage.js";
 import { EdhrecImporter } from "./library/edhrec/importer.js";
+import { LibraryCoverage } from "./library/coverage.js";
 import { LibraryService } from "./library/service.js";
 import { registerAnalysisRoutes } from "./routes/analysis.js";
 import { registerLibraryRoutes } from "./routes/library.js";
@@ -54,6 +55,7 @@ export interface AppContext {
   library: LibraryService;
   precons: PreconImporter;
   edhrec: EdhrecImporter;
+  libraryCoverage: LibraryCoverage;
   agents: AgentManager;
   social: SocialService;
   submissions: SubmissionService;
@@ -149,8 +151,12 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   registerCardRoutes(app, { handle, index, ingestor });
   registerSocialRoutes(app, { handle, social, submissions, roomsManager });
   registerAnalysisRoutes(app, { handle, analyzer });
-  const edhrec = new EdhrecImporter(handle, index, library, analyzer, edhrecClient, opts.edhrecCoverage !== undefined ? opts.edhrecCoverage : new EngineCoverageChecker(engine), app.log);
-  registerLibraryRoutes(app, { handle, library, precons, edhrec });
+  const coverageChecker = opts.edhrecCoverage !== undefined ? opts.edhrecCoverage : new EngineCoverageChecker(engine);
+  const edhrec = new EdhrecImporter(handle, index, library, analyzer, edhrecClient, coverageChecker, app.log);
+  // Library-wide Forge check (any source); precon imports run it for the decks they add.
+  const libraryCoverage = new LibraryCoverage(handle, library, coverageChecker, app.log);
+  precons.setCoverage(libraryCoverage);
+  registerLibraryRoutes(app, { handle, library, precons, edhrec, coverage: libraryCoverage });
   registerStatsRoutes(app, { handle, analyzer, library });
   registerAgentRoutes(app, { handle, agents, roomsManager });
   registerAdminRoutes(app, { handle, roomsManager, presence });
@@ -214,5 +220,5 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, edhrec, agents, social, submissions, singles, engine };
+  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, edhrec, libraryCoverage, agents, social, submissions, singles, engine };
 }

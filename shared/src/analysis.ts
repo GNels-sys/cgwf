@@ -153,6 +153,19 @@ export interface LibraryDeckSummary {
   /** User id credited with a user deck (the submitter, Phase 8), null for precons. */
   createdBy: string | null;
   createdByName: string | null;
+  /** Rules-engine check for any source (2026-10-19); null = never checked. */
+  engineCheck?: LibraryEngineCheck | null;
+}
+
+export interface LibraryEngineCheck {
+  checkedAt: string | null;
+  /** Cards Forge cannot play (empty = all known); null when the check could not run. */
+  missing: string[] | null;
+  /** Why an engine table would refuse the deck (size, singleton, colour identity...). */
+  problems: string[];
+  error: string | null;
+  /** Who set agent eligibility last: the owner by hand, or a coverage check. */
+  eligibleBy: "owner" | "coverage" | null;
 }
 
 export type LibrarySource = "precon" | "user" | "edhrec";
@@ -204,7 +217,7 @@ export interface LibraryDeckDetail extends LibraryDeckSummary {
 
 export interface LibraryImportState {
   running: boolean;
-  phase: "idle" | "list" | "decks" | "done" | "error";
+  phase: "idle" | "list" | "decks" | "coverage" | "done" | "error";
   total: number;
   done: number;
   imported: number;
@@ -218,6 +231,29 @@ export interface LibraryImportState {
 export interface LibraryListResponse {
   decks: LibraryDeckSummary[];
   importState: LibraryImportState;
+  /** Whole library per bracket, ignoring the filters: bot-eligible vs total (2026-10-19). */
+  bracketCounts: Record<Bracket, { eligible: number; total: number }>;
+}
+
+/** Library-wide Forge coverage check (`cli check-library-coverage`, owner route). */
+export interface LibraryCoverageState {
+  running: boolean;
+  phase: "idle" | "checking" | "done" | "error";
+  message: string;
+  total: number;
+  checked: number;
+  /** Switched on by this run. */
+  enabled: number;
+  /** Failing decks left on because the owner switched them on by hand. */
+  keptByOwner: number;
+  /** Decks Forge cannot play or that are not legal for engine tables. */
+  excluded: number;
+  /** Decks the check could not run for (engine down or busy). */
+  unchecked: number;
+  error: string | null;
+  reportPath: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
 }
 
 export interface LibraryPatchRequest {

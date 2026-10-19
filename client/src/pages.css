@@ -1691,3 +1691,26 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
   @keyframes card-hover-in { from { opacity: 0; } to { opacity: 1; } }
 }
 @media (hover: none), (pointer: coarse) { .card-hover-preview { display: none; } }
+
+/* Library: bot-eligible decks per bracket (2026-10-19). */
+.library-bracket-counts { margin-bottom: 16px; }
+.bracket-count-list { list-style: none; margin: 10px 0 6px; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.bracket-count {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--tech-line, var(--border));
+  border-radius: 4px 12px 4px 12px;
+  background: var(--bg-elev);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.bracket-count:hover, .bracket-count:focus-visible { border-color: var(--signal, var(--accent)); }
+.bracket-count.is-low { border-color: color-mix(in srgb, var(--danger, #d66) 60%, var(--border)); }
+.bracket-count.is-low strong { color: var(--danger, #d66); }
+@media (max-width: 600px) { .bracket-count-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

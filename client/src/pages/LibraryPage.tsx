@@ -1,7 +1,7 @@
 import { PageHeading } from "../components/PageHeading";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type LibraryDeckSummary, type LibraryImportState, type SubmissionInfo } from "@cgwf/shared";
+import { ARCHETYPE_LABELS, ARCHETYPE_TAGS, BRACKET_NAMES, type LibraryCoverageState, type LibraryDeckSummary, type LibraryImportState, type LibraryListResponse, type SubmissionInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { EdhrecCredit } from "../components/EdhrecCredit";
 import { RequireUser } from "../components/RequireUser";
@@ -193,8 +193,68 @@ function SubmissionQueue({ onChanged }: { onChanged: () => void }) {
   );
 }
 
+const BOT_POOL_LOW = 15;
+
+/**
+ * Bot-eligible decks per bracket for the whole library, at the top of the page (2026-10-19: Bracket 2
+ * had 4 eligible decks out of 197 and bots kept dealing the same four). Tap a bracket to filter to it.
+ * "Check with the rules engine" runs every deck through Forge and switches on the ones it can play
+ * (never a deck you switched on or off yourself).
+ */
+function BracketCounts({ counts, onPick, onChecked }: { counts: LibraryListResponse["bracketCounts"]; onPick: (b: number) => void; onChecked: () => void }) {
+  const [check, setCheck] = useState<LibraryCoverageState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!check?.running) return;
+    const t = setInterval(() => {
+      api.library
+        .coverageState()
+        .then((r) => {
+          setCheck(r.state);
+          if (!r.state.running) onChecked();
+        })
+        .catch(() => undefined);
+    }, 3000);
+    return () => clearInterval(t);
+  }, [check?.running, onChecked]);
+  const run = async () => {
+    setError(null);
+    try {
+      setCheck((await api.library.checkCoverage({ enable: true })).state);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <section className="notice library-bracket-counts">
+      <div className="row-between">
+        <strong>Decks the bots can use</strong>
+        <button type="button" className="btn btn-small" disabled={check?.running} onClick={() => void run()}>
+          {check?.running ? "Checking..." : "Check with the rules engine"}
+        </button>
+      </div>
+      <ul className="bracket-count-list">
+        {([1, 2, 3, 4, 5] as const).map((b) => (
+          <li key={b}>
+            <button type="button" className={`bracket-count${counts[b].eligible < BOT_POOL_LOW ? " is-low" : ""}`} onClick={() => onPick(b)} title={`Show Bracket ${b}`}>
+              <span className={`bracket-pill b${b}`}>B{b}</span>
+              <span>
+                <strong>{counts[b].eligible}</strong> of {counts[b].total}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {check && <p className="small muted">{check.message}</p>}
+      {error && <p className="small error">{error}</p>}
+      <p className="small muted">Fewer than {BOT_POOL_LOW} at a bracket and re-rolls start repeating. The check never changes a deck you switched on or off yourself.</p>
+    </section>
+  );
+}
+
 function LibraryList() {
   const [decks, setDecks] = useState<LibraryDeckSummary[] | null>(null);
+  const [counts, setCounts] = useState<LibraryListResponse["bracketCounts"] | null>(null);
   const [state, setState] = useState<LibraryImportState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bracket, setBracket] = useState(0);
@@ -208,6 +268,7 @@ function LibraryList() {
       const r = await api.library.list({ bracket, tag, source, agent, q });
       setDecks(r.decks);
       setState(r.importState);
+      setCounts(r.bracketCounts ?? null);
       setError(null);
     } catch (e) {
       setError((e as Error).message);
@@ -239,6 +300,7 @@ function LibraryList() {
   return (
     <>
       <SubmissionQueue onChanged={() => void load()} />
+      {counts && <BracketCounts counts={counts} onPick={setBracket} onChecked={() => void load()} />}
       {state && <ImportBox state={state} onStart={(f) => void start(f)} />}
       <div className="library-filters">
         <select value={bracket} onChange={(e) => setBracket(Number(e.target.value))} aria-label="Bracket">

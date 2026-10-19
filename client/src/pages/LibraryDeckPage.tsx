@@ -136,6 +136,16 @@ function Editor({ id }: { id: string }) {
       </p>
 
       <EdhrecCredit deck={deck} />
+      {deck.source !== "edhrec" && deck.engineCheck && (deck.engineCheck.missing?.length || deck.engineCheck.problems.length || deck.engineCheck.error) ? (
+        <div className="notice">
+          <p className="small warn">
+            {deck.engineCheck.missing?.length ? `The rules engine cannot play ${deck.engineCheck.missing.join(", ")}. ` : ""}
+            {deck.engineCheck.problems.length ? `An engine table would refuse this deck: ${deck.engineCheck.problems.join(" ")} ` : ""}
+            {deck.engineCheck.missing === null && deck.engineCheck.error ? `Rules-engine check not run (${deck.engineCheck.error}). ` : ""}
+            {deck.agentEligible ? "You switched it on for bots yourself, so it stays on." : "Computer opponents never pick it; people can still play it."}
+          </p>
+        </div>
+      ) : null}
 
       <section className="library-edit surface">
         <label className="field">

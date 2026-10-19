@@ -4,7 +4,14 @@ import type { FastifyBaseLogger } from "fastify";
 import {
   AVATARS,
   AVATAR_COLORS,
+  isAgentBracketChoice,
+  isArchetypeTag,
   isBracket,
+  nearBrackets,
+  type AddAgentsResponse,
+  type AgentBracketChoice,
+  type AgentPoolCounts,
+  type AgentPoolInfo,
   type AgentDecisionInfo,
   type AgentGameSummary,
   type AgentPick,
@@ -21,6 +28,7 @@ import type { DbHandle } from "../db/index.js";
 import { agentDecisions, agentRuns, deckCards, decks, libraryDecks, rooms, users } from "../db/schema.js";
 import type { LibraryService } from "../library/service.js";
 import { RoomError, type LiveRoom } from "../rooms/live.js";
+import { libraryDeckIdOf } from "../rooms/deck.js";
 import type { Llm } from "./llm.js";
 import { costOf } from "./pricing.js";
 import { loadPrimers } from "./primers.js";
@@ -151,6 +159,12 @@ export class AgentManager {
   private async hostTags(room: LiveRoom, hostId: string): Promise<{ tags: Set<ArchetypeTag>; bracket: Bracket | null }> {
     const m = room.member(hostId);
     if (!m?.deckId) return { tags: new Set(), bracket: null };
+    // A library deck at the host's seat: its stored bracket and tags (it has no deck_cards rows).
+    const libId = libraryDeckIdOf(m.deckId);
+    if (libId) {
+      const row = this.d.library.getRow(libId);
+      return row ? { tags: new Set(row.tags.filter(isArchetypeTag)), bracket: isBracket(row.bracket) ? (row.bracket as Bracket) : null } : { tags: new Set(), bracket: null };
+    }
     try {
       const cards = this.d.analyzer.loadDeckCards(m.deckId);
       const a = (await this.d.analyzer.analyze(cards, { combos: "skip" })).analysis;
@@ -160,15 +174,23 @@ export class AgentManager {
     }
   }
 
-  /** Replace the lobby's agents with `count` fresh picks of the given bracket. */
-  async addAgents(room: LiveRoom, hostId: string, opts: { count: number; bracket: Bracket }): Promise<{ agents: AgentPick[]; eligible: number }> {
+  /** Bot-eligible decks per bracket, and the host's deck bracket in a room (the lobby's bot box). */
+  async poolCounts(room: LiveRoom | null, hostId: string): Promise<AgentPoolCounts> {
+    const counts = this.d.library.bracketCounts();
+    const eligible = { 1: counts[1].eligible, 2: counts[2].eligible, 3: counts[3].eligible, 4: counts[4].eligible, 5: counts[5].eligible } as Record<Bracket, number>;
+    const hostBracket = room ? (await this.hostTags(room, hostId)).bracket : null;
+    return { eligible, hostBracket };
+  }
+
+  /** Replace the lobby's agents with `count` fresh picks of the given bracket (or "near" the host's). */
+  async addAgents(room: LiveRoom, hostId: string, opts: { count: number; bracket: AgentBracketChoice }): Promise<AddAgentsResponse> {
     // Engine tables: the bot seats are played by Forge's AI (no model, no spend), so the AGENTS_ENABLED flag does not apply.
     if (!this.enabled && !room.isEngine) throw new RoomError("agents are switched off");
     const row = room.refreshRow();
     if (row.status !== "lobby") throw new RoomError("agents can only be added in the lobby");
     if (row.hostUserId !== hostId) throw new RoomError("only the host can add agents");
     const count = Math.max(1, Math.min(MAX_AGENTS, Math.floor(opts.count)));
-    if (!isBracket(opts.bracket)) throw new RoomError("bracket must be 1-5");
+    if (!isAgentBracketChoice(opts.bracket)) throw new RoomError("bracket must be 1-5 or near");
     this.removeAgents(room);
 
     const humans = room.members().filter((m) => m.role === "player" && m.seat !== null);
@@ -176,9 +198,21 @@ export class AgentManager {
     if (freeSeats.length === 0) throw new RoomError("no free seats");
 
     const host = await this.hostTags(room, hostId);
-    let pool = this.d.library.list({ agentEligible: true, bracket: opts.bracket });
+    const brackets: Bracket[] = opts.bracket === "near" ? nearBrackets(host.bracket) : [opts.bracket];
+    let pool = this.d.library.list({ agentEligible: true }).filter((d) => brackets.includes(d.bracket));
     const eligible = pool.length;
-    if (pool.length === 0) pool = this.d.library.list({ agentEligible: true });
+    const wanted = brackets.length === 1 ? `Bracket ${brackets[0]}` : `Brackets ${brackets[0]}-${brackets[brackets.length - 1]}`;
+    let poolInfo: AgentPoolInfo = {
+      brackets,
+      size: pool.length,
+      fallback: false,
+      note: opts.bracket === "near" ? `Dealt from ${wanted} (${host.bracket ? `your deck is Bracket ${host.bracket}` : "your deck's bracket is unknown, so around Bracket 2"}).` : null,
+    };
+    if (pool.length === 0) {
+      // Keep the table playable: every eligible deck, and say so in the picks.
+      pool = this.d.library.list({ agentEligible: true });
+      poolInfo = { brackets: [1, 2, 3, 4, 5], size: pool.length, fallback: true, note: `No ${wanted} decks for bots; dealt from all brackets.` };
+    }
     if (pool.length === 0) throw new RoomError("no agent-eligible decks in the library; mark some on the Library page");
 
     // Weighted random draw that favours strategies not yet at the table, skips decks this host was
@@ -213,7 +247,7 @@ export class AgentManager {
       out.push({ userId, seat, name, libraryDeckId: deck.id, deckName: deck.name, commanders: deck.commanders, bracket: deck.bracket, tags: deck.tags });
     });
     room.broadcastRoom();
-    return { agents: out, eligible };
+    return { agents: out, eligible, pool: poolInfo };
   }
 
   // ------------------------------------------------------------ games

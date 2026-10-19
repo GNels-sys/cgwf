@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { isBracket, type AddAgentsRequest, type AddAgentsResponse, type AgentGamesResponse, type AgentsStatus, type DraftPrimerResponse, type RoomAgentsResponse } from "@cgwf/shared";
+import { isAgentBracketChoice, type AddAgentsRequest, type AddAgentsResponse, type AgentGamesResponse, type AgentPoolCounts, type AgentsStatus, type DraftPrimerResponse, type RoomAgentsResponse } from "@cgwf/shared";
 import type { AgentManager } from "../agents/manager.js";
 import { requireOwner, requireUser } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
@@ -49,14 +49,24 @@ export function registerAgentRoutes(app: FastifyInstance, deps: Deps): void {
     const room = findRoom(req.params.code);
     if (!room) return reply.code(404).send({ error: "no room with that code" });
     if (!room.isEngine && !gate(reply)) return; // engine tables use Forge's AI: no flag needed
-    const bracket = Number(req.body?.bracket ?? 2);
-    if (!isBracket(bracket)) return reply.code(400).send({ error: "bracket must be 1-5" });
+    const raw = req.body?.bracket ?? 2;
+    const bracket = raw === "near" ? "near" : Number(raw);
+    if (!isAgentBracketChoice(bracket)) return reply.code(400).send({ error: "bracket must be 1-5 or near" });
     try {
       return await agents.addAgents(room, req.user!.id, { count: Number(req.body?.count ?? 1), bracket });
     } catch (err) {
       if (err instanceof RoomError) return reply.code(400).send({ error: err.message });
       throw err;
     }
+  });
+
+  /**
+   * Bot-eligible library decks per bracket, and with ?room=CODE the host's deck bracket there: the
+   * lobby's bot box labels its bracket options with these. Not behind AGENTS_ENABLED (engine tables).
+   */
+  app.get<{ Querystring: { room?: string } }>("/api/agents/pool", { preHandler: owner }, async (req): Promise<AgentPoolCounts> => {
+    const room = req.query.room ? findRoom(req.query.room) : null;
+    return agents.poolCounts(room ?? null, req.user!.id);
   });
 
   app.delete<{ Params: { code: string } }>("/api/rooms/:code/agents", { preHandler: owner }, async (req, reply) => {

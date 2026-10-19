@@ -4,7 +4,7 @@ import os from "node:os";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
-import { viewFor, type RegisterResponse } from "@cgwf/shared";
+import { viewFor, type AddAgentsResponse, type AgentPoolCounts, type RegisterResponse } from "@cgwf/shared";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cgwf-agents-"));
 process.env.DATA_DIR = tmp;
@@ -160,6 +160,35 @@ describe("computer opponents play through the normal event path", () => {
     expect(new Set(dealt).size).toBe(5);
     const remembered = ctx.agents.recentDecks(ownerId);
     expect(remembered.length).toBeGreaterThanOrEqual(5);
+  });
+
+  it("bot box: decks per bracket, 'near my bracket', and an empty bracket falls back with a note", async () => {
+    const libId = (name: string) => ctx.library.list({}).find((d) => d.name === name)!.id;
+    const roomRes = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(), payload: {} });
+    const code = (roomRes.json() as { room: { code: string } }).room.code;
+    // The host plays a library deck (Bracket 2), so "near" = Brackets 1-3.
+    ctx.roomsManager.get(code)!.takeSeat(ownerId, 0, `library:${libId("Atraxa A")}`);
+    ctx.library.patch(libId("Atraxa E"), { bracket: 3 });
+    ctx.library.patch(libId("Atraxa F"), { bracket: 1 });
+    try {
+      const pool = (await ctx.app.inject({ method: "GET", url: `/api/agents/pool?room=${code}`, headers: auth() })).json() as AgentPoolCounts;
+      expect(pool).toEqual({ eligible: { 1: 1, 2: 4, 3: 1, 4: 0, 5: 0 }, hostBracket: 2 });
+
+      const near = (await ctx.app.inject({ method: "POST", url: `/api/rooms/${code}/agents`, headers: auth(), payload: { count: 3, bracket: "near" } })).json() as AddAgentsResponse;
+      expect(near.pool).toMatchObject({ brackets: [1, 2, 3], size: 6, fallback: false });
+      expect(near.pool.note).toMatch(/Brackets 1-3 \(your deck is Bracket 2\)/);
+      expect(near.agents.every((p) => p.bracket >= 1 && p.bracket <= 3)).toBe(true);
+
+      const empty = await ctx.app.inject({ method: "POST", url: `/api/rooms/${code}/agents`, headers: auth(), payload: { count: 1, bracket: 5 } });
+      expect(empty.statusCode).toBe(200);
+      expect((empty.json() as AddAgentsResponse).pool).toMatchObject({ fallback: true, note: "No Bracket 5 decks for bots; dealt from all brackets." });
+      expect((empty.json() as AddAgentsResponse).eligible).toBe(0);
+
+      expect((await ctx.app.inject({ method: "POST", url: `/api/rooms/${code}/agents`, headers: auth(), payload: { count: 1, bracket: "far" } })).statusCode).toBe(400);
+    } finally {
+      ctx.library.patch(libId("Atraxa E"), { bracket: 2 });
+      ctx.library.patch(libId("Atraxa F"), { bracket: 2 });
+    }
   });
 
   it("with a model: one call per decision, rationale and cost recorded, and the game cap concedes politely", async () => {

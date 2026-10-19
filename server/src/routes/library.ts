@@ -8,12 +8,14 @@ import { deckCards, decks } from "../db/schema.js";
 import type { EdhrecImporter } from "../library/edhrec/importer.js";
 import type { PreconImporter } from "../library/precons.js";
 import type { LibraryEntry, LibraryService } from "../library/service.js";
+import type { LibraryCoverage } from "../library/coverage.js";
 
 interface Deps {
   handle: DbHandle;
   library: LibraryService;
   precons: PreconImporter;
   edhrec: EdhrecImporter;
+  coverage: LibraryCoverage;
 }
 
 /**
@@ -29,7 +31,7 @@ interface Deps {
  *   GET    /api/library/:id/primer-skeleton
  */
 export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
-  const { handle, library, precons, edhrec } = deps;
+  const { handle, library, precons, edhrec, coverage } = deps;
   // requireUser first so req.user is set; requireOwner then checks users.is_owner (Phase 5).
   const owner = [requireUser(handle), requireOwner(handle)];
 
@@ -46,6 +48,7 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
         agentEligible: req.query.agent === "1" ? true : req.query.agent === "0" ? false : undefined,
       }),
       importState: precons.state,
+      bracketCounts: library.bracketCounts(),
     };
   });
 
@@ -97,6 +100,28 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
     return reply.code(202).send({ started: true, state: edhrec.state });
   });
   app.get("/api/library/import-edhrec", { preHandler: owner }, async () => ({ state: edhrec.state }));
+
+  /**
+   * Library-wide rules-engine check (library/coverage.ts): the machine (loopback / ADMIN_TOKEN, driven by
+   * `cli check-library-coverage`) and the owner. Body {source?, enable?}. Never changes a deck the owner
+   * switched on or off by hand.
+   */
+  type CoverageBody = { source?: string; enable?: boolean } | null;
+  const startCoverage = (body: CoverageBody) => coverage.start({ source: isLibrarySource(body?.source) ? body.source : undefined, enable: Boolean(body?.enable) });
+  app.post<{ Body: CoverageBody }>("/api/admin/library-coverage", async (req, reply) => {
+    if (!machine(req)) return reply.code(403).send({ error: "forbidden" });
+    if (!startCoverage(req.body)) return reply.code(409).send({ error: "a check is already running", state: coverage.state });
+    return reply.code(202).send({ started: true, state: coverage.state });
+  });
+  app.get("/api/admin/library-coverage", async (req, reply) => {
+    if (!machine(req)) return reply.code(403).send({ error: "forbidden" });
+    return { state: coverage.state };
+  });
+  app.post<{ Body: CoverageBody }>("/api/library/coverage", { preHandler: owner }, async (req, reply) => {
+    if (!startCoverage(req.body)) return reply.code(409).send({ error: "a check is already running", state: coverage.state });
+    return reply.code(202).send({ started: true, state: coverage.state });
+  });
+  app.get("/api/library/coverage", { preHandler: owner }, async () => ({ state: coverage.state }));
 
   app.post<{ Body: { force?: boolean; combos?: boolean } | null }>("/api/library/import-precons", { preHandler: owner }, async (req, reply) => {
     if (precons.state.running) return reply.code(409).send({ error: "import already running", importState: precons.state });

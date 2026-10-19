@@ -7,6 +7,7 @@ import type { DbHandle } from "../db/index.js";
 import { cards } from "../db/schema.js";
 import type { NameIndex } from "../search/index.js";
 import type { LibraryEntry, LibraryService } from "./service.js";
+import type { LibraryCoverage } from "./coverage.js";
 
 /**
  * Commander preconstructed decklists from MTGJSON (https://mtgjson.com, MIT
@@ -63,6 +64,12 @@ export interface PreconImportOptions {
 export class PreconImporter {
   readonly state: LibraryImportState = { running: false, phase: "idle", total: 0, done: 0, imported: 0, skipped: 0, errors: [], error: null, startedAt: null, finishedAt: null };
   private lastRequestAt = 0;
+  private coverage: LibraryCoverage | null = null;
+
+  /** New precons go through the rules-engine check and switch on for bots when Forge can play them. */
+  setCoverage(coverage: LibraryCoverage): void {
+    this.coverage = coverage;
+  }
 
   constructor(
     private readonly handle: DbHandle,
@@ -123,6 +130,7 @@ export class PreconImporter {
       if (opts.limit) decks = decks.slice(0, opts.limit);
       this.state.total = decks.length;
       this.state.phase = "decks";
+      const added: string[] = [];
       for (const d of decks) {
         try {
           if (!opts.force && this.library.bySourceKey(PRECON_KEY(d.fileName))) {
@@ -141,7 +149,7 @@ export class PreconImporter {
             this.state.skipped++;
             continue;
           }
-          await this.library.create(
+          const created = await this.library.create(
             {
               name: d.name,
               source: "precon",
@@ -154,6 +162,7 @@ export class PreconImporter {
             },
             { combos: opts.combos === false ? "skip" : "cached" },
           );
+          added.push(created.id);
           this.state.imported++;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -161,6 +170,19 @@ export class PreconImporter {
           this.log?.warn({ err, deck: d.fileName }, "precon import failed for one deck");
         } finally {
           this.state.done++;
+        }
+      }
+      if (added.length && this.coverage) {
+        this.state.phase = "coverage";
+        const report = await this.coverage.check({ ids: added, enable: true });
+        if (report) {
+          const off = report.lines.filter((l) => !l.eligible);
+          for (const l of off) {
+            const why = [l.missing?.length ? `Forge cannot play ${l.missing.join(", ")}` : null, l.problems.length ? l.problems.join(" ") : null, l.missing === null ? `not checked: ${l.error ?? "no engine"}` : null].filter(Boolean).join("; ");
+            this.state.errors.push(`${l.name}: not for bots (${why})`);
+          }
+        } else {
+          this.state.errors.push("rules-engine check not run (another check is running); run cli check-library-coverage --source precon --enable");
         }
       }
       this.state.phase = "done";
