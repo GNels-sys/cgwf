@@ -1464,6 +1464,35 @@ against an in-memory fake Discord.
   bar (`.voice-btn`, `a[aria-label='Join voice on Discord']`, also in `layoutCheck`'s control list);
   `cgwfLayoutCheck()` returned [] at 812x375 and 375x812 with it present.
 
+## AI Coach (2026-10-19, owner only)
+
+The owner wants an AI to review games they lost (and won) and say where better plays were available.
+Two milestones; M1 records what M2 needs, with no model spend.
+
+**M1: decision snapshots** (`server/src/coach/snapshots.ts`, table `decision_snapshots`, migration
+0015). On engine tables, every prompt a HUMAN seat answers (`EngineTable.answer`) is recorded with that
+seat's OWN view at that moment, built only from the prompt frame the engine sent that seat (the view the
+engine's hidden-information audit already covers) and trimmed again by `buildSnapshot`: round / turn /
+phase / active seat, the prompt kind, title and option labels, the answer (raw + chosen labels), the
+seat's own hand / mana pool / lands played, every player's public zones (battlefield with tapped / sick /
+P/T / counters / damage / attachments, graveyard, exile with another player's face-down cards unnamed,
+command zone), life, poison, commander damage, hand and library COUNTS only, the stack and combat. The
+builder copies named hands only for the seat itself and never reads a library list, so even a leaky
+engine frame cannot put another hand or a library into a snapshot (tested with one).
+- Skipped: a pass when nothing was offered; the same pass again (same turn, step, options, stack depth)
+  is collapsed. Bots (Forge AI seats) answer nothing here, so they record nothing.
+- Storage: gzip JSON blob per decision, `room_id` = `game_results.id` (no FK: a snapshot can precede the
+  result row), seat, user id, relay seq, turn, prompt kind. Size budget: ~1-3 KB JSON (~0.5-1 KB
+  stored) per decision, at most 2000 per seat per game, so a game stays well under 1 MB.
+- Never slows a prompt or fails a game: built in try/catch, compressed with async `zlib.gzip`, inserted
+  in the callback, errors logged. `DecisionRecorder.flush()` for tests.
+- Reading: `GET /api/rooms/:code/decisions` returns only the caller's own snapshots (any other seat
+  gets an empty list); M2 reads the owner's through the same `forUser`.
+- Retention: 90 days (`SNAPSHOT_RETENTION_DAYS`), cleaned 90 s after boot and daily.
+- Tests: `coach/snapshots.test.ts` (own hand only, no other hand / library / face-down names; retention),
+  engine.test "records a decision snapshot ..." (real relay path, a leaky frame, collapsed passes,
+  another seat reads nothing).
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**
