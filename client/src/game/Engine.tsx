@@ -4,6 +4,7 @@ import { CardImage } from "../components/CardImage";
 import { CardTile } from "./CardTile";
 import { describeOption, sheetPromptSummary } from "./EnginePrompts";
 import { findCard, nameOf, type Printings } from "./model";
+import { mulliganNote } from "./openingHandText";
 
 /**
  * Rules-engine tables: the UI for the prompt the engine is waiting on. The engine decides what is
@@ -468,7 +469,7 @@ export function EngineMulligan({ prompt, view, printings, me, pick, setPick, ans
       <div className="mulligan">
         <div className="mulligan-box">
           <h2>Keep this hand?</h2>
-          <p className="muted small">{prompt.cardsToReturn > 0 ? `${prompt.hand.length} cards after ${prompt.cardsToReturn} mulligan${prompt.cardsToReturn === 1 ? "" : "s"}. Another mulligan deals seven and puts ${prompt.cardsToReturn + 1} on the bottom.` : "Seven cards. The rules engine shuffles and deals."}</p>
+          <p className="muted small">{mulliganNote(prompt)}</p>
           <div className="mulligan-hand">
             {prompt.hand.map((h) => {
               const c = findCard(view, h.iid) ?? mePlayer.hand.cards.find((x) => x.iid === h.iid);
@@ -492,13 +493,18 @@ export function EngineMulligan({ prompt, view, printings, me, pick, setPick, ans
       </div>
     );
   }
-  if (prompt.kind === "chooseMany" && prompt.reason === "mulligan") {
+  if (prompt.kind === "chooseMany" && (prompt.reason === "mulligan" || prompt.reason === "putBack")) {
     const picked = pick.kind === "select" ? pick.picked : [];
+    const putBack = prompt.reason === "putBack";
     return (
       <div className="mulligan">
         <div className="mulligan-box">
-          <h2>Put {prompt.min} on the bottom</h2>
-          <p className="muted small">Tap the cards to put on the bottom of your library, then confirm.</p>
+          <h2>{putBack ? `Put ${prompt.min} back into your library` : `Put ${prompt.min} on the bottom`}</h2>
+          <p className="muted small">
+            {putBack
+              ? `Draw 10: pick ${prompt.min} of your ten. They are shuffled back into your library and nobody sees which; the other ${prompt.options.length - prompt.min} are your opening hand. Everyone picks at the same time.`
+              : "Tap the cards to put on the bottom of your library, then confirm."}
+          </p>
           <div className="mulligan-hand">
             {prompt.options.map((o) => {
               if (o.kind !== "card") return null;

@@ -82,6 +82,7 @@ public final class BridgeSession {
     private volatile Function<Player, JsonObject> viewBuilder;
     private volatile Runnable beforeAsk;
     private volatile StartingPlayer startingPlayer;
+    private volatile OpeningHand openingHand = OpeningHand.FORGE;
     private CompletableFuture<JsonObject> pending;
     private int pendingId = -1;
     private volatile JsonObject openPrompt;
@@ -244,4 +245,9 @@ public final class BridgeSession {
     public Player startingPlayer() { StartingPlayer s = startingPlayer; return s == null ? null : s.get(); }
 
     public void setStartingPlayer(StartingPlayer s) { this.startingPlayer = s; }
+
+    /** The table's opening-hand rule (Draw 7 with N free mulligans, or Draw 10 put 3 back). */
+    public OpeningHand openingHand() { return openingHand; }
+
+    public void setOpeningHand(OpeningHand o) { this.openingHand = o == null ? OpeningHand.FORGE : o; }
 }

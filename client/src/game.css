@@ -2644,3 +2644,12 @@ button.engine-row { cursor: pointer; width: 100%; }
   .d20-small .d20-value { font-size: 14px; }
   .first-roll-close { margin-top: 8px; }
 }
+
+/* ---------------------------------------------------------------- Opening hand (lobby setting, 2026-10-20) */
+.table-settings-hand { margin: 10px 0 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; }
+.table-settings-hand legend { padding: 0 4px; font-weight: 600; }
+.table-settings-hand-option { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 6px 0; cursor: pointer; }
+.table-settings-hand-option input { width: 20px; height: 20px; margin-top: 2px; flex: none; }
+.table-settings-hand-option.is-on strong { color: var(--accent); }
+.table-settings-rules { display: block; margin-top: 2px; line-height: 1.35; }
+.table-settings-free select { width: 100%; max-width: 280px; }

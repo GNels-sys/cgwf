@@ -201,6 +201,10 @@ export const rooms = sqliteTable(
     voiceManualUrl: text("voice_manual_url"),
     /** Engine tables, lobby setting: "roll" (everyone rolls a D20 for who goes first, the default) or "random". */
     firstPlayer: text("first_player").notNull().default("roll"),
+    /** Engine tables, lobby setting: "draw7" (London mulligan, the default) or "draw10" (draw ten, put three back). */
+    openingHand: text("opening_hand").notNull().default("draw7"),
+    /** Draw 7: free mulligans per player (0-2, default 1, the official multiplayer rule). */
+    freeMulligans: integer("free_mulligans").notNull().default(1),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -234,6 +238,10 @@ export const gameResults = sqliteTable(
     startingSeat: integer("starting_seat"),
     /** How the starting seat was decided: "roll" | "random" (null for games from before 2026-10-19). */
     firstPlayerMethod: text("first_player_method"),
+    /** The opening-hand rule played: "draw7" | "draw10" (null for games from before 2026-10-20). */
+    openingHand: text("opening_hand"),
+    /** Draw 7: the table's free mulligans; null otherwise. */
+    freeMulligans: integer("free_mulligans"),
   },
   (t) => [index("game_results_counted_idx").on(t.counted)],
 );

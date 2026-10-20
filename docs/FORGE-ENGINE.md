@@ -72,6 +72,7 @@ Frames between CGwF and a browser carry no `gameId` (the room socket already sco
 | Frame | Fields | Notes |
 | --- | --- | --- |
 | `createGame` | `gameId`, `seed`, `seats: [{seat, kind: "human" \| "ai", name, deck, aiProfile?}]`, `rules: {format: "commander", startingLife: 40}` | `deck` is the JSON shape in 5. The engine answers `gameCreated {gameId, cardMap}` (6.2) or `error`. |
+| `createGame` `openingHand` | `{mode: "draw7" \| "draw10", freeMulligans: 0-2}` (2026-10-20) | Draw 7: Forge's London MulliganService with the table's free mulligans (the bottom count goes through `tuckCardsViaMulligan`). Draw 10: Forge's starting hand size 10, then every player puts three back into the library at once (shuffled), no mulligans. Absent: Forge's own rule. |
 | `beginGame` | `gameId`, `startingSeat?` | Only after `createGame {deferStart: true}` (2026-10-19): the table rolled a D20 (or picked at random) for who goes first; the engine fixes that seat as Forge's starting player and starts the game (mulligans next). `createGame` may also carry `startingSeat` directly. |
 | `attachSeat` / `detachSeat` | `gameId`, `seat` | Tells the engine a human is connected / gone (for autopilot timers, 7). |
 | `resync` | `gameId`, `seat` | Engine re-sends `state` for that seat and the open `prompt` if any. |

@@ -31,3 +31,4 @@ export * from "./printing.js";
 export * from "./coach.js";
 export * from "./doctor.js";
 export * from "./firstRoll.js";
+export * from "./openingHand.js";

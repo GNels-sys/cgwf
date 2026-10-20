@@ -101,7 +101,21 @@ export type EnginePrompt =
   /** Yes/no: optional costs ("pay 2 life?"), "you may" triggers, replacement effects, coin calls. `options` are the two button labels. */
   | { kind: "confirm"; promptId: number; title: string; detail: string | null; mode: string | null; options: string[]; source: string | null; card: EngineOptionCard | null }
   /** `serumPowder`: iids of Serum Powders in the hand; answering with one exiles the hand and draws that many, then asks again. */
-  | { kind: "mulligan"; promptId: number; title: string; cardsToReturn: number; hand: EngineOptionCard[]; serumPowder?: string[] }
+  | {
+      kind: "mulligan";
+      promptId: number;
+      title: string;
+      /** Cards already put on the bottom after this seat's mulligans. */
+      cardsToReturn: number;
+      hand: EngineOptionCard[];
+      serumPowder?: string[];
+      /** Mulligans this seat has taken so far. */
+      mulligans?: number;
+      /** The table's free mulligans (Draw 7 opening-hand rule). */
+      freeMulligans?: number;
+      /** Cards another mulligan would put on the bottom. */
+      nextBottom?: number;
+    }
   /** X, "choose a number", how many times to pay. `values` when only listed values are legal. */
   | { kind: "number"; promptId: number; title: string; source: string | null; min: number; max: number; values: number[] | null }
   /** Scry / surveil / "put them back in any order" / trigger order. With `buckets`, each item also goes into one of them. */

@@ -6,6 +6,7 @@ import type { PlayerView } from "./view.js";
 import type { EngineAnswer, EngineNotice, EngineStops } from "../engine.js";
 import type { RoomVoice } from "../discord.js";
 import type { FirstPlayerMethod, FirstRollInfo } from "../firstRoll.js";
+import type { OpeningHandRule } from "../openingHand.js";
 
 /**
  * Room + WebSocket protocol. The socket is opened at
@@ -68,6 +69,8 @@ export interface RoomInfo {
   firstPlayer: FirstPlayerMethod;
   /** Engine tables: the roll for who goes first (null before the start, and for random picks). */
   firstRoll: FirstRollInfo | null;
+  /** Engine tables, lobby setting (host): Draw 7 with N free mulligans (default 1), or Draw 10, put 3 back. */
+  openingHand: OpeningHandRule;
 }
 
 export const ROOM_CODE_LENGTH = 6;
@@ -84,7 +87,7 @@ export type ClientMessage =
   /** Host only, once the game has ended: new table, same seats and decks, fresh seed. */
   | { t: "rematch" }
   /** Host only, in the lobby: the Test-game toggle and the table bracket (null = automatic). */
-  | { t: "tableSettings"; testGame?: boolean; tableBracket?: number | null; firstPlayer?: FirstPlayerMethod }
+  | { t: "tableSettings"; testGame?: boolean; tableBracket?: number | null; firstPlayer?: FirstPlayerMethod; openingHand?: Partial<OpeningHandRule> }
   /** Engine tables, while rolling for who goes first: roll your D20 (the server rolls it). */
   | { t: "roll" }
   /** Host only (or the owner): close the table without recording a result. */

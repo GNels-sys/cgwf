@@ -1282,6 +1282,36 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   return value, re-ask on illegal answers, "no question when the rules leave no choice";
   `HiddenInformationTest` still audits every prompt's view. `server/src/engine/engine.test.ts`
   round-trips each kind through the relay to the seat's socket and back.
+- **Opening hand (2026-10-20).** Owner request: free mulligans for the table, and a "draw 10, put 3 back"
+  start. Lobby setting (host, frozen at start, shown to everyone with its rules in plain words from
+  `OPENING_HAND_TEXT` in `shared/src/openingHand.ts`; `rooms.opening_hand` / `free_mulligans`, migration
+  0020; recorded in `game_results.opening_hand` / `free_mulligans`; a rematch keeps it and who-goes-first).
+  Sent as `createGame.openingHand`; engine side `OpeningHand` (shared by every seat's controller like
+  `StartingPlayer`).
+  - **Draw 7 (London mulligan), Free mulligans 0 / 1 / 2 (default 1 = the official multiplayer rule).**
+    Forge's own `MulliganService` + `LondonMulligan` run the whole flow (deal, keep or shuffle back and draw
+    seven, Serum Powder, opening-hand actions). Forge's only free-mulligan setting is a flag (first mulligan
+    free with more than two players, or Brawl), and the service is built inside `GameAction.startGame`, so the
+    table's count is applied where Forge asks for it: `tuckCardsViaMulligan` (bridge and AI seats) answers with
+    mulligans taken minus the free ones (`OpeningHand.bottomNow`, from `PlayerStatistics.getMulliganCount`).
+    Forge's London asks for the bottom cards right after each redraw (then "keep?"), not once after keeping;
+    the outcome is the same. The keep prompt carries `mulligans`, `freeMulligans`, `nextBottom` for the line
+    under "Keep this hand?" (`client/src/game/openingHandText.ts`).
+  - **Draw 10, put 3 back (no mulligans)** (owner, 2026-10-20: not discarded, "the graveyard would favour
+    graveyard decks"). Forge deals ten (`Player.setStartingHandSize`). The first `mulliganKeepHand` Forge asks
+    (any seat) runs `GameSession.putBackAll` once on the game thread: every connected human gets a chooseMany
+    (`reason: "putBack"`, exactly 3 of their own ten) AT THE SAME TIME (helper threads; the game thread waits),
+    Forge's AI (`getCardsToDiscard`) picks for bots and absent seats; then each player's three go into the
+    library and Forge shuffles it (game RNG), logged "Alex put 3 cards back and shuffled." with no card named.
+    Every keep question then answers "keep" without asking. Nothing is discarded or revealed, so nothing
+    triggers; Leylines / Gemstone Caverns / Chancellors are offered afterwards from the seven.
+    Client: the mulligan modal with "Put 3 back into your library". `cgwfLayoutCheck()` checks a pregame
+    modal's own buttons while one is open (they cover the table by design).
+  - Tests: engine `OpeningHandTest` (real games: 0/1/2 free mulligans give bottoms [1,2] / [1] / [] and keep
+    5/6/7 after two mulligans; Draw 10 asks both humans for exactly 3 of 10 at once, never a mulligan, nothing
+    in any graveyard, 99 = library + hand, the three never appear in a later frame, the log line, Leyline still
+    offered), relay engine.test "opening hand" (host only, validation, reload, frozen, createGame, game_results),
+    `shared/src/openingHand.test.ts`, `client/src/game/openingHandText.test.ts`.
 - **Who goes first (2026-10-19).** Owner request: "roll to determine who goes first". Lobby setting (host,
   `rooms.first_player`, migration 0019): **Roll a D20** (default) or **Random**. On Start the relay sends
   `createGame` with `deferStart: true` (the engine builds the game, so missing cards are still caught before

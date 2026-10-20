@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code gameId} and, where seat-specific, {@code seat}. Browsers never connect here.
  *
  * <pre>
- * CGwF -> engine: createGame {rid, gameId, seed?, deferStart?, startingSeat?, seats:[{seat, kind:"human"|"ai", name, deck}]}
+ * CGwF -> engine: createGame {rid, gameId, seed?, deferStart?, startingSeat?, openingHand?: {mode:"draw7"|"draw10", freeMulligans}, seats:[{seat, kind:"human"|"ai", name, deck}]}
  *                 beginGame {gameId, startingSeat?}   (after createGame with deferStart, once the table rolled for who goes first)
  *                 answer {gameId, seat, promptId, ...}   setStops {gameId, seat, stops}   hold {gameId, seat, turn|null}
  *                 resync {gameId, seat}   attachSeat/detachSeat {gameId, seat}   concede {gameId, seat}
@@ -193,7 +193,12 @@ public final class EngineServer extends WebSocketServer {
             if (deck.resolved() == 0) throw new IllegalArgumentException("seat " + seat + ": no card of that deck is known to Forge");
             specs.add(new GameSession.SeatSpec(seat, human, name, deck));
         }
-        GameSession session = new GameSession(gameId, seed, specs, promptTimeoutMs, this::broadcast);
+        OpeningHand opening = OpeningHand.FORGE;
+        if (m.has("openingHand") && m.get("openingHand").isJsonObject()) {
+            JsonObject oh = m.getAsJsonObject("openingHand");
+            opening = OpeningHand.parse(str(oh, "mode"), optInt(oh, "freeMulligans"));
+        }
+        GameSession session = new GameSession(gameId, seed, specs, promptTimeoutMs, this::broadcast, opening);
         games.put(gameId, session);
         JsonObject created = session.createdFrame();
         if (rid != null) created.addProperty("rid", rid);
