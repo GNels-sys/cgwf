@@ -5,6 +5,7 @@ import { CardTile } from "./CardTile";
 import { describeOption, sheetPromptSummary } from "./EnginePrompts";
 import { findCard, nameOf, type Printings } from "./model";
 import { mulliganNote } from "./openingHandText";
+import { canConfirm, choiceLabel, isOptionalChoice, noneAnswer, noneLabel, noneQuestion } from "./optionalChoice";
 
 /**
  * Rules-engine tables: the UI for the prompt the engine is waiting on. The engine decides what is
@@ -168,12 +169,25 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
                 List
               </button>
             )}
-            <button className="btn btn-small btn-primary" disabled={picked.length < prompt.min || picked.length > prompt.max} onClick={() => answer({ promptId: id, options: picked })}>
-              Confirm
-            </button>
-            <button className="btn btn-small" onClick={() => answer({ promptId: id, options: [], cancel: true })}>
-              {prompt.cancelLabel ?? "Cancel"}
-            </button>
+            {isOptionalChoice(prompt) ? (
+              <>
+                <button className="btn btn-small" onClick={openList}>
+                  Choose...
+                </button>
+                <button className="btn btn-small btn-primary" disabled={!canConfirm(prompt, picked)} onClick={() => answer({ promptId: id, options: picked })}>
+                  {choiceLabel(prompt, picked, (o) => describeOption(o, view).title)}
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="btn btn-small btn-primary" disabled={picked.length < prompt.min || picked.length > prompt.max} onClick={() => answer({ promptId: id, options: picked })}>
+                  Confirm
+                </button>
+                <button className="btn btn-small" onClick={() => answer({ promptId: id, options: [], cancel: true })}>
+                  {prompt.cancelLabel ?? "Cancel"}
+                </button>
+              </>
+            )}
           </div>
         </div>
       );
@@ -269,8 +283,8 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
             <button className="btn btn-small" onClick={openList}>
               List
             </button>
-            <button className="btn btn-small btn-primary" disabled={picked.length < prompt.min || picked.length > prompt.max} onClick={() => answer({ promptId: id, options: picked })}>
-              Confirm
+            <button className="btn btn-small btn-primary" disabled={!canConfirm(prompt, picked)} onClick={() => answer({ promptId: id, options: picked })}>
+              {isOptionalChoice(prompt) ? choiceLabel(prompt, picked, (o) => describeOption(o, view).title) : "Confirm"}
             </button>
           </div>
         </div>
@@ -287,11 +301,7 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
             <button className="btn btn-small btn-primary" onClick={openList}>
               Choose...
             </button>
-            {prompt.optional && (
-              <button className="btn btn-small" onClick={() => answer({ promptId: id, option: null })}>
-                Skip
-              </button>
-            )}
+            {/* "Don't use this" lives in the list, behind one confirmation */}
           </div>
         </div>
       );
@@ -352,31 +362,60 @@ function toggle(picked: number[], index: number, max: number): number[] {
 }
 
 /** A sheet listing every option of a choose / chooseMany / targets prompt (cards, players, text). */
+/** The source card's printing for a list prompt: on a battlefield or in a command zone, else on the stack (all public). */
+function sourcePrinting(view: PlayerView, printings: Printings, name: string | null): string | null {
+  if (!name) return null;
+  for (const pl of Object.values(view.players)) {
+    for (const c of [...Object.values(pl.battlefield).flat(), ...pl.command]) if (c.printingId && printings[c.printingId]?.name === name) return c.printingId;
+  }
+  for (const it of view.stack) if (it.name === name && it.printingId) return it.printingId;
+  return null;
+}
+
 export function EngineListSheet({ prompt, view, printings, pick, setPick, answer, onClose, onZoom }: { prompt: EnginePrompt; view: PlayerView; printings: Printings; pick: EnginePick; setPick: (p: EnginePick) => void; answer: (a: EngineAnswer) => void; onClose: () => void; onZoom: (c: ViewCard) => void }) {
+  const [filter, setFilter] = useState("");
+  const [askNone, setAskNone] = useState(false);
   useEffect(() => {
+    setFilter("");
+    setAskNone(false);
+  }, [prompt.promptId]);
+  useEffect(() => {
+    // Escape / tap outside / the close button only minimise the sheet: they never answer
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   if (prompt.kind !== "choose" && prompt.kind !== "chooseMany" && prompt.kind !== "targets") return null;
   const single = prompt.kind === "choose";
+  const optional = isOptionalChoice(prompt);
   const picked = pick.kind === "select" ? pick.picked : [];
   const max = single ? 1 : prompt.max;
   const min = single ? 1 : prompt.min;
   const label = (o: EngineOption) => describeOption(o, view);
-  const [filter, setFilter] = useState("");
-  useEffect(() => setFilter(""), [prompt.promptId]);
   const shown = filter.trim() ? prompt.options.filter((o) => label(o).title.toLowerCase().includes(filter.trim().toLowerCase())) : prompt.options;
+  const onlyOne = optional && prompt.options.length === 1 && max === 1;
+  const srcArt = optional ? sourcePrinting(view, printings, prompt.source) : null;
+  const what = prompt.kind === "targets" ? prompt.ability : null;
   return (
     <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={prompt.title} onClick={(e) => e.stopPropagation()}>
+      <div className={`sheet${optional ? " optional-choice" : ""}`} role="dialog" aria-modal="true" aria-label={prompt.title} onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <strong>{prompt.title}</strong>
-          <span className="muted small">{single ? "Pick one." : `Pick ${min === max ? min : `${min} to ${max}`}.`}</span>
+          <span className="muted small">{single ? (optional ? "Pick one, or don't use it." : "Pick one.") : optional ? `Pick up to ${max}.` : `Pick ${min === max ? min : `${min} to ${max}`}.`}</span>
           <button className="sheet-close" onClick={onClose} aria-label="Close">
             &times;
           </button>
         </div>
+        {optional && (prompt.source || what) && (
+          <div className="optional-source">
+            {srcArt && <CardImage id={srcArt} name={prompt.source ?? ""} size="small" className="engine-row-img" />}
+            <p className="small">
+              {prompt.source && <strong>{prompt.source}</strong>}
+              {prompt.source && what ? ": " : ""}
+              {what}
+            </p>
+          </div>
+        )}
         {prompt.options.length > 12 && <input className="input" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter" aria-label="Filter options" style={{ marginBottom: 8 }} />}
         <div className="engine-options">
           {prompt.options.length === 0 && <p className="muted">Nothing to choose.</p>}
@@ -388,8 +427,10 @@ export function EngineListSheet({ prompt, view, printings, pick, setPick, answer
             return (
               <button
                 key={o.index}
-                className={`engine-option${selected ? " is-selected" : ""}`}
+                className={`engine-option${selected ? " is-selected" : ""}${onlyOne ? " is-only" : ""}`}
+                aria-pressed={single ? undefined : selected}
                 onClick={() => {
+                  setAskNone(false);
                   if (single) {
                     onClose();
                     answer({ promptId: prompt.promptId, option: o.index });
@@ -406,24 +447,52 @@ export function EngineListSheet({ prompt, view, printings, pick, setPick, answer
             );
           })}
         </div>
-        {!single && (
-          <div className="actions" style={{ marginTop: 10 }}>
-            <button className="btn btn-primary" disabled={picked.length < min || picked.length > max} onClick={() => answer({ promptId: prompt.promptId, options: picked })}>
-              Confirm {picked.length ? `(${picked.length})` : ""}
-            </button>
-            {prompt.kind === "targets" && (
-              <button className="btn" onClick={() => answer({ promptId: prompt.promptId, options: [], cancel: true })}>
-                {prompt.cancelLabel ?? "Cancel"}
+        {askNone && optional ? (
+          <div className="optional-none-confirm" role="alertdialog" aria-label={noneQuestion(prompt)}>
+            <p>
+              <strong>{noneQuestion(prompt)}</strong>
+            </p>
+            <div className="actions">
+              <button className="btn" onClick={() => setAskNone(false)}>
+                Back
               </button>
+              <button className="btn btn-danger-quiet optional-none-yes" onClick={() => answer(noneAnswer(prompt))}>
+                Yes, {noneLabel(prompt).toLowerCase()}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {!single && (
+              <div className="actions" style={{ marginTop: 10 }}>
+                <button className="btn btn-primary optional-confirm" disabled={!canConfirm(prompt, picked)} onClick={() => answer({ promptId: prompt.promptId, options: picked })}>
+                  {optional ? choiceLabel(prompt, picked, (o) => label(o).title) : `Confirm ${picked.length ? `(${picked.length})` : ""}`}
+                </button>
+                {optional && (
+                  <button className="btn btn-small optional-none" onClick={() => setAskNone(true)}>
+                    {noneLabel(prompt)}
+                  </button>
+                )}
+                {prompt.kind === "targets" && prompt.cancelLabel && (
+                  <button className="btn btn-small" onClick={() => answer({ promptId: prompt.promptId, options: [], cancel: true })}>
+                    {prompt.cancelLabel}
+                  </button>
+                )}
+                {prompt.kind === "targets" && !prompt.cancelLabel && !optional && (
+                  <button className="btn" onClick={() => answer({ promptId: prompt.promptId, options: [], cancel: true })}>
+                    Cancel
+                  </button>
+                )}
+              </div>
             )}
-          </div>
-        )}
-        {single && prompt.kind === "choose" && prompt.optional && (
-          <div className="actions" style={{ marginTop: 10 }}>
-            <button className="btn" onClick={() => answer({ promptId: prompt.promptId, option: null })}>
-              Skip
-            </button>
-          </div>
+            {single && optional && (
+              <div className="actions" style={{ marginTop: 10 }}>
+                <button className="btn btn-small optional-none" onClick={() => setAskNone(true)}>
+                  {noneLabel(prompt)}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

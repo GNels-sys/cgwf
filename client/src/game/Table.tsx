@@ -36,6 +36,7 @@ import { TokenFinder } from "./TokenFinder";
 import { TriggersPanel } from "./Triggers";
 import { AgentsPanel } from "./AgentsPanel";
 import { isOwner, useUser } from "../user";
+import { isOptionalChoice } from "./optionalChoice";
 
 /**
  * The table. Phone landscape first: opponents across the top (or around the
@@ -159,6 +160,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       if (!prompt || s) return s; // never stomp a sheet the player opened themself
       // Questions that need a sheet open at once; list choices open when there is nothing on the table to tap.
       if (SHEET_PROMPT_KINDS.has(prompt.kind)) return { kind: "enginePrompt" };
+      // Optional choices ("up to one", "any number of", "you may") always open their list: the empty answer must
+      // never be the easy one, and glowing cards may be hidden behind an overlay (owner report, Cloud, 2026-10-20).
+      if (isOptionalChoice(prompt)) return { kind: "engineList" };
       // Lists open on their own when something in them cannot be tapped on the table (hidden cards, text, spells on the stack);
       // players are chips in the bar already.
       if (prompt.kind === "choose" || (prompt.kind === "chooseMany" && prompt.reason !== "mulligan" && prompt.reason !== "putBack") || prompt.kind === "targets") {

@@ -78,9 +78,21 @@ const PREGAME_CONTROLS: Array<[string, string]> = [
   ["pregame title", ".mulligan-box h2"],
 ];
 
+/** An open sheet (prompt lists, optional choices, Pay with) is modal too: its own buttons must be reachable. */
+const SHEET_CONTROLS: Array<[string, string]> = [
+  ["sheet close", ".sheet-backdrop .sheet-close"],
+  ["sheet action", ".sheet-backdrop .actions button"],
+];
+
 export function collectLayout(root: Document = document): LayoutSample {
   const controls: ControlSample[] = [];
-  const list = root.querySelector(".first-roll") ? FIRST_ROLL_CONTROLS : root.querySelector(".mulligan .mulligan-box") ? PREGAME_CONTROLS : CONTROLS;
+  const list = root.querySelector(".first-roll")
+    ? FIRST_ROLL_CONTROLS
+    : root.querySelector(".mulligan .mulligan-box")
+      ? PREGAME_CONTROLS
+      : root.querySelector(".sheet-backdrop .sheet")
+        ? SHEET_CONTROLS
+        : CONTROLS;
   for (const [name, selector] of list) {
     const seen = new Set<Element>();
     root.querySelectorAll(selector).forEach((el, i) => {

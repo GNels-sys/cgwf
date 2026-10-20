@@ -2653,3 +2653,16 @@ button.engine-row { cursor: pointer; width: 100%; }
 .table-settings-hand-option.is-on strong { color: var(--accent); }
 .table-settings-rules { display: block; margin-top: 2px; line-height: 1.35; }
 .table-settings-free select { width: 100%; max-width: 280px; }
+
+/* ---------------------------------------------------------------- Optional choices (up to N / you may), 2026-10-20 */
+.optional-source { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.optional-source p { margin: 0; line-height: 1.35; }
+.engine-option.is-only { outline: 2px solid var(--accent); outline-offset: 1px; }
+.optional-choice .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.optional-choice .optional-confirm { min-height: 44px; flex: 1 1 auto; }
+.optional-none { min-height: 44px; background: transparent; border-style: dashed; color: var(--fg-muted); }
+.optional-none-confirm { margin-top: 10px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elev-2); }
+.optional-none-confirm p { margin: 0 0 8px; }
+.optional-none-confirm .actions { justify-content: flex-end; }
+.optional-none-confirm .btn { min-height: 44px; }
+.btn-danger-quiet { border-color: var(--danger); color: var(--danger); background: transparent; }
