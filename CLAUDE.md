@@ -1493,6 +1493,45 @@ engine frame cannot put another hand or a library into a snapshot (tested with o
   engine.test "records a decision snapshot ..." (real relay path, a leaky frame, collapsed passes,
   another seat reads nothing).
 
+**M2: the coach** (OWNER ONLY: `requireUser` + `requireOwner`, and `COACH_AI_ENABLED=1` with
+`ANTHROPIC_API_KEY`; otherwise every `/api/coach/*` route answers 404 and the client shows nothing,
+`useCoachEnabled` asks `/api/coach/status`). Code: `server/src/coach/{llm,context,coach}.ts`,
+`server/src/routes/coach.ts`, `client/src/coach/`, `client/src/pages/CoachPage.tsx`, tables
+`coach_reports` / `coach_followups` (migration 0016).
+- **Model:** `claude-opus-5-5` (`COACH_MODEL`), the claude-api skill's default and strongest generally
+  priced Opus-class model: a game review is deep, multi-step reasoning and a report is a handful of
+  calls. Adaptive thinking (always on for this model), effort `high` for the report, `medium` for
+  follow-ups; server-side refusal fallbacks (`fallbacks: "default"`, beta
+  `server-side-fallback-2026-07-01`); structured output (`output_config.format` JSON schema
+  `REPORT_SCHEMA`: summary, 3-6 turning points with round / turn / had / chose / betterLine / why /
+  theme / cards, three habits, a hidden-information note); one strict custom tool `card_text(name)`
+  (oracle text from the local card data). Prompt caching: the system prompt and the big game record
+  carry `cache_control`, so the tool loop and follow-ups re-read them at the cache price.
+- **What the model sees** (`buildCoachGame`): seats, decks, places; the owner's decklist with mana cost,
+  type and oracle text, plus the primer (library deck, or the library copy of an own deck); the
+  opponents' cards only as they appeared in public zones; the public log (step lines dropped, capped
+  60k chars); the owner's decision snapshots rendered as text (full boards once per turn, hand / stack /
+  floating mana / options / choice every decision; capped 160k chars keeping the start and the end).
+  Games without snapshots get a LIGHT review (log + the owner's raw EngineAnswer rows), labelled in the
+  prompt and on the page. The system prompt requires conditional phrasing about hidden information.
+- **Flow:** "Coach me" (game-over overlay on engine tables, Recent tables for ended engine tables, the
+  Deck stats page's AI Coach panel listing finished games losses first) -> `/coach/:code` ->
+  `POST /api/coach/rooms/:code` starts a background report (polled every 4 s), cached per game and
+  player (`coach_reports` unique room + user; an errored one may be retried; a done one is never
+  regenerated). "Ask a follow-up": one question at a time (`POST .../followup`), answered in the
+  background with the report and the last five Q&As as context. Card names in turning points open the
+  card.
+- **Spend control:** every call's usage (summing `usage.iterations` when a fallback ran) is priced
+  ($4 in / $20 out / $5 cache write / $0.20 cache read per MTok) and stored on the report or follow-up;
+  a report stops as "capped" past `COACH_MAX_USD_PER_REPORT` ($4) or `COACH_MAX_TOKENS_PER_REPORT`
+  (600k input+output tokens) and after 8 calls (follow-ups: 4); nothing new starts once today's coach
+  spend (UTC day, reports + follow-ups) reaches `COACH_MAX_USD_PER_DAY` ($20), a cap SEPARATE from the
+  agents' daily cap. Admin page: "AI Coach" line + per-report tokens and dollars (`GET /api/admin/coach`).
+- Tests: `coach/coach.test.ts` with `ScriptedCoachLlm` (no network): owner only (403 for others, 404
+  when off), the prompt carries the owner's hand and public cards but not an opponent's hand, the
+  card_text tool, structured report stored and priced, cached (no second call), follow-up counted, light
+  review label, per-report cap, daily cap.
+
 ## Phases
 
 1. Scaffold, Fly deploy, PWA shell, Scryfall ingest, card search page. **(done)**

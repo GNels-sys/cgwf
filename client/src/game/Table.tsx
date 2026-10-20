@@ -1,3 +1,4 @@
+import { CoachLink } from "../coach/coach";
 import { VoiceButton } from "./Voice";
 import { useTableMotion } from "./useTableMotion";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -859,6 +860,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
                   Rematch
                 </button>
               ) : null}
+              {engineMode && <CoachLink code={room.code} className="btn" />}
               <button className="btn" onClick={() => setDismissedEnd(true)}>
                 Look at the table
               </button>

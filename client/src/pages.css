@@ -1782,3 +1782,28 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
   .perf-grid thead th { font-size: .68rem; }
   .perf-baseline { font-size: .57rem; }
 }
+
+/* AI Coach (owner only): report page, games panel, Admin spend */
+.coach-start { display: grid; gap: 10px; justify-items: start; margin-block: 16px; }
+.coach-summary, .coach-habits, .coach-games { margin-block: 16px; }
+.coach-points ol { list-style: none; padding: 0; display: grid; gap: 12px; }
+.coach-point h3 { margin: 4px 0 8px; }
+.coach-point dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; }
+.coach-point dt { color: var(--fg-muted); font-size: 0.85rem; }
+.coach-point dd { margin: 0; }
+@media (max-width: 600px) { .coach-point dl { grid-template-columns: 1fr; } .coach-point dd { margin-bottom: 6px; } }
+.coach-cards { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.coach-card { min-height: 36px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg-elev); color: var(--accent); font: inherit; font-size: 0.85rem; cursor: pointer; }
+.coach-reader { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: #000a; padding: 16px; }
+.coach-reader-box { position: relative; width: min(340px, 90vw); }
+.coach-reader-box .sheet-close { position: absolute; top: -8px; right: -8px; min-width: 44px; min-height: 44px; }
+.coach-qa { margin-block: 8px; padding: 8px 10px; border-left: 3px solid var(--border); }
+.coach-followups textarea { width: 100%; }
+.coach-game-list { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.coach-game-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.coach-game-list .muted { flex: 1; min-width: 160px; }
+.coach-loss { font-weight: 600; }
+.coach-win { font-weight: 600; color: var(--accent); }
+.admin-coach-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.admin-coach-table th, .admin-coach-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: left; }
+.admin-coach { overflow-x: auto; }

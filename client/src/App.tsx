@@ -1,3 +1,4 @@
+import { CoachPage } from "./pages/CoachPage";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
@@ -46,6 +47,7 @@ export function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/stores" element={<StoresPage />} />
             <Route path="/stats" element={<DeckStatsPage />} />
+            <Route path="/coach/:code" element={<CoachPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/library" element={<LibraryPage />} />
             <Route path="/admin/library/:id" element={<LibraryDeckPage />} />
