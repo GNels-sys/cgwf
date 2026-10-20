@@ -1,4 +1,7 @@
 import type {
+  CoachAdminResponse,
+  CoachGameRow,
+  CoachRoomResponse,
   AdminOpenTable,
   DiscordStatus,
   DeckPerformance,
@@ -308,6 +311,15 @@ export const api = {
   deckStats: {
     list: (bots: boolean) => request<DeckStatsListResponse>(`/api/deck-stats${bots ? "" : "?bots=0"}`),
     deck: (ref: string, bots: boolean) => request<DeckPerformance>(`/api/deck-stats/deck/${encodeURIComponent(ref)}${bots ? "" : "?bots=0"}`),
+  },
+  /** AI Coach: OWNER ONLY, and only when the server has COACH_AI_ENABLED (404 otherwise). */
+  coach: {
+    status: () => request<{ enabled: boolean; model: string | null; spentTodayUsd: number; limits: { maxUsdPerReport: number; maxUsdPerDay: number; maxTokensPerReport: number } }>("/api/coach/status"),
+    games: () => request<{ games: CoachGameRow[] }>("/api/coach/games"),
+    room: (code: string) => request<CoachRoomResponse>(`/api/coach/rooms/${encodeURIComponent(code)}`),
+    start: (code: string) => request<{ id: string; status: string }>(`/api/coach/rooms/${encodeURIComponent(code)}`, { method: "POST", json: {} }),
+    followup: (code: string, question: string) => request<{ id: number }>(`/api/coach/rooms/${encodeURIComponent(code)}/followup`, { method: "POST", json: { question } }),
+    admin: () => request<CoachAdminResponse>("/api/admin/coach"),
   },
   rooms: {
     create: (opts: CreateRoomRequest = {}) => request<CreateRoomResponse>("/api/rooms", { method: "POST", json: opts }),
