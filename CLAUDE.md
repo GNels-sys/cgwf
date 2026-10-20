@@ -1282,6 +1282,24 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   return value, re-ask on illegal answers, "no question when the rules leave no choice";
   `HiddenInformationTest` still audits every prompt's view. `server/src/engine/engine.test.ts`
   round-trips each kind through the relay to the seat's socket and back.
+- **Choices grouped by player (2026-10-20).** Owner request after #34: "a card list of items that we can interact
+  with, separated by player". Every targets / choose / chooseMany prompt with a card, player or stack-item option
+  (required or optional; not mulligan bottoms or Draw 10 put-backs) opens `GroupedChoiceSheet`
+  (`client/src/game/ChoiceSheet.tsx`, grouping in `choiceGroups.ts`): one collapsible section per player in turn
+  order starting with "You" (avatar, name, life; hidden when it has no option), the player as a target at the
+  top of their section ("Player · 31 life"), then their cards by zone (battlefield Creatures / Artifacts /
+  Enchantments / Lands / Other permanents from the card's row on the table, then Graveyard, Exile, Command
+  zone, Hand, Library), then "On the stack", then anything else; a filter above 12 options. Battlefield cards
+  belong to their controller, others to their owner. Rows: thumbnail (tap = CardZoom, never selects), name,
+  mana cost dots, type line, P/T, counters, tapped, "with <attached cards>", a "Read" toggle with the oracle
+  text inline (never selects). The footer counts ("1 of 2 chosen · 1 to 2") and the primary button names the
+  action from the effect's first verb ("Exile Rhystic Study and Sol Ring"); #34's rules stand (disabled until
+  min is met, "Choose none" with a confirmation when min is 0, closing only minimises). The glowing cards on the
+  table remain a shortcut into the same pick state. To show oracle text the relay now sends the card data of a
+  prompt's card options with that seat's state (`EngineTable.prompts[seat].printings`), to that seat only
+  (relay test "sends a prompt's card options' full card data ... to that seat only"). Tests:
+  `client/src/game/choiceSheet.test.tsx` (grouping by player and zone, player target placement, Read and Zoom
+  do not select, named primary, a table tap updates the sheet, collapse).
 - **Optional choices never default to "nothing" (2026-10-20).** Owner report: Cloud, Ex-SOLDIER ("attach up to
   one target Equipment you control to it") never got his Equipment. The bridge asked correctly (targets, min 0,
   max 1; prod room 7W4KD3) and the client answered `options: []`, because Confirm in the bar was enabled with

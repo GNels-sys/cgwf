@@ -150,11 +150,11 @@ describe("optional choices (Cloud's 'attach up to one target Equipment')", () =>
     click(primary);
     expect(answers).toEqual([]);
     // the only option is first and highlighted, but not preselected
-    expect(q(".engine-option.is-only")).not.toBeNull();
-    expect(q(".engine-option.is-selected")).toBeNull();
-    click(q(".engine-option"));
+    expect(q(".choice-row.is-only")).not.toBeNull();
+    expect(q(".choice-row.is-selected")).toBeNull();
+    click(q(".choice-main"));
     expect(primary.disabled).toBe(false);
-    expect(primary.textContent).toBe("Choose Bloodforged Battle-Axe");
+    expect(primary.textContent).toBe("Attach Bloodforged Battle-Axe");
     click(primary);
     expect(answers).toEqual([{ promptId: 826, options: [0] }]);
   });
