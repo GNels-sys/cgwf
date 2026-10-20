@@ -1,0 +1,1566 @@
+[
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "welcome",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Your next greatgame night awaits.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "start",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Pick a name and an avatar",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signin",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signup",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Create an account",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Friends",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "settings",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Personalize",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Your profile",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "import",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Import a deck",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "agents",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Computer opponents",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 425.40625
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 524.234375
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 582.296875
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 648.96875
+      }
+    ],
+    "errors": []
+  },
+  {
+    "name": "stores",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Local stores",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stats",
+    "size": "portrait",
+    "ui": "dark",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Deck stats",
+    "overflowElements": [
+      {
+        "tag": "TABLE",
+        "cls": "deck-stats-table",
+        "right": 657
+      },
+      {
+        "tag": "THEAD",
+        "cls": "",
+        "right": 657
+      },
+      {
+        "tag": "TR",
+        "cls": "",
+        "right": 657
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "right": 439.5625
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "deck-stats-sort",
+        "right": 423.5625
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "right": 498.46875
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "deck-stats-sort",
+        "right": 482.46875
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "right": 574.90625
+      }
+    ],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "portrait",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "welcome",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Your next greatgame night awaits.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "start",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Pick a name and an avatar",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signin",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Welcome back",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signup",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Create an account",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Friends",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "settings",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Personalize",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Your profile",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "import",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Import a deck",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "agents",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Computer opponents",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 425.40625
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 524.234375
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 582.296875
+      },
+      {
+        "tag": "TH",
+        "cls": "is-num",
+        "right": 648.96875
+      }
+    ],
+    "errors": []
+  },
+  {
+    "name": "stores",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Local stores",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stats",
+    "size": "portrait",
+    "ui": "light",
+    "width": 375,
+    "scrollWidth": 375,
+    "overflow": false,
+    "heading": "Deck stats",
+    "overflowElements": [
+      {
+        "tag": "TABLE",
+        "cls": "deck-stats-table",
+        "right": 657
+      },
+      {
+        "tag": "THEAD",
+        "cls": "",
+        "right": 657
+      },
+      {
+        "tag": "TR",
+        "cls": "",
+        "right": 657
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "right": 439.5625
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "deck-stats-sort",
+        "right": 423.5625
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "right": 498.46875
+      },
+      {
+        "tag": "BUTTON",
+        "cls": "deck-stats-sort",
+        "right": 482.46875
+      },
+      {
+        "tag": "TH",
+        "cls": "",
+        "right": 574.90625
+      }
+    ],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "portrait",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "welcome",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Your next greatgame night awaits.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "start",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Pick a name and an avatar",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signin",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signup",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Create an account",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Friends",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "settings",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Personalize",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Your profile",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "import",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Import a deck",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "agents",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Computer opponents",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stores",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Local stores",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stats",
+    "size": "landscape",
+    "ui": "dark",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Deck stats",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "landscape",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "welcome",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Your next greatgame night awaits.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "start",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Pick a name and an avatar",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signin",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Welcome back",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signup",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Create an account",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Friends",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "settings",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Personalize",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Your profile",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "import",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Import a deck",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "agents",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Computer opponents",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stores",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Local stores",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stats",
+    "size": "landscape",
+    "ui": "light",
+    "width": 812,
+    "scrollWidth": 812,
+    "overflow": false,
+    "heading": "Deck stats",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "landscape",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "welcome",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Your next greatgame night awaits.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "start",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Pick a name and an avatar",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signin",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signup",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Create an account",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Friends",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "settings",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Personalize",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Your profile",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "import",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Import a deck",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "agents",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Computer opponents",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stores",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Local stores",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stats",
+    "size": "desktop",
+    "ui": "dark",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Deck stats",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "desktop",
+    "ui": "dark",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "decks",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back, Alex.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "welcome",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Your next greatgame night awaits.",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "start",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Pick a name and an avatar",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signin",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Welcome back",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "signup",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Create an account",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "play",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Play",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Friends",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "settings",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Personalize",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "profile",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Your profile",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "cards",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Card collection",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "import",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Import a deck",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "deck",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Deck library",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "library-deck",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Sanctuary of the Wilds",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "agents",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Computer opponents",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "admin",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Admin",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stores",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Local stores",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "stats",
+    "size": "desktop",
+    "ui": "light",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "overflow": false,
+    "heading": "Deck stats",
+    "overflowElements": [],
+    "errors": []
+  },
+  {
+    "name": "friends-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "play-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "library-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "agents-empty",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "friends-error",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "name": "notifications-normal-motion",
+    "size": "desktop",
+    "ui": "light",
+    "overflow": false,
+    "errors": []
+  }
+]

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { BRACKET_NAMES, MAX_SEATS, agentPoolIsSmall, agentPoolSize, nearLabel, type AgentBracketChoice, type AgentPick, type AgentPoolCounts, type Bracket, type FriendInfo, type RoomInfo, type RoomInviteInfo } from "@cgwf/shared";
 import { api } from "../api";
+import { PowerBadge } from "../components/PowerBadge";
 import { Avatar } from "../components/Avatar";
 import { isOwner, useUser } from "../user";
 import type { RoomSocket } from "./socket";
@@ -403,7 +404,7 @@ function AgentsControl({ room }: { room: RoomInfo }) {
         <ul className="small agents-picks">
           {picks.map((p) => (
             <li key={p.userId}>
-              <strong>{p.name}</strong> · seat {p.seat + 1} · {p.deckName} ({p.commanders.join(" / ")}) · B{p.bracket}
+              <strong>{p.name}</strong> · seat {p.seat + 1} · {p.deckName} ({p.commanders.join(" / ")}) · <PowerBadge level={p.bracket} />
               {p.tags.length ? ` · ${p.tags.join(", ")}` : ""}
             </li>
           ))}

@@ -2,7 +2,7 @@ import { PerformancePanel } from "../components/PerformancePanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { deckScenery } from "../components/deckScenery";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { SUBMISSION_NOTE_MAX, type Board, type DeckCardEntry, type DeckDetail, type SubmissionInfo } from "@cgwf/shared";
+import { SUBMISSION_NOTE_MAX, type Board, type DeckAnalysis, type DeckCardEntry, type DeckDetail, type SubmissionInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { BracketPanel } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
@@ -182,6 +182,9 @@ function DeckView({ id }: { id: string }) {
       .catch((e: Error) => setError(e.message));
   }, [id]);
 
+  const [analysisRecord, setAnalysisRecord] = useState<{ deckId: string; value: DeckAnalysis | null } | null>(null);
+  const analysisDeckId = deck?.id ?? id;
+  const receiveAnalysis = useCallback((value: DeckAnalysis | null) => setAnalysisRecord({ deckId: analysisDeckId, value }), [analysisDeckId]);
   const loadStats = useCallback(() => api.decks.stats(id), [id]);
   const loadShopping = useCallback(() => api.singles.deckShopping(id), [id]);
 
@@ -323,11 +326,11 @@ function DeckView({ id }: { id: string }) {
       </section>
 
       <div className="analysis-row">
-        <BracketPanel deckId={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} />
+        <BracketPanel deckId={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} onAnalysis={receiveAnalysis} />
         <StatsPanel load={loadStats} version={`${deck.updatedAt}:${deck.cards.length}`} />
       </div>
 
-      <PerformancePanel deckRef={deck.id} />
+      <PerformancePanel key={deck.id} deckRef={deck.id} analysis={analysisRecord?.deckId === deck.id ? analysisRecord.value : null} />
 
       <ShoppingPanel load={loadShopping} version={`${deck.updatedAt}:${deck.cards.length}`} />
 

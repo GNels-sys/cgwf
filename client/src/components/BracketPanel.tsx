@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ARCHETYPE_LABELS, BRACKET_NAMES, type DeckAnalysis } from "@cgwf/shared";
 import { api } from "../api";
 
@@ -9,7 +9,7 @@ import { api } from "../api";
  */
 export function BracketBadge({ bracket, label }: { bracket: 1 | 2 | 3 | 4 | 5; label: string }) {
   return (
-    <div className={`bracket-badge b${bracket}`}>
+    <div className={`bracket-badge b${bracket}`} data-power={bracket}>
       <span className="bracket-badge-label">{label}</span>
       <span className="bracket-badge-num">{bracket}</span>
       <span className="bracket-badge-name">{BRACKET_NAMES[bracket]}</span>
@@ -129,29 +129,37 @@ export function AnalysisBody({ a }: { a: DeckAnalysis }) {
 }
 
 /** `version` changes whenever the deck's list changes, which re-runs the analysis. */
-export function BracketPanel({ deckId, version }: { deckId: string; version: string }) {
+export function BracketPanel({ deckId, version, onAnalysis }: { deckId: string; version: string; onAnalysis?: ((analysis: DeckAnalysis | null) => void) | undefined }) {
   const [analysis, setAnalysis] = useState<DeckAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const requestVersion = useRef(0);
 
   const load = useCallback(
     async (refresh: boolean) => {
+      const request = ++requestVersion.current;
       setBusy(true);
       setError(null);
+      onAnalysis?.(null);
       try {
         const r = await api.decks.analysis(deckId, refresh);
+        if (request !== requestVersion.current) return;
         setAnalysis(r.analysis);
+        onAnalysis?.(r.analysis);
       } catch (e) {
+        if (request !== requestVersion.current) return;
         setError((e as Error).message);
+        onAnalysis?.(null);
       } finally {
-        setBusy(false);
+        if (request === requestVersion.current) setBusy(false);
       }
     },
-    [deckId],
+    [deckId, onAnalysis],
   );
 
   useEffect(() => {
     void load(false);
+    return () => { requestVersion.current++; };
   }, [load, version]);
 
   return (
