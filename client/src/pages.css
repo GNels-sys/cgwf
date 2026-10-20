@@ -1837,3 +1837,12 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
 .doctor-prefs { margin-top: 12px; }
 .doctor-prefs li { margin: 4px 0; }
 .doctor-credit { margin-top: 14px; }
+.doctor-ai { margin-top: 18px; padding: 14px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border)); border-radius: 4px 16px 4px 16px; background: color-mix(in srgb, var(--accent) 6%, var(--bg-elev)); }
+.doctor-ai h3 { margin: 0; }
+.doctor-ai .eyebrow { margin: 0 0 4px; }
+.doctor-ai-read { margin: 10px 0 12px; line-height: 1.55; }
+.doctor-swap.is-ai { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.doctor-ai-off { margin-top: 14px; }
+.doctor-ai-usage table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.doctor-ai-usage th, .doctor-ai-usage td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; font-variant-numeric: tabular-nums; }
+.doctor-ai-usage .table-wrap { overflow-x: auto; }

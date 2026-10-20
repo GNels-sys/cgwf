@@ -99,3 +99,76 @@ export interface DoctorApplyRequest {
   /** Oracle id of the card to add (its default printing goes in). */
   addOracleId: string;
 }
+
+/* ---------------- AI deck upgrade (M2, owner only) ---------------- */
+
+export interface DoctorAiSwap {
+  add: DoctorCardRef;
+  cut: DoctorCardRef & { entryId: number | null; quantity: number };
+  reason: string;
+  bracket: { floorAfter: number; raises: boolean };
+}
+
+export interface DoctorAiResult {
+  /** One paragraph: the deck's plan and its weaknesses. */
+  read: string;
+  swaps: DoctorAiSwap[];
+}
+
+export type DoctorAiStatus = "running" | "done" | "capped" | "refused" | "error";
+
+export interface DoctorAiRun {
+  id: string;
+  deckRef: string;
+  deckName: string;
+  deckVersion: string;
+  /** False when the deck changed since this run (it still shows, marked as older). */
+  current: boolean;
+  targetBracket: number;
+  allowHigher: boolean;
+  model: string;
+  servedBy: string | null;
+  status: DoctorAiStatus;
+  calls: number;
+  toolCalls: number;
+  invalidSubmissions: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  costUsd: number;
+  result: DoctorAiResult | null;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export interface DoctorAiState {
+  enabled: boolean;
+  /** "missing key" etc. when enabled but cannot run. */
+  problem: string | null;
+  model: string;
+  maxUsdPerRun: number;
+  maxUsdPerDay: number;
+  todayUsd: number;
+  /** The newest run for this deck (any version), when asked for one deck. */
+  run: DoctorAiRun | null;
+}
+
+export interface DoctorAiStartRequest {
+  bracket?: number;
+  allowHigher?: boolean;
+  /** Run again even when a finished run exists for this deck version. */
+  force?: boolean;
+}
+
+/** Owner's Admin page: Deck Doctor AI usage. */
+export interface DoctorAiUsage {
+  enabled: boolean;
+  model: string;
+  maxUsdPerRun: number;
+  maxUsdPerDay: number;
+  todayUsd: number;
+  last30Usd: number;
+  runs: DoctorAiRun[];
+}

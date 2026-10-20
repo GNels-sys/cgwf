@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
-import { isBracket, normalizeName, type Bracket, type DoctorResponse } from "@cgwf/shared";
+import { isBracket, normalizeName, type Bracket, type DeckAnalysis, type DoctorResponse } from "@cgwf/shared";
 import type { DbHandle } from "../../db/index.js";
 import { cards, deckCards, deckDoctorPrefs, decks, libraryDeckCards, libraryDecks, type CardRow } from "../../db/schema.js";
 import type { EdhrecClient } from "../../library/edhrec/client.js";
@@ -9,7 +9,7 @@ import type { SinglesClient } from "../../singles/client.js";
 import { fromRow, loadGameChangers } from "../index.js";
 import type { SpellbookResults, SpellbookVariant } from "../combos.js";
 import type { DeckAnalyzer } from "../service.js";
-import { loadCommanderEdhrec } from "./edhrec.js";
+import { loadCommanderEdhrec, type EdhrecCardStat } from "./edhrec.js";
 import { planSwaps, type DoctorCandidate, type DoctorDeckCard } from "./plan.js";
 
 /**
@@ -19,6 +19,21 @@ import { planSwaps, type DoctorCandidate, type DoctorDeckCard } from "./plan.js"
  */
 
 export type DoctorTarget = { kind: "own"; deckId: string; userId: string } | { kind: "library"; libraryId: string; userId: string };
+
+export interface DoctorContext {
+  response: DoctorResponse;
+  name: string;
+  version: string;
+  primer: string;
+  cards: DoctorDeckCard[];
+  analysis: DeckAnalysis;
+  combos: SpellbookResults | null;
+  identity: Set<string>;
+  keep: Set<string>;
+  dismissed: Set<string>;
+  edhrecCards: Map<string, EdhrecCardStat> | null;
+  commanderLabel: string;
+}
 
 export class DoctorError extends Error {
   constructor(
@@ -44,7 +59,7 @@ export class DeckDoctor {
   ) {}
 
   /** The deck's main + commander lines with their printing rows; null when the caller may not read it. */
-  loadDeck(t: DoctorTarget): { deckRef: string; name: string; lines: Array<{ entryId: number; row: CardRow; quantity: number; board: "main" | "commander" }> } | null {
+  loadDeck(t: DoctorTarget): { deckRef: string; name: string; version: string; primer: string; lines: Array<{ entryId: number; row: CardRow; quantity: number; board: "main" | "commander" }> } | null {
     const db = this.d.handle.db;
     if (t.kind === "own") {
       const deck = db.select().from(decks).where(and(eq(decks.id, t.deckId), eq(decks.userId, t.userId))).get();
@@ -53,6 +68,8 @@ export class DeckDoctor {
       return {
         deckRef: deck.id,
         name: deck.name,
+        version: deck.updatedAt,
+        primer: "",
         lines: rows.filter((r) => r.dc.board === "main" || r.dc.board === "commander").map((r) => ({ entryId: r.dc.id, row: r.card, quantity: r.dc.quantity, board: r.dc.board as "main" | "commander" })),
       };
     }
@@ -62,6 +79,8 @@ export class DeckDoctor {
     return {
       deckRef: `library:${lib.id}`,
       name: lib.name,
+      version: lib.updatedAt,
+      primer: lib.primer,
       lines: rows.filter((r) => r.lc.board === "main" || r.lc.board === "commander").map((r) => ({ entryId: r.lc.id, row: r.card, quantity: r.lc.quantity, board: r.lc.board as "main" | "commander" })),
     };
   }
@@ -75,6 +94,11 @@ export class DeckDoctor {
   }
 
   async run(t: DoctorTarget, opts: { target?: number | undefined; allowHigher?: boolean | undefined } = {}): Promise<DoctorResponse> {
+    return (await this.build(t, opts)).response;
+  }
+
+  /** The full picture behind a Doctor answer (the AI upgrade reuses it as its evidence). */
+  async build(t: DoctorTarget, opts: { target?: number | undefined; allowHigher?: boolean | undefined } = {}): Promise<DoctorContext> {
     const deck = this.loadDeck(t);
     if (!deck) throw new DoctorError("deck not found", 404);
     const deckCardsList: DoctorDeckCard[] = deck.lines.map((l) => ({
@@ -151,7 +175,7 @@ export class DeckDoctor {
       }
     }
 
-    return {
+    const response: DoctorResponse = {
       deckRef: deck.deckRef,
       commanders,
       targetBracket: target,
@@ -167,6 +191,20 @@ export class DeckDoctor {
       keep: prefs.keep,
       dismissed: prefs.dismissed,
       canApply: t.kind === "own",
+    };
+    return {
+      response,
+      name: deck.name,
+      version: deck.version,
+      primer: deck.primer,
+      cards: deckCardsList,
+      analysis: analyzed.analysis,
+      combos: combos as SpellbookResults | null,
+      identity,
+      keep: new Set(prefs.keep.map((p) => p.oracleId)),
+      dismissed,
+      edhrecCards: edhrec.status === "ok" ? edhrec.data.cards : null,
+      commanderLabel: label,
     };
   }
 

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { BRACKET_NAMES, DOCTOR_ROLE_LABELS, type Bracket, type DoctorResponse, type DoctorSwap } from "@cgwf/shared";
+import { BRACKET_NAMES, DOCTOR_ROLE_LABELS, type Bracket, type DoctorCardRef, type DoctorResponse, type DoctorSwap } from "@cgwf/shared";
+import { isOwner, useUser } from "../user";
+import { DoctorAiSection } from "./DoctorAiSection";
 import { api } from "../api";
 import { CardDetail } from "./CardDetail";
 import { useCardHover } from "./CardHoverPreview";
@@ -21,6 +23,7 @@ export function DoctorPanel({ kind, id, version, onApplied }: { kind: "own" | "l
   const [open, setOpen] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const hover = useCardHover();
+  const { user } = useUser();
 
   useEffect(() => {
     let live = true;
@@ -53,17 +56,18 @@ export function DoctorPanel({ kind, id, version, onApplied }: { kind: "own" | "l
       setBusy(null);
     }
   };
-  const apply = (s: DoctorSwap) =>
-    void act(`apply:${s.add.oracleId}`, () => api.doctor.apply(id, s.cut.entryId!, s.add.oracleId!), () => {
+  const applyLine = (cutEntryId: number, addOracleId: string) =>
+    void act(`apply:${addOracleId}`, () => api.doctor.apply(id, cutEntryId, addOracleId), () => {
       onApplied?.();
       refresh();
     });
+  const apply = (s: DoctorSwap) => applyLine(s.cut.entryId!, s.add.oracleId!);
   const pref = (kindOf: "keep" | "dismiss", oracleId: string | null, name: string, clear = false) => {
     if (!oracleId) return;
     void act(`${kindOf}:${oracleId}`, () => (clear ? api.doctor.clearPref({ deckRef, oracleId, name, kind: kindOf }) : api.doctor.setPref({ deckRef, oracleId, name, kind: kindOf })), refresh);
   };
 
-  const card = (c: DoctorSwap["add"] | DoctorSwap["cut"], sign: "+" | "−") => (
+  const card = (c: DoctorCardRef, sign: "+" | "−") => (
     <button type="button" className={`doctor-card ${sign === "+" ? "is-add" : "is-cut"}`} onClick={() => setOpen(c.cardId)} {...hover.bind({ id: c.cardId, name: c.name, faceCount: c.faceCount })}>
       <span className="doctor-sign" aria-hidden="true">{sign}</span>
       <span className="doctor-card-name">{c.name}</span>
@@ -165,6 +169,25 @@ export function DoctorPanel({ kind, id, version, onApplied }: { kind: "own" | "l
                 </li>
               ))}
             </ol>
+          )}
+          {isOwner(user) && (
+            <DoctorAiSection
+              kind={kind}
+              id={id}
+              version={version}
+              bracket={bracket ?? data.targetBracket}
+              allowHigher={allowHigher}
+              canApply={data.canApply}
+              busy={busy !== null}
+              renderPair={(s) => (
+                <div className="doctor-pair">
+                  {card(s.add, "+")}
+                  {card(s.cut, "−")}
+                </div>
+              )}
+              onApply={applyLine}
+              onPref={pref}
+            />
           )}
           {(data.keep.length > 0 || data.dismissed.length > 0) && (
             <details className="doctor-prefs">
