@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
  * One row per Scryfall printing (English only). JSON columns hold the
@@ -230,6 +230,29 @@ export const gameResults = sqliteTable(
     turns: integer("turns"),
   },
   (t) => [index("game_results_counted_idx").on(t.counted)],
+);
+
+/**
+ * AI Coach M1: one decision a HUMAN seat made on a rules-engine table (a prompt it answered), with that
+ * seat's OWN view at that moment (own hand, public zones, stack, mana, what was playable; never another
+ * hand or any library). gzip-compressed JSON. Readable only by that seat's user. Kept 90 days.
+ */
+export const decisionSnapshots = sqliteTable(
+  "decision_snapshots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** = rooms.id = game_results.id (no FK: a snapshot may be written before the result row exists) */
+    roomId: text("room_id").notNull(),
+    seat: integer("seat").notNull(),
+    userId: text("user_id").notNull(),
+    /** Order within the room (the relay's event sequence when the answer was recorded). */
+    seq: integer("seq").notNull(),
+    turn: integer("turn"),
+    promptKind: text("prompt_kind").notNull(),
+    createdAt: text("created_at").notNull(),
+    data: blob("data", { mode: "buffer" }).notNull(),
+  },
+  (t) => [index("decision_snapshots_room_user_idx").on(t.roomId, t.userId), index("decision_snapshots_created_idx").on(t.createdAt)],
 );
 
 /** One seat of a recorded game: who, with which deck (snapshot survives deletions), and how it went. */

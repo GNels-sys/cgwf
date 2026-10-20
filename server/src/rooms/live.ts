@@ -37,6 +37,7 @@ import { EngineRoomError, EngineTable, type RoomPort } from "./engineTable.js";
 import { deckForEngine } from "../engine/deck.js";
 import type { GameResults } from "../stats/results.js";
 import type { DiscordVoice } from "../discord/voice.js";
+import type { DecisionRecorder } from "../coach/snapshots.js";
 import { normaliseInvite, type RoomVoice } from "@cgwf/shared";
 import type { AdminOpenTable, EngineAnswer, EngineStops } from "@cgwf/shared";
 
@@ -46,6 +47,8 @@ export interface EngineDeps {
   index: NameIndex;
   /** Deck-statistics recorder, wired after construction (RoomManager.setResults). */
   results?: GameResults | null;
+  /** AI Coach M1 decision snapshots, wired after construction (RoomManager.setDecisions). */
+  decisions?: DecisionRecorder | null;
 }
 
 /**
@@ -142,6 +145,7 @@ export class LiveRoom {
       userName: (userId) => this.handle.db.select({ name: users.displayName }).from(users).where(eq(users.id, userId)).get()?.name ?? "Player",
       agentIds: () => new Set(this.agentMemberIds()),
       results: () => this.engineDeps?.results ?? null,
+      decisions: () => this.engineDeps?.decisions ?? null,
     };
   }
 
@@ -675,6 +679,13 @@ export class RoomManager {
   setResults(r: GameResults): void {
     this.results = r;
     if (this.engine) this.engine.results = r;
+  }
+
+  /** AI Coach M1: decision snapshots of human seats on engine tables. */
+  decisions: DecisionRecorder | null = null;
+  setDecisions(d: DecisionRecorder): void {
+    this.decisions = d;
+    if (this.engine) this.engine.decisions = d;
   }
 
   /** Close one table by code (host / owner checks are the caller's). False when unknown or already ended. */

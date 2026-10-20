@@ -32,6 +32,7 @@ import { registerDeckStatsRoutes } from "./routes/deckStats.js";
 import { DeckBrackets } from "./stats/brackets.js";
 import { GameResults } from "./stats/results.js";
 import { DiscordVoice, type VoiceConfig } from "./discord/voice.js";
+import { DecisionRecorder } from "./coach/snapshots.js";
 import type { FetchLike as DiscordFetch } from "./discord/client.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerSinglesRoutes } from "./routes/singles.js";
@@ -181,6 +182,23 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
     voice.status = { state: "error", botName: null, categoryName: null, problem: `${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} not set (fly secrets set ...).` };
   }
   roomsManager.setVoice(voice);
+  // AI Coach M1: decision snapshots (own view only), kept SNAPSHOT_RETENTION_DAYS (90)
+  const decisions = new DecisionRecorder(handle, app.log);
+  roomsManager.setDecisions(decisions);
+  if (opts.idleSweep !== false) {
+    const clean = () => {
+      try {
+        const n = decisions.cleanup();
+        if (n) app.log.info({ deleted: n }, "old decision snapshots removed");
+      } catch (err) {
+        app.log.warn({ err: (err as Error).message }, "decision snapshot cleanup failed");
+      }
+    };
+    const daily = setInterval(clean, 24 * 3600_000);
+    daily.unref();
+    setTimeout(clean, 90_000).unref();
+    app.addHook("onClose", async () => clearInterval(daily));
+  }
   if (opts.discordBoot !== false && voice.status.state === "checking") {
     void voice.verify().then(() => voice.sweepOrphans()).catch((err: unknown) => app.log.warn({ err: (err as Error).message }, "discord boot sweep failed"));
     const sweep = setInterval(() => void voice.sweepOrphans().catch(() => undefined), 60 * 60 * 1000);

@@ -25,6 +25,7 @@ import type { EngineCardRef, PrintingMapper } from "../engine/mapping.js";
 import { cleanEngineText, engineToView, toEngineAnswer, toEnginePrompt, type ConvertContext, type EngineCardJson, type EngineStateJson, type SeatInfo } from "../engine/view.js";
 import { loadSettings, saveEngineStops } from "../settings.js";
 import type { GameResults } from "../stats/results.js";
+import type { DecisionRecorder } from "../coach/snapshots.js";
 
 /**
  * The engine side of a LiveRoom: talks to the rules engine for one table and turns its frames into
@@ -55,6 +56,8 @@ export interface RoomPort {
   agentIds(): Set<string>;
   /** Deck-statistics recorder (null when the server has none wired, e.g. some tests). */
   results(): GameResults | null;
+  /** AI Coach M1: decision snapshots of human seats (null = not wired). */
+  decisions(): DecisionRecorder | null;
 }
 
 interface PersistedState {
@@ -365,6 +368,12 @@ export class EngineTable {
     this.prompts.delete(seat);
     this.room.appendEngine(userId, { type: "EngineAnswer", payload: { seat, promptId: answer.promptId, prompt: open.prompt.kind, answer: out } });
     this.seq++;
+    // AI Coach: what this human seat saw and chose (its own audited prompt view only); async, never fails the game
+    try {
+      this.room.decisions()?.record({ roomId: this.room.id, seat, userId, seq: this.seq }, open.raw, out);
+    } catch (err) {
+      this.room.log.warn({ err }, "decision snapshot failed");
+    }
     this.sendSeat(seat);
   }
 
