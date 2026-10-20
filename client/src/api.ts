@@ -59,6 +59,9 @@ import type {
   LibraryCoverageState,
   DoctorResponse,
   DoctorPrefRequest,
+  DoctorAiState,
+  DoctorAiUsage,
+  DoctorAiStartRequest,
 } from "@cgwf/shared";
 
 const TOKEN_KEY = "cgwf.token";
@@ -168,6 +171,10 @@ export const api = {
     apply: (deckId: string, cutEntryId: number, addOracleId: string) => request<{ ok: true }>(`/api/decks/${encodeURIComponent(deckId)}/doctor/apply`, { json: { cutEntryId, addOracleId } }),
     setPref: (body: DoctorPrefRequest) => request<{ ok: true }>("/api/doctor/prefs", { json: body }),
     clearPref: (body: DoctorPrefRequest) => request<{ ok: true }>("/api/doctor/prefs", { method: "DELETE", json: body }),
+    /** Owner only: the Claude upgrade run for a deck (state + newest run), start / run again, Admin usage. */
+    ai: (kind: "own" | "library", id: string) => request<DoctorAiState>(`/api/${kind === "own" ? "decks" : "library-decks"}/${encodeURIComponent(id)}/doctor/ai`),
+    aiStart: (kind: "own" | "library", id: string, body: DoctorAiStartRequest) => request<DoctorAiState>(`/api/${kind === "own" ? "decks" : "library-decks"}/${encodeURIComponent(id)}/doctor/ai`, { json: body }),
+    aiUsage: () => request<DoctorAiUsage>("/api/admin/doctor-ai"),
   },
 
   /** Owner-only deck library (Phase 6). */
