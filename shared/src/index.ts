@@ -29,3 +29,4 @@ export * from "./deckStats.js";
 export * from "./discord.js";
 export * from "./printing.js";
 export * from "./coach.js";
+export * from "./doctor.js";

@@ -57,6 +57,8 @@ import type {
   AddAgentsRequest,
   AgentPoolCounts,
   LibraryCoverageState,
+  DoctorResponse,
+  DoctorPrefRequest,
 } from "@cgwf/shared";
 
 const TOKEN_KEY = "cgwf.token";
@@ -154,6 +156,18 @@ export const api = {
     importUrl: (url: string) => request<ImportUrlResponse>(`/api/decks/import-url?url=${encodeURIComponent(url)}`),
     setPrinting: (id: string, entryId: number, cardId: string) =>
       request<{ deck: DeckDetail }>(`/api/decks/${encodeURIComponent(id)}/cards/${entryId}`, { method: "PATCH", json: { cardId } }),
+  },
+
+  /** Deck Doctor (free): suggested swaps for an own deck or a library deck (read-only). */
+  doctor: {
+    get: (kind: "own" | "library", id: string, opts: { bracket?: number | null; allowHigher?: boolean } = {}) => {
+      const qs = [opts.bracket ? `bracket=${opts.bracket}` : "", opts.allowHigher ? "allowHigher=1" : ""].filter(Boolean).join("&");
+      const base = kind === "own" ? `/api/decks/${encodeURIComponent(id)}/doctor` : `/api/library-decks/${encodeURIComponent(id)}/doctor`;
+      return request<DoctorResponse>(`${base}${qs ? `?${qs}` : ""}`);
+    },
+    apply: (deckId: string, cutEntryId: number, addOracleId: string) => request<{ ok: true }>(`/api/decks/${encodeURIComponent(deckId)}/doctor/apply`, { json: { cutEntryId, addOracleId } }),
+    setPref: (body: DoctorPrefRequest) => request<{ ok: true }>("/api/doctor/prefs", { json: body }),
+    clearPref: (body: DoctorPrefRequest) => request<{ ok: true }>("/api/doctor/prefs", { method: "DELETE", json: body }),
   },
 
   /** Owner-only deck library (Phase 6). */

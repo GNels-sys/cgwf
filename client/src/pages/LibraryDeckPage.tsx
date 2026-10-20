@@ -6,6 +6,7 @@ import { api } from "../api";
 import { EdhrecCredit } from "../components/EdhrecCredit";
 import { AnalysisBody } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
+import { DoctorPanel } from "../components/DoctorPanel";
 import { useCardHover } from "../components/CardHoverPreview";
 import { ManaCost } from "../components/ManaCost";
 import { PrintingPicker, printingLabel } from "../components/PrintingPicker";
@@ -209,6 +210,8 @@ function Editor({ id }: { id: string }) {
       </div>
 
       <PerformancePanel deckRef={`library:${deck.id}`} title="Performance (all players)" analysis={a ?? null} />
+
+      <DoctorPanel kind="library" id={deck.id} version={deck.updatedAt} />
 
       <ShoppingPanel load={loadShopping} version={deck.updatedAt} />
 

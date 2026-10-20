@@ -7,6 +7,7 @@ import { api } from "../api";
 import { BracketPanel } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
+import { DoctorPanel } from "../components/DoctorPanel";
 import { useCardHover } from "../components/CardHoverPreview";
 import { PrintingPicker, printingLabel } from "../components/PrintingPicker";
 import { ShoppingPanel } from "../components/LocalStores";
@@ -331,6 +332,8 @@ function DeckView({ id }: { id: string }) {
       </div>
 
       <PerformancePanel key={deck.id} deckRef={deck.id} analysis={analysisRecord?.deckId === deck.id ? analysisRecord.value : null} />
+
+      <DoctorPanel kind="own" id={deck.id} version={`${deck.updatedAt}:${deck.cards.length}`} onApplied={() => void api.decks.get(deck.id).then((r) => setDeck(r.deck))} />
 
       <ShoppingPanel load={loadShopping} version={`${deck.updatedAt}:${deck.cards.length}`} />
 
