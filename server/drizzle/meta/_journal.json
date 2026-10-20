@@ -134,6 +134,13 @@
       "when": 1792475172962,
       "tag": "0018_perfect_sinister_six",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1792476885581,
+      "tag": "0019_wandering_puff_adder",
+      "breakpoints": true
     }
   ]
 }

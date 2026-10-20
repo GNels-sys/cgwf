@@ -2561,3 +2561,86 @@ button.engine-row { cursor: pointer; width: 100%; }
 .voice-default { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
 .voice-manual-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .voice-default-panel { margin-block: 18px; }
+
+/* ---------------------------------------------------------------- Who goes first (D20 roll, 2026-10-19) */
+.first-roll {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.72);
+  overflow-y: auto;
+}
+.first-roll-box {
+  width: min(100%, 560px);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  text-align: center;
+  background: color-mix(in srgb, var(--bg-elev) 88%, transparent);
+  backdrop-filter: blur(18px);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: 16px;
+}
+.first-roll-box h2 { margin: 2px 0 6px; font-family: Georgia, "Times New Roman", serif; }
+.first-roll-box .eyebrow { margin: 0; }
+.first-roll-status { margin: 8px 0 10px; font-weight: 600; color: var(--accent); }
+.first-roll-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+}
+.first-roll-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-elev-2) 60%, transparent);
+}
+.first-roll-seat.is-winner { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.first-roll-seat.is-out { opacity: 0.55; }
+.first-roll-name { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 6px; font-weight: 600; max-width: 100%; overflow-wrap: anywhere; text-align: center; }
+.first-roll-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--who, var(--accent)); flex: none; }
+.first-roll-note { min-height: 44px; display: flex; align-items: center; color: var(--fg-muted); }
+.first-roll-roll { min-width: 88px; min-height: 44px; }
+.first-roll-close { margin-top: 12px; min-height: 44px; }
+
+.d20 { position: relative; display: inline-grid; place-items: center; }
+.d20 svg { width: 100%; height: 100%; overflow: visible; }
+.d20-big { width: clamp(84px, 24vh, 150px); height: clamp(84px, 24vh, 150px); margin: 2px auto; }
+.d20-small { width: 52px; height: 52px; }
+.d20-body { fill: color-mix(in srgb, var(--accent) 16%, var(--bg-elev-2)); stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; }
+.d20-face { fill: color-mix(in srgb, var(--accent) 28%, var(--bg-elev)); stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.d20-facet { fill: none; stroke: color-mix(in srgb, var(--accent) 60%, transparent); stroke-width: 1.5; }
+.d20-value { position: absolute; top: 47%; left: 50%; transform: translate(-50%, -50%); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg); }
+.d20-big .d20-value { font-size: clamp(26px, 7vh, 44px); }
+.d20-small .d20-value { font-size: 17px; }
+.first-roll-seat.is-winner .d20-body { fill: color-mix(in srgb, var(--accent) 40%, var(--bg-elev-2)); }
+@media (prefers-reduced-motion: no-preference) {
+  .d20.is-spinning svg { animation: d20-tumble 0.9s cubic-bezier(0.2, 0.7, 0.3, 1); }
+  .d20.is-spinning .d20-value { opacity: 0.6; }
+}
+@keyframes d20-tumble {
+  0% { transform: rotate(0deg) scale(0.85); }
+  60% { transform: rotate(560deg) scale(1.08); }
+  100% { transform: rotate(720deg) scale(1); }
+}
+@media (max-height: 480px) {
+  .first-roll-box { padding: 10px 12px 12px; }
+  .first-roll-box h2 { font-size: 1.15rem; margin-bottom: 2px; }
+  .first-roll-status { margin: 4px 0 6px; }
+  .first-roll-seat { flex-direction: row; justify-content: space-between; padding: 4px 8px; }
+  .first-roll-seats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .d20-small { width: 40px; height: 40px; }
+  .d20-small .d20-value { font-size: 14px; }
+  .first-roll-close { margin-top: 8px; }
+}

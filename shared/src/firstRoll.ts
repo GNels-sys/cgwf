@@ -6,7 +6,10 @@
  */
 
 export type FirstPlayerMethod = "roll" | "random";
-export const FIRST_PLAYER_METHODS: readonly FirstPlayerMethod[] = ["roll", "random"];
+export const FIRST_PLAYER_METHODS: readonly FirstPlayerMethod[] = [
+  "roll",
+  "random",
+];
 export const DEFAULT_FIRST_PLAYER: FirstPlayerMethod = "roll";
 export const D20_SIDES = 20;
 
@@ -40,11 +43,15 @@ export interface FirstRollInfo {
 }
 
 /** One finished round: the single highest roll wins, else the seats tied at the top roll again. */
-export function resolveRound(rolls: ReadonlyArray<{ seat: number; value: number }>): { winner: number } | { tied: number[]; value: number } {
+export function resolveRound(
+  rolls: ReadonlyArray<{ seat: number; value: number }>,
+): { winner: number } | { tied: number[]; value: number } {
   if (rolls.length === 0) throw new Error("no rolls");
   const top = Math.max(...rolls.map((r) => r.value));
   const best = rolls.filter((r) => r.value === top).map((r) => r.seat);
-  return best.length === 1 ? { winner: best[0] as number } : { tied: best.sort((a, b) => a - b), value: top };
+  return best.length === 1
+    ? { winner: best[0] as number }
+    : { tied: best.sort((a, b) => a - b), value: top };
 }
 
 /** "Alex and Blair", "Alex, Blair and Casey". */
@@ -56,7 +63,8 @@ export function joinNames(names: readonly string[]): string {
 /** Log lines, shared so the relay, its tests and the client agree on the wording. */
 export const firstRollText = {
   rolled: (name: string, value: number) => `${name} rolled ${value}`,
-  tied: (names: readonly string[], value: number) => `${joinNames(names)} tied with ${value}: they roll again`,
+  tied: (names: readonly string[], value: number) =>
+    `${joinNames(names)} tied with ${value}: they roll again`,
   goesFirst: (name: string) => `${name} goes first`,
   randomPick: (name: string) => `Random pick: ${name} goes first`,
 };

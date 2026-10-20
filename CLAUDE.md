@@ -1282,6 +1282,41 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   return value, re-ask on illegal answers, "no question when the rules leave no choice";
   `HiddenInformationTest` still audits every prompt's view. `server/src/engine/engine.test.ts`
   round-trips each kind through the relay to the seat's socket and back.
+- **Who goes first (2026-10-19).** Owner request: "roll to determine who goes first". Lobby setting (host,
+  `rooms.first_player`, migration 0019): **Roll a D20** (default) or **Random**. On Start the relay sends
+  `createGame` with `deferStart: true` (the engine builds the game, so missing cards are still caught before
+  anyone rolls, but does not start it), appends `GameStarted` and then:
+  - **Roll:** `RoomInfo.firstRoll` (`shared/src/firstRoll.ts`: round, per seat value / contending / history /
+    auto, winner, doneAt) goes to every member. Each seated player taps Roll (`{t:"roll"}`; only for their
+    own seat, once per round; spectators refused); the server rolls with `crypto.randomInt` (`d20` in
+    `engineTable.ts`), never the client. Bots and seats with no socket roll on their own after
+    `FIRST_ROLL_AUTO_MS` (1.5 s, +0.4 s per seat); a connected player who never taps is rolled for after
+    `FIRST_ROLL_TIMEOUT_MS` (60 s); a player who disconnects mid-roll is rolled for after the short delay.
+    The single highest roll wins; a tie re-rolls among the tied seats only (`resolveRound`). Every roll is
+    an `EngineRoll {round, seat, value, auto}` event plus an EngineLog line ("Alex rolled 17", "Alex and
+    Blair tied with 12: they roll again", "Alex goes first"); `EngineFirstPlayer {seat, method}` closes it.
+    A reload rebuilds the roll from those events (`PersistedState.firstPlayer.decided` says whether it was
+    still open), re-arming the automatic rolls.
+  - **Random:** the server picks a seat with `crypto.randomInt`, logs "Random pick: Alex goes first", no overlay.
+  - Then `beginGame {startingSeat}`; `game_results.starting_seat` / `first_player_method` record it.
+  - **Engine hook** (`StartingPlayer`, `BridgeAiLobbyPlayer`): Forge's `GameAction.determineFirstTurnPlayer`
+    flips for a player and then asks THAT player's controller `chooseStartingPlayer`. Every seat's controller
+    (the bridge's for humans, a `PlayerControllerAi` subclass for AI seats) answers with the table's choice,
+    so Forge's own flip never decides and nobody is asked "Who plays first?". Without a `startingSeat`
+    (an older relay) Forge behaves as before. A deferred game never begun is dropped after 30 minutes.
+  - **Client** (`client/src/game/FirstRoll.tsx`, styles at the end of `game.css`): a modal over the lobby (the
+    engine has sent no frame yet) or the table: a big original SVG D20 (your roll, then the winning roll),
+    one small die per seat with Roll / "rolls automatically" / "waiting", tie rounds with each seat's rolls,
+    "<name> goes first" for 4.5 s (Continue closes it) while the mulligan comes up underneath. The tumble is
+    decorative (random faces for 0.9 s, then the server's value); under reduced motion the value shows at
+    once. `cgwfLayoutCheck()` checks the overlay's own controls while it is open (it covers the table by
+    design) and is installed by the overlay before the table exists; [] at 812x375 and 375x812.
+  - Tests: engine `StartingPlayerTest` (real games: each of a human and two AI seats takes turn 1 when chosen,
+    over seeds whose own flip differs; no "Who plays first?" prompt; a deferred game waits and can be
+    ended), relay `engine.test.ts` "rolling for who goes first" (lobby setting + Random, own-seat rolls,
+    refusals, a scripted tie re-rolled among the tied, beginGame + game_results, bot and absent seats
+    rolling on their own, client reload and relay reload mid-roll), `shared/src/firstRoll.test.ts`,
+    `client/src/game/firstRoll.test.ts`. `scripts/engine-bot.mjs` rolls its own die.
 - **Counts are clamped to the options (2026-10-19).** Owner report: Blasphemous Edict ("each player
   sacrifices thirteen creatures") with six creatures sent a choose-13-of-6 prompt that could never be
   answered, so the spell never resolved. Rule 701.21a: a player sacrifices as many as they can. The

@@ -79,10 +79,18 @@ const SPECTATOR = -1;
 /** A seat whose sockets are all gone keeps the game waiting this long before the AI takes over. */
 export const ABSENT_GRACE_MS = Number(process.env.ENGINE_ABSENT_GRACE_MS ?? 3 * 60 * 1000);
 
-/** Rolling for who goes first: bots and players with no connection roll on their own after this (plus 0.4 s per seat). */
-export const AUTO_ROLL_MS = Number(process.env.FIRST_ROLL_AUTO_MS ?? 1500);
-/** A connected player who never taps Roll is rolled for after this, so one idle phone cannot hold up the table. */
-export const ROLL_TIMEOUT_MS = Number(process.env.FIRST_ROLL_TIMEOUT_MS ?? 60_000);
+/**
+ * Rolling for who goes first. autoMs: bots and players with no connection roll on their own after this
+ * (plus 0.4 s per seat, so the dice land one by one). timeoutMs: a connected player who never taps Roll
+ * is rolled for after this, so one idle phone cannot hold up the table. Mutable for tests.
+ */
+export const firstRollTiming = {
+  autoMs: Number(process.env.FIRST_ROLL_AUTO_MS ?? 1500),
+  timeoutMs: Number(process.env.FIRST_ROLL_TIMEOUT_MS ?? 60_000),
+  staggerMs: 400,
+};
+/** The die: the server's secure RNG (node:crypto), never the client. Replaceable in tests only. */
+export const d20 = { roll: (): number => randomInt(1, D20_SIDES + 1) };
 
 interface RollState {
   method: FirstPlayerMethod;
@@ -252,7 +260,7 @@ export class EngineTable {
   // ------------------------------------------------------------ who goes first (D20 roll, 2026-10-19)
 
   private newRoll(method: FirstPlayerMethod): RollState {
-    return { method, round: 1, contenders: this.seats.map((s) => s.seat), values: new Map(), history: new Map(), winner: null, doneAt: null };
+    return { method, round: 1, contenders: this.seats.map((s) => s.seat).sort((a, b) => a - b), values: new Map(), history: new Map(), winner: null, doneAt: null };
   }
 
   /** RoomInfo.firstRoll: public to the table (null for a random pick and for older games). */
@@ -264,7 +272,7 @@ export class EngineTable {
       method: r.method,
       status: r.winner === null ? "rolling" : "done",
       round: r.round,
-      seats: this.seats.map((s) => ({
+      seats: [...this.seats].sort((a, b) => a.seat - b.seat).map((s) => ({
         seat: s.seat,
         userId: s.userId,
         name: s.name,
@@ -320,7 +328,7 @@ export class EngineTable {
     const t = this.rollTimers.get(seat);
     if (t) clearTimeout(t);
     this.rollTimers.delete(seat);
-    const value = randomInt(1, D20_SIDES + 1); // the server's secure RNG, never the client
+    const value = d20.roll();
     const round = r.round;
     const res = this.applyRoll(seat, value);
     const ev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineRoll", payload: { round, seat, value, auto } });
@@ -354,14 +362,14 @@ export class EngineTable {
     this.client.trySend({ type: "beginGame", gameId: this.room.id, startingSeat: seat });
   }
 
-  /** Bots and absent seats roll after a short delay; a present player gets ROLL_TIMEOUT_MS to tap Roll. */
+  /** Bots and absent seats roll after a short delay; a present player gets firstRollTiming.timeoutMs to tap Roll. */
   private armRollTimers(): void {
     const r = this.roll;
     if (!r || r.winner !== null || this.disposed) return;
     let n = 0;
     for (const seat of r.contenders) {
       if (r.values.has(seat)) continue;
-      this.armRollTimer(seat, this.rollsOnItsOwn(seat) ? AUTO_ROLL_MS + 400 * n++ : ROLL_TIMEOUT_MS);
+      this.armRollTimer(seat, this.rollsOnItsOwn(seat) ? firstRollTiming.autoMs + firstRollTiming.staggerMs * n++ : firstRollTiming.timeoutMs);
     }
   }
 
@@ -372,7 +380,11 @@ export class EngineTable {
       this.rollTimers.delete(seat);
       const r = this.roll;
       if (!r || r.winner !== null || this.disposed || !r.contenders.includes(seat) || r.values.has(seat)) return;
-      this.recordRoll(seat, true);
+      try {
+        this.recordRoll(seat, true);
+      } catch (err) {
+        this.room.log.warn({ err }, "automatic first-player roll failed");
+      }
     }, ms);
     timer.unref();
     this.rollTimers.set(seat, timer);
@@ -611,7 +623,7 @@ export class EngineTable {
     const seat = this.seatOf(conn.userId);
     this.sendTo(conn);
     if (this.room.row().status === "playing") {
-      if (seat !== null && this.roll && this.roll.winner === null && this.roll.contenders.includes(seat) && !this.roll.values.has(seat)) this.armRollTimer(seat, ROLL_TIMEOUT_MS);
+      if (seat !== null && this.roll && this.roll.winner === null && this.roll.contenders.includes(seat) && !this.roll.values.has(seat)) this.armRollTimer(seat, firstRollTiming.timeoutMs);
       this.client.trySend({ type: "resync", gameId: this.room.id, seat: seat ?? SPECTATOR });
       if (seat !== null) {
         const t = this.absentTimers.get(seat);
@@ -628,7 +640,7 @@ export class EngineTable {
     const seat = this.seatOf(userId);
     if (seat === null || this.room.row().status !== "playing") return;
     for (const c of this.room.connections()) if (c.userId === userId) return; // another device is still here
-    if (this.roll && this.roll.winner === null && this.roll.contenders.includes(seat) && !this.roll.values.has(seat)) this.armRollTimer(seat, AUTO_ROLL_MS);
+    if (this.roll && this.roll.winner === null && this.roll.contenders.includes(seat) && !this.roll.values.has(seat)) this.armRollTimer(seat, firstRollTiming.autoMs);
     this.armAbsent(seat);
   }
 

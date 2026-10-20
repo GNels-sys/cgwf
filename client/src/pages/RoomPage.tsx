@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { RequireUser } from "../components/RequireUser";
+import { FirstRollOverlay } from "../game/FirstRoll";
 import { Lobby } from "../game/Lobby";
 import { useRoomSocket } from "../game/socket";
 import { Table } from "../game/Table";
@@ -38,10 +39,20 @@ function Room({ code }: { code: string }) {
       </main>
     );
   }
-  if (sock.room.status === "lobby" || !sock.view) return <Lobby room={sock.room} sock={sock} />;
+  // Engine tables: the D20 roll for who goes first sits over the lobby (before the engine's first frame) or the table.
+  const roll = sock.room.firstRoll ? <FirstRollOverlay room={sock.room} sock={sock} /> : null;
+  if (sock.room.status === "lobby" || !sock.view) {
+    return (
+      <>
+        <Lobby room={sock.room} sock={sock} />
+        {roll}
+      </>
+    );
+  }
   return (
     <ErrorBoundary>
       <Table room={sock.room} view={sock.view} printings={sock.printings} sock={sock} />
+      {roll}
     </ErrorBoundary>
   );
 }
