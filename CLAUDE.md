@@ -1282,6 +1282,21 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   return value, re-ask on illegal answers, "no question when the rules leave no choice";
   `HiddenInformationTest` still audits every prompt's view. `server/src/engine/engine.test.ts`
   round-trips each kind through the relay to the seat's socket and back.
+- **Optional choices never default to "nothing" (2026-10-20).** Owner report: Cloud, Ex-SOLDIER ("attach up to
+  one target Equipment you control to it") never got his Equipment. The bridge asked correctly (targets, min 0,
+  max 1; prod room 7W4KD3) and the client answered `options: []`, because Confirm in the bar was enabled with
+  nothing picked. Now (`client/src/game/optionalChoice.ts`): every targets / chooseMany prompt with min 0 and
+  options, and every optional choose, opens its list sheet at once (`Table.tsx`; glowing cards may be hidden
+  behind an overlay), with the source card and its ability on top; the primary button is disabled until
+  something is picked and names it ("Choose Bloodforged Battle-Axe"); "Choose none" (single optional choices:
+  "Don't use this") is a secondary, dashed button with one confirmation ("Attach nothing to Cloud?") before
+  `options: []` goes out; a lone option is outlined first but never preselected; the x, tapping outside and
+  Escape only minimise the sheet to the bar ("Choose..."). Sheets sit above the Interaction Stack and side
+  panels (z 60). Optional targets lose the bar's Cancel (it was the same empty trap). `cgwfLayoutCheck()`
+  checks an open sheet's own buttons. Tests: `client/src/game/optionalChoice.test.tsx` (happy-dom, a real
+  React render: primary cannot send empty, x / backdrop / Escape never answer, the confirm path sends
+  `options: []`), engine `CloudAttachTest` (a real game: the human casts Cloud, the trigger asks the human,
+  choosing the Axe leaves it attached).
 - **Opening hand (2026-10-20).** Owner request: free mulligans for the table, and a "draw 10, put 3 back"
   start. Lobby setting (host, frozen at start, shown to everyone with its rules in plain words from
   `OPENING_HAND_TEXT` in `shared/src/openingHand.ts`; `rooms.opening_hand` / `free_mulligans`, migration
