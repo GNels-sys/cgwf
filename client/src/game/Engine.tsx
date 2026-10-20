@@ -6,6 +6,8 @@ import { describeOption, sheetPromptSummary } from "./EnginePrompts";
 import { findCard, nameOf, type Printings } from "./model";
 import { mulliganNote } from "./openingHandText";
 import { canConfirm, choiceLabel, isOptionalChoice, noneAnswer, noneLabel, noneQuestion } from "./optionalChoice";
+import { GroupedChoiceSheet, primaryLabel } from "./ChoiceSheet";
+import { isGroupedChoice } from "./choiceGroups";
 
 /**
  * Rules-engine tables: the UI for the prompt the engine is waiting on. The engine decides what is
@@ -169,24 +171,16 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
                 List
               </button>
             )}
-            {isOptionalChoice(prompt) ? (
-              <>
-                <button className="btn btn-small" onClick={openList}>
-                  Choose...
-                </button>
-                <button className="btn btn-small btn-primary" disabled={!canConfirm(prompt, picked)} onClick={() => answer({ promptId: id, options: picked })}>
-                  {choiceLabel(prompt, picked, (o) => describeOption(o, view).title)}
-                </button>
-              </>
-            ) : (
-              <>
-                <button className="btn btn-small btn-primary" disabled={picked.length < prompt.min || picked.length > prompt.max} onClick={() => answer({ promptId: id, options: picked })}>
-                  Confirm
-                </button>
-                <button className="btn btn-small" onClick={() => answer({ promptId: id, options: [], cancel: true })}>
-                  {prompt.cancelLabel ?? "Cancel"}
-                </button>
-              </>
+            <button className="btn btn-small" onClick={openList}>
+              Choose...
+            </button>
+            <button className="btn btn-small btn-primary" disabled={!canConfirm(prompt, picked)} onClick={() => answer({ promptId: id, options: picked })}>
+              {primaryLabel(prompt, picked, (o) => describeOption(o, view).title)}
+            </button>
+            {!isOptionalChoice(prompt) && (
+              <button className="btn btn-small" onClick={() => answer({ promptId: id, options: [], cancel: true })}>
+                {prompt.cancelLabel ?? "Cancel"}
+              </button>
             )}
           </div>
         </div>
@@ -284,7 +278,7 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
               List
             </button>
             <button className="btn btn-small btn-primary" disabled={!canConfirm(prompt, picked)} onClick={() => answer({ promptId: id, options: picked })}>
-              {isOptionalChoice(prompt) ? choiceLabel(prompt, picked, (o) => describeOption(o, view).title) : "Confirm"}
+              {primaryLabel(prompt, picked, (o) => describeOption(o, view).title)}
             </button>
           </div>
         </div>
@@ -372,7 +366,7 @@ function sourcePrinting(view: PlayerView, printings: Printings, name: string | n
   return null;
 }
 
-export function EngineListSheet({ prompt, view, printings, pick, setPick, answer, onClose, onZoom }: { prompt: EnginePrompt; view: PlayerView; printings: Printings; pick: EnginePick; setPick: (p: EnginePick) => void; answer: (a: EngineAnswer) => void; onClose: () => void; onZoom: (c: ViewCard) => void }) {
+export function EngineListSheet({ prompt, view, printings, pick, setPick, answer, onClose, onZoom, members = [], me = null }: { prompt: EnginePrompt; view: PlayerView; printings: Printings; pick: EnginePick; setPick: (p: EnginePick) => void; answer: (a: EngineAnswer) => void; onClose: () => void; onZoom: (c: ViewCard) => void; members?: RoomMember[]; me?: string | null }) {
   const [filter, setFilter] = useState("");
   const [askNone, setAskNone] = useState(false);
   useEffect(() => {
@@ -386,6 +380,8 @@ export function EngineListSheet({ prompt, view, printings, pick, setPick, answer
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   if (prompt.kind !== "choose" && prompt.kind !== "chooseMany" && prompt.kind !== "targets") return null;
+  // cards, players and stack items: the list grouped by player and zone (text-only lists stay flat below)
+  if (isGroupedChoice(prompt)) return <GroupedChoiceSheet prompt={prompt} view={view} printings={printings} members={members} me={me} pick={pick} setPick={setPick} answer={answer} onClose={onClose} onZoom={onZoom} />;
   const single = prompt.kind === "choose";
   const optional = isOptionalChoice(prompt);
   const picked = pick.kind === "select" ? pick.picked : [];

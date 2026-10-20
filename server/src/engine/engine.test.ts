@@ -348,6 +348,25 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(events).toBe("engine");
   });
 
+  it("sends a prompt's card options' full card data (for reading them in the list) to that seat only", async () => {
+    const gameId = ctx.roomsManager.get(code)!.id;
+    const ma = alex.mark();
+    const mb = blair.mark();
+    // a tutor: the option is a card in Alex's library, which no view lists
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 30, prompt: "targets", title: "Choose a card", ability: "Search your library for an artifact card.", source: "Fabricate", min: 1, max: 1, options: [{ ...card(60, "Glorious Anthem", "Library", pid[0]!), kind: "card", index: 0 }] });
+    const s = await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 30, ma);
+    const prompt = s.view.engine!.prompt!;
+    if (prompt.kind !== "targets" || prompt.options[0]!.kind !== "card") throw new Error("unreachable");
+    const pr = prompt.options[0]!.printingId!;
+    expect(pr).toBeTruthy();
+    expect(alex.printings[pr]?.oracleText).toContain("Creatures you control get +1/+1");
+    await new Promise((r) => setTimeout(r, 200));
+    expect(blair.printings[pr]).toBeUndefined();
+    expect(blair.text.slice(mb).join(" ")).not.toContain("Glorious Anthem");
+    alex.send({ t: "engine", answer: { promptId: 30, options: [0] } });
+    await engine.waitFor((f) => f.type === "answer" && f.promptId === 30);
+  });
+
   it("delivers a notice (cards revealed to a seat, a value Forge announces) to that seat only, with printings", async () => {
     const gameId = ctx.roomsManager.get(code)!.id;
     const ma = alex.mark();

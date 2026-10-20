@@ -110,7 +110,8 @@ const ROUND_LINE = /^Round (\d+) begins$/;
 export class EngineTable {
   private seats: SeatInfo[] = [];
   private readonly lastState = new Map<number, EngineStateJson>();
-  private readonly prompts = new Map<number, { raw: Record<string, unknown>; prompt: EnginePrompt }>();
+  /** Open prompt per seat; `printings`: the full card data of its card options (sent only to that seat, for reading them in the list). */
+  private readonly prompts = new Map<number, { raw: Record<string, unknown>; prompt: EnginePrompt; printings?: Map<string, CardPrinting> }>();
   private readonly stops = new Map<number, EngineStops>();
   /** Seats holding priority this turn (turn number), cleared when the engine reports a later turn. */
   private readonly holds = new Map<number, number>();
@@ -434,8 +435,17 @@ export class EngineTable {
         this.seq++;
         const raw = frame as Record<string, unknown>;
         if (raw.view && typeof raw.view === "object") this.lastState.set(seat, raw.view as EngineStateJson);
-        const prompt = toEnginePrompt(raw, this.ctx(null));
-        if (prompt) this.prompts.set(seat, { raw, prompt });
+        const base = this.ctx(null);
+        const optionPrintings = new Map<string, CardPrinting>();
+        const prompt = toEnginePrompt(raw, {
+          ...base,
+          printingOf: (c) => {
+            const pr = base.printingOf(c);
+            if (pr) optionPrintings.set(pr.id, pr);
+            return pr;
+          },
+        });
+        if (prompt) this.prompts.set(seat, { raw, prompt, printings: optionPrintings });
         else this.room.log.warn({ prompt: raw.prompt }, "unknown engine prompt kind");
         this.sendSeat(seat);
         // everyone else learns who the table is waiting on
@@ -696,6 +706,9 @@ export class EngineTable {
     if (!state) return;
     const viewer = seat === null ? null : conn.userId;
     const { view, printings } = engineToView(state, this.ctx(viewer));
+    // the seat's own open prompt: its options' card data (oracle text etc.), so the list can show them; never to anyone else
+    const open = seat === null ? undefined : this.prompts.get(seat);
+    for (const [id, pr] of open?.printings ?? []) printings.set(id, pr);
     const delta: Record<string, CardPrinting> = {};
     for (const [id, printing] of printings) {
       if (conn.sentPrintings.has(id)) continue;

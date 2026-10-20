@@ -37,6 +37,7 @@ import { TriggersPanel } from "./Triggers";
 import { AgentsPanel } from "./AgentsPanel";
 import { isOwner, useUser } from "../user";
 import { isOptionalChoice } from "./optionalChoice";
+import { isGroupedChoice } from "./choiceGroups";
 
 /**
  * The table. Phone landscape first: opponents across the top (or around the
@@ -163,6 +164,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       // Optional choices ("up to one", "any number of", "you may") always open their list: the empty answer must
       // never be the easy one, and glowing cards may be hidden behind an overlay (owner report, Cloud, 2026-10-20).
       if (isOptionalChoice(prompt)) return { kind: "engineList" };
+      // Every card / player choice opens its list grouped by player (owner request 2026-10-20); the glowing
+      // cards on the table stay a shortcut into the same selection.
+      if (isGroupedChoice(prompt)) return { kind: "engineList" };
       // Lists open on their own when something in them cannot be tapped on the table (hidden cards, text, spells on the stack);
       // players are chips in the bar already.
       if (prompt.kind === "choose" || (prompt.kind === "chooseMany" && prompt.reason !== "mulligan" && prompt.reason !== "putBack") || prompt.kind === "targets") {
@@ -571,7 +575,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     } else if (sheet.kind === "payWith" && prompt?.kind === "priority") {
       sheetView = <PayWithSheet card={sheet.card} options={sheet.options} view={view} printings={printings} promptId={prompt.promptId} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     } else if (sheet.kind === "engineList" && prompt) {
-      sheetView = <EngineListSheet prompt={prompt} view={view} printings={printings} pick={pick} setPick={setPick} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
+      sheetView = <EngineListSheet prompt={prompt} view={view} printings={printings} pick={pick} setPick={setPick} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} members={room.members} me={me} />;
     } else if (sheet.kind === "enginePrompt" && prompt && SHEET_PROMPT_KINDS.has(prompt.kind)) {
       sheetView = <EnginePromptSheet prompt={prompt} view={view} printings={printings} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     }

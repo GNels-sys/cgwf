@@ -2666,3 +2666,40 @@ button.engine-row { cursor: pointer; width: 100%; }
 .optional-none-confirm .actions { justify-content: flex-end; }
 .optional-none-confirm .btn { min-height: 44px; }
 .btn-danger-quiet { border-color: var(--danger); color: var(--danger); background: transparent; }
+
+/* ---------------------------------------------------------------- Choices grouped by player and zone (2026-10-20) */
+.choice-sheet { display: flex; flex-direction: column; max-height: min(92dvh, 760px); }
+.choice-groups { overflow-y: auto; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
+.choice-player { border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--bg-elev-2) 45%, transparent); }
+.choice-player.is-you { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.choice-player-head { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 6px 10px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.choice-player-head.is-static { cursor: default; }
+.choice-player-head strong { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.choice-count { margin-left: auto; padding: 0 8px; border-radius: 999px; background: var(--bg-elev-2); }
+.choice-chevron { width: 1em; text-align: center; }
+.choice-zone-head { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 36px; padding: 2px 12px; background: none; border: 0; border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent); color: var(--fg-muted); font: inherit; text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer; }
+.choice-list { list-style: none; margin: 0; padding: 4px 8px 8px; display: flex; flex-direction: column; gap: 6px; }
+.choice-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 4px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elev); }
+.choice-row.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 12%, var(--bg-elev)); }
+.choice-row.is-only { outline: 2px dashed color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
+.choice-thumb { padding: 0; border: 0; background: none; cursor: zoom-in; --tile-h: 64px; --tile-w: calc(64px * 63 / 88); }
+.choice-thumb .engine-row-img { width: calc(64px * 63 / 88); height: 64px; object-fit: contain; border-radius: 4px; }
+.choice-thumb-blank { display: block; width: calc(64px * 63 / 88); height: 64px; border-radius: 4px; background: var(--bg-elev-2); }
+.choice-main { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; padding: 4px 26px 4px 4px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.choice-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600; }
+.choice-type { line-height: 1.25; }
+.choice-facts { display: flex; flex-wrap: wrap; gap: 4px 10px; color: var(--fg-muted); }
+.choice-facts strong { color: var(--fg); }
+.choice-check { position: absolute; top: 4px; right: 6px; color: var(--accent); font-weight: 700; }
+.choice-read { min-height: 36px; align-self: start; }
+.choice-oracle { grid-column: 1 / -1; margin: 2px 4px 4px; white-space: pre-line; line-height: 1.4; }
+.choice-foot { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 6px; }
+.choice-counter { margin: 0 0 6px; }
+.choice-foot .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.choice-foot .optional-confirm { min-height: 44px; flex: 1 1 auto; }
+@media (max-height: 480px) {
+  .choice-thumb { --tile-h: 48px; --tile-w: calc(48px * 63 / 88); }
+  .choice-thumb .engine-row-img, .choice-thumb-blank { width: calc(48px * 63 / 88); height: 48px; }
+  .choice-sheet { max-height: 96dvh; }
+}
+.choice-sheet .optional-source { display: block; padding: 6px 10px; }
