@@ -41,6 +41,7 @@ import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerSinglesRoutes } from "./routes/singles.js";
 import { registerDoctorRoutes } from "./routes/doctor.js";
 import { DeckDoctor } from "./analysis/doctor/service.js";
+import { AnthropicDoctorLlm, DoctorAi, type DoctorLlm } from "./analysis/doctor/ai.js";
 import { SinglesClient } from "./singles/client.js";
 import { registerSocialRoutes } from "./routes/social.js";
 import { presence } from "./social/presence.js";
@@ -61,6 +62,7 @@ export interface AppContext {
   library: LibraryService;
   precons: PreconImporter;
   edhrec: EdhrecImporter;
+  doctorAi: DoctorAi;
   libraryCoverage: LibraryCoverage;
   agents: AgentManager;
   social: SocialService;
@@ -84,6 +86,10 @@ export interface BuildOptions {
   edhrecCacheDir?: string;
   edhrecGapMs?: number;
   edhrecCoverage?: CoverageChecker | null;
+  /** Deck Doctor AI: tests inject a scripted model, the flag and small caps. */
+  doctorLlm?: DoctorLlm | null;
+  doctorAiEnabled?: boolean;
+  doctorCaps?: Partial<{ perRun: number; perDay: number; maxTokens: number; maxCalls: number; effort: string }>;
   /** Phase 10: tests inject a fake Singles site (and its URL/token); production reads config. */
   singlesFetch?: FetchLike;
   singlesOptions?: Partial<import("./singles/client.js").SinglesClientOptions>;
@@ -168,7 +174,9 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   const libraryCoverage = new LibraryCoverage(handle, library, coverageChecker, app.log);
   precons.setCoverage(libraryCoverage);
   const doctor = new DeckDoctor({ handle, index, analyzer, edhrec: edhrecClient, singles, log: app.log });
-  registerDoctorRoutes(app, { handle, doctor });
+  const doctorLlm = opts.doctorLlm !== undefined ? opts.doctorLlm : config.anthropicApiKey ? new AnthropicDoctorLlm(config.doctorModel, config.anthropicApiKey, config.anthropicWorkspaceId) : null;
+  const doctorAi = new DoctorAi({ handle, index, doctor, llm: doctorLlm, enabled: opts.doctorAiEnabled, log: app.log, caps: opts.doctorCaps });
+  registerDoctorRoutes(app, { handle, doctor, ai: doctorAi });
   registerLibraryRoutes(app, { handle, library, precons, edhrec, coverage: libraryCoverage });
   registerStatsRoutes(app, { handle, analyzer, library });
   registerAgentRoutes(app, { handle, agents, roomsManager });
@@ -259,5 +267,5 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, edhrec, libraryCoverage, agents, social, submissions, singles, engine, coach };
+  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, edhrec, libraryCoverage, doctorAi, agents, social, submissions, singles, engine, coach };
 }

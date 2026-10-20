@@ -10,6 +10,7 @@ import { isOwner, useUser } from "../user";
 import "../admin.css";
 import { OpenTables } from "./OpenTables";
 import { DiscordStatusCard } from "./DiscordStatusCard";
+import { DoctorAiUsageCard } from "./DoctorAiUsageCard";
 
 /**
  * Owner-only: who is on the platform and who is using it. Everything comes
@@ -373,6 +374,7 @@ function Overview() {
       </p>
       <Tiles t={data.totals} />
       <DiscordStatusCard />
+      <DoctorAiUsageCard />
       <CoachUsageCard />
       <OpenTables />
       <section className="admin-charts" aria-label="Twelve-week trends">

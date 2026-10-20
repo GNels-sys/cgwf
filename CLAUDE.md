@@ -688,6 +688,52 @@ code is shared.
   page match), `routes/doctor.test.ts` (fixture EDHREC page: colours, cache, prefs, apply + its refusals,
   library read-only, no page), `client/src/components/doctorText.test.ts`.
 
+### Deck Doctor AI upgrade (M2, OWNER ONLY, model spend)
+
+"An upgrade that is to remain locked to all but me as the website owner, where they can use a Claude API to
+find the absolute best card to add and what to cut." Code: `server/src/analysis/doctor/ai.ts` (`DoctorAi`,
+`AnthropicDoctorLlm`), routes at the end of `routes/doctor.ts`, `client/src/components/DoctorAiSection.tsx`
+(inside the Deck Doctor panel, rendered only for `isOwner`), `client/src/pages/DoctorAiUsageCard.tsx` (Admin).
+
+- **Locks**: every route is `[requireUser, requireOwner]`; nothing runs unless `DOCTOR_AI_ENABLED=1` (Fly
+  secret) and `ANTHROPIC_API_KEY` is set (the workspace-scoped key the agents use; never printed). Off =
+  the owner sees "Claude upgrade: off", starting answers 503.
+- **Model**: `DOCTOR_MODEL`, default `claude-opus-5-5` (the claude-api skill's default and the strongest
+  Opus-class model; quality matters more than cost at a handful of runs, and Claude Fable 5.1 costs 2.5x with
+  longer turns). Effort `DOCTOR_EFFORT` = `high` (Opus 5.5 defaults to `medium`); thinking is always on;
+  `tool_choice: auto` (forced tool choice is a 400 on this model) with `strict` tool schemas; streamed
+  (`finalMessage`) so long thinking never times out; server-side refusal fallbacks on (`betas:
+  ["server-side-fallback-2026-07-01"], fallbacks: "default"`); the system prompt and the deck context are
+  cache breakpoints, so every call after the first reads them at $0.20/MTok.
+- **Input** (`renderContext`): the decklist with full oracle text and EDHREC synergy / inclusion per card,
+  commanders and colour identity, the bracket rules, the analysis (floor, suggestion, reasons, Game Changers,
+  combos), role counts, the free Doctor's shortlist with its reasons, the top 60 EDHREC cards not in the deck,
+  the primer (library decks), pinned and dismissed cards, the target bracket and "allow higher".
+- **Tools**: `lookup_card {name}` returns OUR card row (exact name via `NameIndex`; else up to five close
+  matches): oracle text, type, cost, colour identity, Commander legality, inside the colours, Game Changer,
+  roles, in the deck, dismissed, the floor now and if added (`floorWith`, counting combos it completes).
+  `submit_recommendations {read, swaps[{add, cut, reason}]}` is validated with the free Doctor's rules (real
+  paper card, legal, inside the identity, not in the deck, not dismissed, not added twice; cut in the deck,
+  not a commander, not kept, a land only for a land, not more copies than the deck has; each swap and all of
+  them together within the target bracket unless allowed). Invalid = an `is_error` tool result listing every
+  problem; Claude fixes and resubmits. Up to `DOCTOR_MAX_CALLS` (10) model calls; text without a tool call
+  is nudged twice, then the run ends as an error.
+- **Spend** (separate from the agents' caps): before every call the run's cost so far is checked against
+  `DOCTOR_MAX_USD_PER_RUN` (3.00) and today's total (UTC) against `DOCTOR_MAX_USD_PER_DAY` (15.00); a hit
+  ends the run as `capped`. `DOCTOR_MAX_TOKENS_PER_CALL` (16000) bounds each answer. Cost = `costOf` from
+  `agents/pricing.ts` per model attempt (`usage.iterations` when a refusal fallback ran). Table
+  `doctor_ai_runs` (migration 0018): user, deck ref/name/version, target, model, served by, status
+  running|done|capped|refused|error, calls, tool calls, rejected answers, tokens (in, out, cache read, cache
+  write), cost, result JSON, error, timestamps. Admin page: today / 30 days / caps / last 30 runs.
+- **Cache**: `POST .../doctor/ai` returns the finished run for the same deck version, target and "allow
+  higher" without a model call; "Run again" (`force`) starts a new billed run. A run made for an older deck
+  version still shows, marked as such, without Apply.
+- **Output**: a one-paragraph read of the deck and up to five swaps with reasons, the same Apply / Keep /
+  Not interested actions as the free Doctor (Apply = the same `/doctor/apply` route, own decks only).
+- **Tests** (`routes/doctorAi.test.ts`, a scripted model, no network): owner only; a lookup, an invalid answer
+  sent back with each reason, the fixed answer accepted; usage and cost recorded; the cache and Run again;
+  per-run cap, refusal, daily cap and the flag; fallback pricing per attempt; the context marks pinned cards.
+
 ## Computer opponents (Phase 7, owner only)
 
 "Agents" are Claude-driven seats. Everything lives in `server/src/agents/`; nothing here runs unless

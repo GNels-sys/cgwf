@@ -53,6 +53,17 @@ export const config = {
   coachMaxTokensPerReport: Number(env("COACH_MAX_TOKENS_PER_REPORT", "600000")),
   agentMaxUsdPerGame: Number(env("AGENT_MAX_USD_PER_GAME", "6")),
   agentMaxUsdPerDay: Number(env("AGENT_MAX_USD_PER_DAY", "25")),
+  /**
+   * Deck Doctor AI upgrade (owner only, analysis/doctor/ai.ts). DOCTOR_AI_ENABLED=1 turns it on; it needs
+   * ANTHROPIC_API_KEY. Spend has its own caps (not the agents' daily cap), checked before every model call.
+   */
+  doctorAiEnabled: env("DOCTOR_AI_ENABLED", "0") === "1",
+  doctorModel: env("DOCTOR_MODEL", "claude-opus-5-5"),
+  doctorEffort: env("DOCTOR_EFFORT", "high"),
+  doctorMaxUsdPerRun: Number(env("DOCTOR_MAX_USD_PER_RUN", "3")),
+  doctorMaxUsdPerDay: Number(env("DOCTOR_MAX_USD_PER_DAY", "15")),
+  doctorMaxTokensPerCall: Number(env("DOCTOR_MAX_TOKENS_PER_CALL", "16000")),
+  doctorMaxCalls: Number(env("DOCTOR_MAX_CALLS", "10")),
   agentMaxTokensPerDecision: Number(env("AGENT_MAX_TOKENS_PER_DECISION", "1500")),
   agentDecisionTimeoutMs: Number(env("AGENT_DECISION_TIMEOUT_MS", "60000")),
   agentMaxCallsPerTurn: Number(env("AGENT_MAX_CALLS_PER_TURN", "8")),
