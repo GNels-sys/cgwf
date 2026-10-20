@@ -108,6 +108,11 @@ export class GameResults {
     })();
   }
 
+  /** The opening-hand rule the game is played with (frozen at the start). */
+  recordOpeningHand(roomId: string, rule: { mode: "draw7" | "draw10"; freeMulligans: number }): void {
+    this.handle.db.update(gameResults).set({ openingHand: rule.mode, freeMulligans: rule.mode === "draw7" ? rule.freeMulligans : null }).where(eq(gameResults.id, roomId)).run();
+  }
+
   /** Who took the first turn (the D20 roll's winner or the random pick), once the table decided. */
   recordStartingSeat(roomId: string, seat: number, method: "roll" | "random"): void {
     this.handle.db.update(gameResults).set({ startingSeat: seat, firstPlayerMethod: method }).where(eq(gameResults.id, roomId)).run();

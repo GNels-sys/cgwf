@@ -875,6 +875,45 @@ describe("engine tables (relay to the rules engine)", () => {
       await t.b.close();
     });
 
+    it("opening hand: a host-only lobby setting, validated, kept across a reload, sent to the engine and recorded", async () => {
+      timing.autoMs = 20;
+      timing.timeoutMs = 60;
+      const t = await twoSeats("hand");
+      const first = t.a.frames.filter(isRoom).at(-1)!;
+      expect(first.room.openingHand).toEqual({ mode: "draw7", freeMulligans: 1 });
+      let m = t.a.mark();
+      t.a.send({ t: "tableSettings", openingHand: { mode: "draw10" } });
+      await t.a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.openingHand.mode === "draw10", m);
+      const bad = t.b.mark();
+      t.b.send({ t: "tableSettings", openingHand: { mode: "draw7" } });
+      expect(await t.b.errorSince(bad)).toMatch(/only the host/);
+      const bad2 = t.a.mark();
+      t.a.send({ t: "tableSettings", openingHand: { freeMulligans: 3 } });
+      expect(await t.a.errorSince(bad2)).toMatch(/0, 1 or 2/);
+      m = t.a.mark();
+      t.a.send({ t: "tableSettings", openingHand: { mode: "draw7", freeMulligans: 2 }, firstPlayer: "random" });
+      await t.a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.openingHand.mode === "draw7" && f.room.openingHand.freeMulligans === 2, m);
+      // a reload (new socket) sees the stored setting, and so does everyone else
+      await t.b.close();
+      const b2 = new Client("blair-hand2", blair.token);
+      await b2.connect(port, t.code);
+      const seen = await b2.waitFor((f): f is RoomMsg => isRoom(f));
+      expect(seen.room.openingHand).toEqual({ mode: "draw7", freeMulligans: 2 });
+      m = t.a.mark();
+      t.a.send({ t: "start" });
+      const created = await engine.waitFor((f) => f.type === "createGame" && f.gameId === t.room.id);
+      expect(created.openingHand).toEqual({ mode: "draw7", freeMulligans: 2 });
+      await t.a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.status === "playing", m);
+      const frozen = t.a.mark();
+      t.a.send({ t: "tableSettings", openingHand: { mode: "draw10" } });
+      expect(await t.a.errorSince(frozen)).toMatch(/frozen/);
+      const { gameResults } = await import("../db/schema.js");
+      const { eq } = await import("drizzle-orm");
+      expect(ctx.handle.db.select().from(gameResults).where(eq(gameResults.id, t.room.id)).get()).toMatchObject({ openingHand: "draw7", freeMulligans: 2 });
+      await t.a.close();
+      await b2.close();
+    });
+
     it("each player rolls their own die; a tie re-rolls among the tied only; the winner reaches the engine and the record", async () => {
       timing.autoMs = 60_000; // nobody is rolled for in this test
       timing.timeoutMs = 60_000;

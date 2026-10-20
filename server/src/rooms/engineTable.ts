@@ -7,6 +7,7 @@ import {
   STARTING_LIFE,
   SYSTEM_ACTOR,
   firstRollText,
+  sanitizeOpeningHand,
   isFirstPlayerMethod,
   resolveRound,
   type CardPrinting,
@@ -220,7 +221,8 @@ export class EngineTable {
     if (problems.length) throw new EngineRoomError(`The rules engine needs legal Commander decks. ${problems.join(" | ")}`);
     const seed = Number.parseInt(row.seed.slice(0, 12), 16) || Date.now();
     // The engine builds the game now (so missing cards are found before anyone rolls) and waits for beginGame.
-    const created = await this.client.createGame(row.id, seed, seatsReq, { deferStart: true });
+    const openingHand = sanitizeOpeningHand(row.openingHand, row.freeMulligans);
+    const created = await this.client.createGame(row.id, seed, seatsReq, { deferStart: true, openingHand });
     const missing = created.players.filter((p) => p.missing.length).map((p) => `${p.name}: ${p.missing.join(", ")}`);
     if (missing.length) {
       this.client.trySend({ type: "endGame", gameId: row.id });
@@ -237,6 +239,11 @@ export class EngineTable {
       );
     } catch (err) {
       this.room.log.error({ err }, "recording the game start failed");
+    }
+    try {
+      this.room.results()?.recordOpeningHand(row.id, openingHand);
+    } catch (err) {
+      this.room.log.error({ err }, "recording the opening-hand rule failed");
     }
     // Each player's remembered stops (Personalize / the table's Stops panel) apply from the first priority.
     for (const s of this.seats) {

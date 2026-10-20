@@ -1,4 +1,4 @@
-import { BRACKET_NAMES, type Bracket, type RoomInfo } from "@cgwf/shared";
+import { BRACKET_NAMES, MAX_FREE_MULLIGANS, OPENING_HAND_TEXT, freeMulligansLabel, openingHandSummary, type Bracket, type OpeningHandMode, type RoomInfo } from "@cgwf/shared";
 import type { RoomSocket } from "./socket";
 
 const BRACKETS: Bracket[] = [1, 2, 3, 4, 5];
@@ -55,6 +55,39 @@ export function TableSettings({ room, sock, isHost }: { room: RoomInfo; sock: Ro
           Who goes first: <strong>{room.firstPlayer === "random" ? "Random" : "Roll a D20"}</strong>
         </p>
       )}
+      <fieldset className="table-settings-hand">
+        <legend>Opening hand</legend>
+        {isHost ? (
+          (["draw7", "draw10"] as OpeningHandMode[]).map((mode) => (
+            <label key={mode} className={`table-settings-hand-option${room.openingHand.mode === mode ? " is-on" : ""}`}>
+              <input type="radio" name="opening-hand" checked={room.openingHand.mode === mode} onChange={() => sock.send({ t: "tableSettings", openingHand: { mode } })} />
+              <span>
+                <strong>{OPENING_HAND_TEXT[mode].title}</strong>
+                <span className="muted small table-settings-rules">{OPENING_HAND_TEXT[mode].rules}</span>
+              </span>
+            </label>
+          ))
+        ) : (
+          <p className="small">
+            <strong>{openingHandSummary(room.openingHand)}</strong>
+            <span className="muted small table-settings-rules">{OPENING_HAND_TEXT[room.openingHand.mode].rules}</span>
+          </p>
+        )}
+        {isHost && room.openingHand.mode === "draw7" && (
+          <label className="field table-settings-free">
+            <span>Free mulligans</span>
+            <select value={room.openingHand.freeMulligans} onChange={(e) => sock.send({ t: "tableSettings", openingHand: { freeMulligans: Number(e.target.value) } })}>
+              {Array.from({ length: MAX_FREE_MULLIGANS + 1 }, (_, n) => (
+                <option key={n} value={n}>
+                  {n}
+                  {n === 1 ? " (official multiplayer rule)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {!isHost && room.openingHand.mode === "draw7" && <p className="muted small">{freeMulligansLabel(room.openingHand.freeMulligans)} per player.</p>}
+      </fieldset>
       <p className="muted small table-settings-note">These settings are fixed when the game starts. Only finished games that are not test games count in deck stats.</p>
     </section>
   );

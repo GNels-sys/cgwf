@@ -57,6 +57,7 @@ public final class GameSession {
     private int logSent;
     private volatile boolean over;
     private final StartingPlayer starting = new StartingPlayer();
+    private final OpeningHand opening;
     /** end() was called: the game thread sets the game over at its next event. */
     private volatile boolean endRequested;
     private final java.util.concurrent.atomic.AtomicBoolean started = new java.util.concurrent.atomic.AtomicBoolean();
@@ -69,6 +70,11 @@ public final class GameSession {
     private int outCount = 0;
 
     public GameSession(String gameId, long seed, List<SeatSpec> specs, long promptTimeoutMs, Consumer<JsonObject> out) {
+        this(gameId, seed, specs, promptTimeoutMs, out, OpeningHand.FORGE);
+    }
+
+    public GameSession(String gameId, long seed, List<SeatSpec> specs, long promptTimeoutMs, Consumer<JsonObject> out, OpeningHand opening) {
+        this.opening = opening == null ? OpeningHand.FORGE : opening;
         this.gameId = gameId;
         this.seed = seed;
         this.specs = List.copyOf(specs);
@@ -83,9 +89,10 @@ public final class GameSession {
                 session.attach(frame -> emit(frame, seat));
                 humans.put(seat, session);
                 session.setStartingPlayer(starting);
+                session.setOpeningHand(this.opening);
                 lp = new BridgeLobbyPlayer(s.name(), session);
             } else {
-                lp = new BridgeAiLobbyPlayer(s.name(), starting);
+                lp = new BridgeAiLobbyPlayer(s.name(), starting, this.opening);
             }
             seatOfLobby.put(lp, s.seat());
             seats.add(new GameFactory.Seat(s.name(), s.deck().deck(), lp));
@@ -105,6 +112,10 @@ public final class GameSession {
                 return v;
             });
             s.setBeforeAsk(this::flushIfDirty);
+        }
+        if (this.opening.drawTen()) {
+            for (Player p : game.getRegisteredPlayers()) p.setStartingHandSize(OpeningHand.DRAW10_HAND); // Forge deals ten
+            this.opening.setPutBack(this::putBackAll);
         }
         game.subscribeToEvents(this);
         thread = new Thread(this::run, "game-" + gameId);
@@ -148,6 +159,58 @@ public final class GameSession {
     }
 
     public void start() { begin(null); }
+
+    public OpeningHand openingHand() { return opening; }
+
+    /**
+     * Draw 10, put 3 back (game thread, from the first keep question): every human seat is asked at the same
+     * time (its own ten only), Forge's AI picks for bots and absent seats; then each player's three go back
+     * into their library, which is shuffled (Forge's shuffle, the game's RNG). Nothing is discarded or
+     * revealed, so nothing triggers; the log names no card. The opening-hand actions follow from the seven.
+     */
+    private void putBackAll() {
+        flushIfDirty(); // the asks below run on helper threads while this thread waits: nothing changes meanwhile
+        List<Player> players = new ArrayList<>(game.getPlayers());
+        Map<Player, java.util.concurrent.CompletableFuture<List<Card>>> asks = new LinkedHashMap<>();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "putback-" + gameId);
+            t.setDaemon(true);
+            return t;
+        });
+        try {
+            for (Player p : players) {
+                if (p.getController() instanceof BridgeController bc && !bc.autopilot()) {
+                    asks.put(p, java.util.concurrent.CompletableFuture.supplyAsync(() -> bc.choosePutBack(OpeningHand.PUT_BACK), pool));
+                }
+            }
+            for (Player p : players) {
+                List<Card> hand = new ArrayList<>(p.getCardsIn(ZoneType.Hand));
+                List<Card> chosen = null;
+                if (asks.containsKey(p)) {
+                    try { chosen = asks.get(p).join(); } catch (RuntimeException e) { chosen = null; }
+                }
+                if (chosen == null || chosen.size() != Math.min(OpeningHand.PUT_BACK, hand.size()) || !hand.containsAll(chosen)) chosen = aiPutBack(p, hand);
+                for (Card c : chosen) game.getAction().moveToLibrary(c, null);
+                p.shuffle(null);
+                game.getGameLog().add(forge.game.GameLogEntryType.MULLIGAN, p.getName() + " put " + chosen.size() + " cards back and shuffled.");
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    /** Forge's AI discard choice (the cards it would least like to keep), exactly three. */
+    private static List<Card> aiPutBack(Player p, List<Card> hand) {
+        int n = Math.min(OpeningHand.PUT_BACK, hand.size());
+        List<Card> out = new ArrayList<>();
+        if (p.getController() instanceof forge.ai.PlayerControllerAi ai) {
+            try {
+                for (Card c : ai.getAi().getCardsToDiscard(n, null, null)) if (hand.contains(c) && !out.contains(c) && out.size() < n) out.add(c);
+            } catch (RuntimeException ignored) { }
+        }
+        for (int i = hand.size() - 1; out.size() < n && i >= 0; i--) if (!out.contains(hand.get(i))) out.add(hand.get(i));
+        return out;
+    }
 
     /**
      * Starts the game thread (Match.startGame: who goes first, then mulligans). {@code startingSeat}

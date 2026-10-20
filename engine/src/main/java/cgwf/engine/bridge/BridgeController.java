@@ -1230,11 +1230,22 @@ public final class BridgeController extends PlayerControllerAi {
 
     @Override
     public boolean mulliganKeepHand(Player firstPlayer, int cardsToReturn) {
+        OpeningHand rule = session.openingHand();
+        if (rule.drawTen()) { // no mulligans: everyone puts three of their ten back instead (once, all seats at the same time)
+            rule.ensurePutBack();
+            return true;
+        }
+        if (rule.ownsFreeMulligans()) cardsToReturn = rule.bottomSoFar(player);
         if (autopilot()) return super.mulliganKeepHand(firstPlayer, cardsToReturn);
         JsonObject a;
         while (true) {
             JsonObject p = prompt("mulligan", "Keep this hand?");
             p.addProperty("cardsToReturn", cardsToReturn);
+            p.addProperty("mulligans", player.getStats().getMulliganCount());
+            if (rule.ownsFreeMulligans()) {
+                p.addProperty("freeMulligans", rule.freeMulligans);
+                p.addProperty("nextBottom", rule.bottomNow(player));
+            }
             List<Card> hand = new ArrayList<>(player.getCardsIn(ZoneType.Hand));
             p.add("hand", objectsJson(hand));
             // Serum Powder: "Any time you could mulligan and Serum Powder is in your hand, you may exile all the cards
@@ -1255,6 +1266,12 @@ public final class BridgeController extends PlayerControllerAi {
         return !a.has("keep") || a.get("keep").isJsonNull() || a.get("keep").getAsBoolean();
     }
 
+    /** Draw 10: which three of the ten go back into the library (null = nobody answered; the AI picks). */
+    List<Card> choosePutBack(int n) {
+        List<Card> hand = new ArrayList<>(player.getCardsIn(ZoneType.Hand));
+        return chooseCards("Put " + n + " cards back into your library (it is shuffled). You keep the other " + (hand.size() - n) + ".", null, hand, n, n, "putBack");
+    }
+
     /** Exile the whole hand, draw that many (the mulligan question is then asked again on the new hand). */
     void useSerumPowder() {
         List<Card> hand = new ArrayList<>(player.getCardsIn(ZoneType.Hand));
@@ -1266,6 +1283,9 @@ public final class BridgeController extends PlayerControllerAi {
 
     @Override
     public CardCollectionView tuckCardsViaMulligan(CardCollectionView hand, int cardsToReturn) {
+        OpeningHand rule = session.openingHand();
+        if (rule.ownsFreeMulligans()) cardsToReturn = Math.min(rule.bottomNow(player), hand.size()); // the table's free mulligans, not Forge's flag
+        if (cardsToReturn <= 0) return new CardCollection();
         if (autopilot()) return super.tuckCardsViaMulligan(hand, cardsToReturn);
         List<Card> cards = new ArrayList<>();
         for (Card c : hand) cards.add(c);

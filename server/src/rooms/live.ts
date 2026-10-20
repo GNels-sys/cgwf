@@ -38,7 +38,7 @@ import { deckForEngine } from "../engine/deck.js";
 import type { GameResults } from "../stats/results.js";
 import type { DiscordVoice } from "../discord/voice.js";
 import type { DecisionRecorder } from "../coach/snapshots.js";
-import { DEFAULT_FIRST_PLAYER, isFirstPlayerMethod, normaliseInvite, type RoomVoice } from "@cgwf/shared";
+import { DEFAULT_FIRST_PLAYER, isFirstPlayerMethod, normaliseInvite, sanitizeOpeningHand, type RoomVoice } from "@cgwf/shared";
 import type { AdminOpenTable, EngineAnswer, EngineStops } from "@cgwf/shared";
 
 /** What the rules-engine integration needs (null when no engine is configured). */
@@ -281,6 +281,7 @@ export class LiveRoom {
       voice: this.voiceFor(row, Boolean(forUserId && rows.some((m) => m.userId === forUserId))),
       firstPlayer: isFirstPlayerMethod(row.firstPlayer) ? row.firstPlayer : DEFAULT_FIRST_PLAYER,
       firstRoll: this.engineTable?.firstRollInfo() ?? null,
+      openingHand: sanitizeOpeningHand(row.openingHand, row.freeMulligans),
     };
   }
 
@@ -292,7 +293,7 @@ export class LiveRoom {
   }
 
   /** Host, lobby only: the Test-game toggle and the table bracket (null = automatic). Frozen at start. */
-  setTableSettings(userId: string, s: { testGame?: unknown; tableBracket?: unknown; firstPlayer?: unknown }): void {
+  setTableSettings(userId: string, s: { testGame?: unknown; tableBracket?: unknown; firstPlayer?: unknown; openingHand?: unknown }): void {
     const row = this.refreshRow();
     if (row.hostUserId !== userId) throw new RoomError("only the host can change the table settings");
     if (row.status !== "lobby") throw new RoomError("the game has started; the table settings are frozen");
@@ -307,6 +308,13 @@ export class LiveRoom {
     if (s.firstPlayer !== undefined) {
       if (!isFirstPlayerMethod(s.firstPlayer)) throw new RoomError("who goes first is \"roll\" or \"random\"");
       set.firstPlayer = s.firstPlayer;
+    }
+    if (s.openingHand !== undefined) {
+      const o = (s.openingHand ?? {}) as { mode?: unknown; freeMulligans?: unknown };
+      if (o.mode !== undefined && o.mode !== "draw7" && o.mode !== "draw10") throw new RoomError("the opening hand is \"draw7\" or \"draw10\"");
+      if (o.freeMulligans !== undefined && (!Number.isInteger(o.freeMulligans) || (o.freeMulligans as number) < 0 || (o.freeMulligans as number) > 2)) throw new RoomError("free mulligans are 0, 1 or 2");
+      if (o.mode !== undefined) set.openingHand = o.mode as string;
+      if (o.freeMulligans !== undefined) set.freeMulligans = o.freeMulligans as number;
     }
     if (!Object.keys(set).length) return;
     this.handle.db.update(rooms).set(set).where(eq(rooms.id, this.id)).run();
@@ -872,7 +880,8 @@ export class RoomManager {
     }
     const members = old.members();
     this.handle.sqlite.transaction(() => {
-      this.handle.db.insert(rooms).values({ id, code, hostUserId: userId, status: "lobby", format: "commander", seed, lastSeq: 0, engine: Boolean(row.engine), createdAt: ts, updatedAt: ts }).run();
+      // a rematch keeps the house rules (who goes first, the opening hand)
+      this.handle.db.insert(rooms).values({ id, code, hostUserId: userId, status: "lobby", format: "commander", seed, lastSeq: 0, engine: Boolean(row.engine), firstPlayer: row.firstPlayer, openingHand: row.openingHand, freeMulligans: row.freeMulligans, createdAt: ts, updatedAt: ts }).run();
       for (const m of members) {
         this.handle.db.insert(roomMembers).values({ roomId: id, userId: m.userId, role: m.role, seat: m.seat, deckId: m.deckId, joinedAt: ts }).run();
       }

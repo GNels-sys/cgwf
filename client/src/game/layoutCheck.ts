@@ -72,9 +72,15 @@ const FIRST_ROLL_CONTROLS: Array<[string, string]> = [
   ["first-roll panel", ".first-roll-box h2"],
 ];
 
+/** The pregame modals (keep / mulligan, put on the bottom, Draw 10's put back) cover the table on purpose. */
+const PREGAME_CONTROLS: Array<[string, string]> = [
+  ["pregame action", ".mulligan-box .actions button"],
+  ["pregame title", ".mulligan-box h2"],
+];
+
 export function collectLayout(root: Document = document): LayoutSample {
   const controls: ControlSample[] = [];
-  const list = root.querySelector(".first-roll") ? FIRST_ROLL_CONTROLS : CONTROLS;
+  const list = root.querySelector(".first-roll") ? FIRST_ROLL_CONTROLS : root.querySelector(".mulligan .mulligan-box") ? PREGAME_CONTROLS : CONTROLS;
   for (const [name, selector] of list) {
     const seen = new Set<Element>();
     root.querySelectorAll(selector).forEach((el, i) => {

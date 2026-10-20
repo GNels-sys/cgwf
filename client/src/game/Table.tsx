@@ -161,7 +161,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       if (SHEET_PROMPT_KINDS.has(prompt.kind)) return { kind: "enginePrompt" };
       // Lists open on their own when something in them cannot be tapped on the table (hidden cards, text, spells on the stack);
       // players are chips in the bar already.
-      if (prompt.kind === "choose" || (prompt.kind === "chooseMany" && prompt.reason !== "mulligan") || prompt.kind === "targets") {
+      if (prompt.kind === "choose" || (prompt.kind === "chooseMany" && prompt.reason !== "mulligan" && prompt.reason !== "putBack") || prompt.kind === "targets") {
         const tappable = (o: EngineOption) => (o.kind === "card" && findCardIn(view, o.iid) !== null) || (o.kind === "player" && prompt.kind === "targets");
         if (prompt.options.length && !prompt.options.every(tappable)) return { kind: "engineList" };
       }
@@ -796,7 +796,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       {chain && !chainMin && !(prompt && prompt.kind !== "priority") && (
         <InteractionStack stack={view.stack} view={view} printings={printings} members={room.members} onZoom={holdCard} prompt={prompt} me={me} answer={answerEngine} onMinimize={() => setChainMin(true)} />
       )}
-      {engineMode && prompt && me && (prompt.kind === "mulligan" || (prompt.kind === "chooseMany" && prompt.reason === "mulligan")) && (
+      {engineMode && prompt && me && (prompt.kind === "mulligan" || (prompt.kind === "chooseMany" && (prompt.reason === "mulligan" || prompt.reason === "putBack"))) && (
         <EngineMulligan prompt={prompt} view={view} printings={printings} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} />
       )}
       {showMulligan && mePlayer && (

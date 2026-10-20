@@ -464,7 +464,17 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
         card: raw.card && typeof raw.card === "object" ? toOptionCard(raw.card as EngineCardJson, ctx) : null,
       };
     case "mulligan":
-      return { kind: "mulligan", promptId, title, cardsToReturn: Number(raw.cardsToReturn ?? 0), hand: cardsOnly(raw.hand, ctx), ...(Array.isArray(raw.serumPowder) && raw.serumPowder.length ? { serumPowder: raw.serumPowder.map((id) => String(id)) } : {}) };
+      return {
+        kind: "mulligan",
+        promptId,
+        title,
+        cardsToReturn: Number(raw.cardsToReturn ?? 0),
+        hand: cardsOnly(raw.hand, ctx),
+        ...(Array.isArray(raw.serumPowder) && raw.serumPowder.length ? { serumPowder: raw.serumPowder.map((id) => String(id)) } : {}),
+        ...(typeof raw.mulligans === "number" ? { mulligans: raw.mulligans } : {}),
+        ...(typeof raw.freeMulligans === "number" ? { freeMulligans: raw.freeMulligans } : {}),
+        ...(typeof raw.nextBottom === "number" ? { nextBottom: raw.nextBottom } : {}),
+      };
     case "number":
       return { kind: "number", promptId, title, source: str(raw.source), min: Number(raw.min ?? 0), max: Number(raw.max ?? 0), values: Array.isArray(raw.values) ? (raw.values as unknown[]).map(Number).filter((n) => Number.isFinite(n)) : null };
     case "order":
