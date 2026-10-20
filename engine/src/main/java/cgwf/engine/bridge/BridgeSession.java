@@ -81,6 +81,7 @@ public final class BridgeSession {
     private volatile Transport transport;
     private volatile Function<Player, JsonObject> viewBuilder;
     private volatile Runnable beforeAsk;
+    private volatile StartingPlayer startingPlayer;
     private CompletableFuture<JsonObject> pending;
     private int pendingId = -1;
     private volatile JsonObject openPrompt;
@@ -238,4 +239,9 @@ public final class BridgeSession {
     public boolean autoPassesEmpty(int turn) {
         return stops.autoPassEmpty && !holding(turn);
     }
+
+    /** The table's starting player (D20 roll or random pick), or null when Forge decides. */
+    public Player startingPlayer() { StartingPlayer s = startingPlayer; return s == null ? null : s.get(); }
+
+    public void setStartingPlayer(StartingPlayer s) { this.startingPlayer = s; }
 }

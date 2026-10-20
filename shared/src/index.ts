@@ -30,3 +30,4 @@ export * from "./discord.js";
 export * from "./printing.js";
 export * from "./coach.js";
 export * from "./doctor.js";
+export * from "./firstRoll.js";

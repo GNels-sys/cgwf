@@ -42,7 +42,20 @@ export function TableSettings({ room, sock, isHost }: { room: RoomInfo; sock: Ro
           {room.tableBracketChosen ? "" : " (automatic: highest deck bracket)"}
         </p>
       )}
-      <p className="muted small table-settings-note">Both settings are fixed when the game starts. Only finished games that are not test games count in deck stats.</p>
+      {isHost ? (
+        <label className="field table-settings-first">
+          <span>Who goes first</span>
+          <select value={room.firstPlayer} onChange={(e) => sock.send({ t: "tableSettings", firstPlayer: e.target.value === "random" ? "random" : "roll" })}>
+            <option value="roll">Roll a D20 (everyone rolls)</option>
+            <option value="random">Random (no roll)</option>
+          </select>
+        </label>
+      ) : (
+        <p className="table-settings-first muted small">
+          Who goes first: <strong>{room.firstPlayer === "random" ? "Random" : "Roll a D20"}</strong>
+        </p>
+      )}
+      <p className="muted small table-settings-note">These settings are fixed when the game starts. Only finished games that are not test games count in deck stats.</p>
     </section>
   );
 }

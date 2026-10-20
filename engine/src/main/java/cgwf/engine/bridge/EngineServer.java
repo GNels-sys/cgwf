@@ -27,7 +27,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@code gameId} and, where seat-specific, {@code seat}. Browsers never connect here.
  *
  * <pre>
- * CGwF -> engine: createGame {rid, gameId, seed?, seats:[{seat, kind:"human"|"ai", name, deck}]}
+ * CGwF -> engine: createGame {rid, gameId, seed?, deferStart?, startingSeat?, seats:[{seat, kind:"human"|"ai", name, deck}]}
+ *                 beginGame {gameId, startingSeat?}   (after createGame with deferStart, once the table rolled for who goes first)
  *                 answer {gameId, seat, promptId, ...}   setStops {gameId, seat, stops}   hold {gameId, seat, turn|null}
  *                 resync {gameId, seat}   attachSeat/detachSeat {gameId, seat}   concede {gameId, seat}
  *                 endGame {gameId}   health {rid}   ping
@@ -114,6 +115,10 @@ public final class EngineServer extends WebSocketServer {
         try {
             switch (type) {
                 case "createGame" -> createGame(conn, m, rid);
+                case "beginGame" -> {
+                    game(gameId).begin(optInt(m, "startingSeat"));
+                    System.err.println("[engine] game " + gameId + " began, starting seat " + optInt(m, "startingSeat"));
+                }
                 case "answer" -> game(gameId).answer(seat(m), m);
                 case "setStops" -> game(gameId).setStops(seat(m), m.has("stops") && m.get("stops").isJsonObject() ? m.getAsJsonObject("stops") : null);
                 case "hold" -> game(gameId).setHold(seat(m), m.has("turn") && !m.get("turn").isJsonNull() ? m.get("turn").getAsInt() : 0);
@@ -172,7 +177,7 @@ public final class EngineServer extends WebSocketServer {
         String gameId = str(m, "gameId");
         if (gameId == null || gameId.isBlank()) throw new IllegalArgumentException("gameId is required");
         if (games.containsKey(gameId)) throw new IllegalArgumentException("a game with that id is already running");
-        games.entrySet().removeIf(e -> e.getValue().isOver());
+        games.entrySet().removeIf(e -> e.getValue().isOver() || e.getValue().isStale(STALE_DEFERRED_MS));
         if (games.size() >= maxGames) throw new IllegalArgumentException("engine busy: " + games.size() + " games running");
         long seed = m.has("seed") && !m.get("seed").isJsonNull() ? m.get("seed").getAsLong() : System.nanoTime();
         if (!m.has("seats") || !m.get("seats").isJsonArray() || m.getAsJsonArray("seats").size() < 2) throw new IllegalArgumentException("need at least two seats");
@@ -193,8 +198,19 @@ public final class EngineServer extends WebSocketServer {
         JsonObject created = session.createdFrame();
         if (rid != null) created.addProperty("rid", rid);
         conn.send(created.toString());
-        session.start();
+        if (m.has("deferStart") && m.get("deferStart").getAsBoolean()) {
+            System.err.println("[engine] game " + gameId + " created with " + specs.size() + " seats, waiting for beginGame (" + activeGames() + " active)");
+            return;
+        }
+        session.begin(optInt(m, "startingSeat"));
         System.err.println("[engine] game " + gameId + " started with " + specs.size() + " seats (" + activeGames() + " active)");
+    }
+
+    /** A deferred game the relay never began (it restarted mid-roll) is dropped after this. */
+    private static final long STALE_DEFERRED_MS = 30 * 60_000L;
+
+    private static Integer optInt(JsonObject m, String key) {
+        return m.has(key) && !m.get(key).isJsonNull() ? m.get(key).getAsInt() : null;
     }
 
     private int activeGames() {

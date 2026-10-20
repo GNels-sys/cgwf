@@ -199,6 +199,8 @@ export const rooms = sqliteTable(
     voiceInviteUrl: text("voice_invite_url"),
     /** Manual fallback: a Discord invite the host pasted (or their saved default), when the bot is off. */
     voiceManualUrl: text("voice_manual_url"),
+    /** Engine tables, lobby setting: "roll" (everyone rolls a D20 for who goes first, the default) or "random". */
+    firstPlayer: text("first_player").notNull().default("roll"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
@@ -228,6 +230,10 @@ export const gameResults = sqliteTable(
     /** Forge's own end reason (AllOpponentsLost, Draw, ...) or why the table was closed. */
     detail: text("detail"),
     turns: integer("turns"),
+    /** The seat that took the first turn (the D20 roll's winner or the random pick); null before it was decided. */
+    startingSeat: integer("starting_seat"),
+    /** How the starting seat was decided: "roll" | "random" (null for games from before 2026-10-19). */
+    firstPlayerMethod: text("first_player_method"),
   },
   (t) => [index("game_results_counted_idx").on(t.counted)],
 );

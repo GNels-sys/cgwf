@@ -108,6 +108,11 @@ export class GameResults {
     })();
   }
 
+  /** Who took the first turn (the D20 roll's winner or the random pick), once the table decided. */
+  recordStartingSeat(roomId: string, seat: number, method: "roll" | "random"): void {
+    this.handle.db.update(gameResults).set({ startingSeat: seat, firstPlayerMethod: method }).where(eq(gameResults.id, roomId)).run();
+  }
+
   /** The table was closed before Forge finished: kept for the record, never counted. */
   abandon(roomId: string, detail: string): void {
     const row = this.handle.db.select().from(gameResults).where(eq(gameResults.id, roomId)).get();

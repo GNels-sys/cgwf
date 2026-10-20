@@ -10,6 +10,9 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cgwf-engine-"));
 process.env.DATA_DIR = tmp;
 process.env.SKIP_AUTO_INGEST = "1";
 process.env.ENGINE_ABSENT_GRACE_MS = "300"; // short grace so the reload test runs in well under a second
+// Who goes first: everyone at the other tests' tables is rolled for within moments (the roll tests set their own timing).
+process.env.FIRST_ROLL_AUTO_MS = "20";
+process.env.FIRST_ROLL_TIMEOUT_MS = "60";
 
 const { buildApp } = await import("../app.js");
 const fixture = fileURLToPath(new URL("../scryfall/fixtures/cards.sample.json", import.meta.url));
@@ -239,6 +242,8 @@ describe("engine tables (relay to the rules engine)", () => {
     const m = alex.mark();
     alex.send({ t: "start" });
     const created = await engine.waitFor((f) => f.type === "createGame");
+    // nobody taps Roll here: both players are rolled for after the (test) timeout, then the game begins
+    await engine.waitFor((f) => f.type === "beginGame" && f.gameId === created.gameId);
     // remembered stops go to the engine right after the game is created
     const stopsFrames = await engine.waitFor((f) => f.type === "setStops" && f.seat === 1);
     expect((stopsFrames.stops as { respond: boolean }).respond).toBe(true);
@@ -791,5 +796,195 @@ describe("engine tables (relay to the rules engine)", () => {
     const res = await ctx.app.inject({ method: "GET", url: `/api/rooms/${code}`, headers: auth(alex.token) });
     expect((res.json() as { room: { status: string } }).room.status).toBe("ended");
     await Promise.all([alex.close(), blair.close(), casey.close()]);
+  });
+  // ------------------------------------------------------------ who goes first (D20 roll, 2026-10-19)
+
+  describe("rolling for who goes first", () => {
+    type RoomMsg = Extract<ServerMessage, { t: "room" }>;
+    const isRoom = (f: ServerMessage): f is RoomMsg => f.t === "room";
+    let timing: { autoMs: number; timeoutMs: number; staggerMs: number };
+    let die: { roll: () => number };
+    let realRoll: () => number;
+    let saved = { autoMs: 0, timeoutMs: 0, staggerMs: 0 };
+
+    beforeAll(async () => {
+      const mod = await import("../rooms/engineTable.js");
+      timing = mod.firstRollTiming;
+      die = mod.d20;
+      realRoll = die.roll;
+      saved = { ...timing };
+    });
+    afterAll(() => {
+      Object.assign(timing, saved);
+      die.roll = realRoll;
+    });
+
+    const scripted = (values: number[]) => {
+      const queue = [...values];
+      die.roll = () => {
+        const v = queue.shift();
+        if (v === undefined) throw new Error("the test ran out of scripted rolls");
+        return v;
+      };
+    };
+
+    /** A fresh two-seat engine table, both players connected and seated with legal decks. */
+    const twoSeats = async (label: string) => {
+      const res = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(alex.token), payload: { engine: true } });
+      const c = (res.json() as { room: { code: string } }).room.code;
+      const a = new Client(`alex-${label}`, alex.token);
+      const b = new Client(`blair-${label}`, blair.token);
+      await a.connect(port, c);
+      await ctx.app.inject({ method: "POST", url: `/api/rooms/${c}/join`, headers: auth(blair.token) });
+      await b.connect(port, c);
+      const da = await makeDeck(alex.token, `Forests ${label} A`, legal);
+      const db = await makeDeck(blair.token, `Forests ${label} B`, legal);
+      a.send({ t: "seat", seat: 0, deckId: da });
+      b.send({ t: "seat", seat: 1, deckId: db });
+      await a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.members.filter((m) => m.deckId).length === 2);
+      return { code: c, a, b, room: ctx.roomsManager.get(c)! };
+    };
+
+    it("is a lobby setting: Roll a D20 by default, Random for tables that skip it", async () => {
+      timing.autoMs = 20;
+      timing.timeoutMs = 60;
+      const t = await twoSeats("set");
+      const first = t.a.frames.filter(isRoom).at(-1)!;
+      expect(first.room.firstPlayer).toBe("roll");
+      const m = t.a.mark();
+      t.a.send({ t: "tableSettings", firstPlayer: "random" });
+      await t.a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.firstPlayer === "random", m);
+      const bad = t.b.mark();
+      t.b.send({ t: "tableSettings", firstPlayer: "roll" });
+      expect(await t.b.errorSince(bad)).toMatch(/only the host/);
+      // Random: the server picks, no ceremony; the pick goes to Forge and is recorded
+      const s = t.a.mark();
+      t.a.send({ t: "start" });
+      const created = await engine.waitFor((f) => f.type === "createGame" && f.gameId === t.room.id);
+      expect(created.deferStart).toBe(true);
+      const begin = await engine.waitFor((f) => f.type === "beginGame" && f.gameId === t.room.id);
+      expect([0, 1]).toContain(begin.startingSeat);
+      const playing = await t.a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.status === "playing", s);
+      expect(playing.room.firstRoll).toBeNull();
+      const { gameResults, roomEvents } = await import("../db/schema.js");
+      const { eq } = await import("drizzle-orm");
+      expect(ctx.handle.db.select().from(gameResults).where(eq(gameResults.id, t.room.id)).get()).toMatchObject({ startingSeat: begin.startingSeat, firstPlayerMethod: "random" });
+      const lines = ctx.handle.db.select().from(roomEvents).where(eq(roomEvents.roomId, t.room.id)).all().filter((e) => e.type === "EngineLog").map((e) => (JSON.parse(e.payload) as { text: string }).text);
+      expect(lines).toContain(`Random pick: ${begin.startingSeat === 0 ? "Alex" : "Blair"} goes first`);
+      await t.a.close();
+      await t.b.close();
+    });
+
+    it("each player rolls their own die; a tie re-rolls among the tied only; the winner reaches the engine and the record", async () => {
+      timing.autoMs = 60_000; // nobody is rolled for in this test
+      timing.timeoutMs = 60_000;
+      const t = await twoSeats("tie");
+      scripted([12, 12, 5, 17]);
+      const s = t.a.mark();
+      t.a.send({ t: "start" });
+      const rolling = await t.a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.status === "playing" && f.room.firstRoll?.status === "rolling", s);
+      expect(rolling.room.firstRoll!.seats.map((x) => [x.seat, x.value, x.contending])).toEqual([[0, null, true], [1, null, true]]);
+      expect(engine.received.find((f) => f.type === "beginGame" && f.gameId === t.room.id)).toBeUndefined();
+      // a spectator has no die
+      const spec = new Client("casey-tie", casey.token);
+      await ctx.app.inject({ method: "POST", url: `/api/rooms/${t.code}/join`, headers: auth(casey.token) });
+      await spec.connect(port, t.code);
+      const sm = spec.mark();
+      spec.send({ t: "roll" });
+      expect(await spec.errorSince(sm)).toMatch(/only seated players roll/);
+      // Alex rolls 12; rolling again is refused
+      let m = t.b.mark();
+      t.a.send({ t: "roll" });
+      await t.b.waitFor((f): f is RoomMsg => isRoom(f) && f.room.firstRoll?.seats.find((x) => x.seat === 0)?.value === 12, m);
+      const twice = t.a.mark();
+      t.a.send({ t: "roll" });
+      expect(await t.a.errorSince(twice)).toMatch(/already rolled/);
+      // Blair rolls 12 too: a tie, round 2 for both
+      m = t.a.mark();
+      t.b.send({ t: "roll" });
+      const r2 = await t.a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.firstRoll?.round === 2, m);
+      expect(r2.room.firstRoll!.seats.map((x) => [x.value, x.contending, x.history])).toEqual([[null, true, [12]], [null, true, [12]]]);
+      t.a.send({ t: "roll" });
+      m = t.a.mark();
+      t.b.send({ t: "roll" });
+      const done = await t.a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.firstRoll?.status === "done", m);
+      expect(done.room.firstRoll).toMatchObject({ winnerSeat: 1, round: 2 });
+      expect(done.room.firstRoll!.doneAt).toBeGreaterThan(0);
+      const begin = await engine.waitFor((f) => f.type === "beginGame" && f.gameId === t.room.id);
+      expect(begin.startingSeat).toBe(1);
+      const { gameResults, roomEvents } = await import("../db/schema.js");
+      const { eq } = await import("drizzle-orm");
+      expect(ctx.handle.db.select().from(gameResults).where(eq(gameResults.id, t.room.id)).get()).toMatchObject({ startingSeat: 1, firstPlayerMethod: "roll" });
+      const events = ctx.handle.db.select().from(roomEvents).where(eq(roomEvents.roomId, t.room.id)).all();
+      const lines = events.filter((e) => e.type === "EngineLog").map((e) => (JSON.parse(e.payload) as { text: string }).text);
+      expect(lines).toEqual(["Alex rolled 12", "Blair rolled 12", "Alex and Blair tied with 12: they roll again", "Alex rolled 5", "Blair rolled 17", "Blair goes first"]);
+      expect(events.filter((e) => e.type === "EngineRoll").map((e) => JSON.parse(e.payload))).toEqual([
+        { round: 1, seat: 0, value: 12, auto: false },
+        { round: 1, seat: 1, value: 12, auto: false },
+        { round: 2, seat: 0, value: 5, auto: false },
+        { round: 2, seat: 1, value: 17, auto: false },
+      ]);
+      // after the roll nobody can roll again
+      const late = t.a.mark();
+      t.a.send({ t: "roll" });
+      expect(await t.a.errorSince(late)).toMatch(/nobody is rolling/);
+      await spec.close();
+      await t.a.close();
+      await t.b.close();
+    });
+
+    it("bots and absent seats roll on their own, and a reload mid-roll (client or relay) shows the rolls so far", async () => {
+      timing.autoMs = 30;
+      timing.staggerMs = 5;
+      timing.timeoutMs = 60_000;
+      const { users, decks, deckCards, roomMembers } = await import("../db/schema.js");
+      const res = await ctx.app.inject({ method: "POST", url: "/api/rooms", headers: auth(alex.token), payload: { engine: true } });
+      const c = (res.json() as { room: { code: string } }).room.code;
+      const room = ctx.roomsManager.get(c)!;
+      const now = new Date().toISOString();
+      ctx.handle.db.insert(users).values({ id: "bot-user-roll", displayName: "Goblin bot", avatar: "owl", color: "ruby", createdAt: now, lastSeenAt: now, isAgent: true } as never).run();
+      ctx.handle.db.insert(decks).values({ id: "bot-deck-roll", userId: "bot-user-roll", name: "Bot forests", format: "commander", createdAt: now, updatedAt: now } as never).run();
+      ctx.handle.db.insert(deckCards).values([{ deckId: "bot-deck-roll", cardId: ATRAXA, quantity: 1, board: "commander", position: 0 }, { deckId: "bot-deck-roll", cardId: FOREST, quantity: 99, board: "main", position: 1 }] as never).run();
+      ctx.handle.db.insert(roomMembers).values({ roomId: room.id, userId: "bot-user-roll", role: "player", seat: 1, deckId: "bot-deck-roll", joinedAt: now }).run();
+      // Blair is seated but not connected (absent)
+      const blairId = ((await ctx.app.inject({ method: "GET", url: "/api/me", headers: auth(blair.token) })).json() as { user: { id: string } }).user.id;
+      ctx.handle.db.insert(roomMembers).values({ roomId: room.id, userId: blairId, role: "player", seat: 2, deckId: await makeDeck(blair.token, "Forests absent", legal), joinedAt: now }).run();
+      const a = new Client("alex-auto", alex.token);
+      await a.connect(port, c);
+      a.send({ t: "seat", seat: 0, deckId: await makeDeck(alex.token, "Forests auto", legal) });
+      await a.waitFor((f): f is RoomMsg => isRoom(f) && f.room.members.filter((m) => m.deckId).length === 3);
+      scripted([7, 15, 3]); // bot 7, Blair (absent) 15, then Alex 3
+      a.send({ t: "start" });
+      // the bot and the absent seat roll on their own; Alex (connected) does not
+      const both = await a.waitFor((f): f is RoomMsg => isRoom(f) && (f.room.firstRoll?.seats.filter((x) => x.value !== null).length ?? 0) === 2, 0, 3000);
+      const fr = both.room.firstRoll!;
+      expect(fr.status).toBe("rolling");
+      expect(fr.seats.find((x) => x.seat === 1)).toMatchObject({ value: 7, auto: true });
+      expect(fr.seats.find((x) => x.seat === 2)).toMatchObject({ value: 15, auto: true });
+      expect(fr.seats.find((x) => x.seat === 0)).toMatchObject({ value: null, auto: false });
+      // client reload: a new socket gets the roll as it stands (a reload is quicker than the absent-seat roll)
+      timing.autoMs = 60_000;
+      await a.close();
+      const a2 = new Client("alex-auto2", alex.token);
+      await a2.connect(port, c);
+      const again = await a2.waitFor((f): f is RoomMsg => isRoom(f) && f.room.firstRoll !== null);
+      expect(again.room.firstRoll!.seats.map((x) => x.value)).toEqual([null, 7, 15]);
+      // relay reload: the room falls out of memory and is rebuilt from the event log
+      await a2.close();
+      await new Promise((r) => setTimeout(r, 100));
+      (room as unknown as { lastActivity: number }).lastActivity = 0;
+      (ctx.roomsManager as unknown as { sweep(): void }).sweep();
+      const a3 = new Client("alex-auto3", alex.token);
+      await a3.connect(port, c);
+      const rebuilt = await a3.waitFor((f): f is RoomMsg => isRoom(f) && f.room.firstRoll !== null);
+      expect(rebuilt.room.firstRoll).toMatchObject({ status: "rolling", round: 1 });
+      expect(rebuilt.room.firstRoll!.seats.map((x) => x.value)).toEqual([null, 7, 15]);
+      const m = a3.mark();
+      a3.send({ t: "roll" });
+      const done = await a3.waitFor((f): f is RoomMsg => isRoom(f) && f.room.firstRoll?.status === "done", m);
+      expect(done.room.firstRoll!.winnerSeat).toBe(2);
+      expect((await engine.waitFor((f) => f.type === "beginGame" && f.gameId === room.id)).startingSeat).toBe(2);
+      await a3.close();
+    });
   });
 });

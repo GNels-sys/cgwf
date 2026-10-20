@@ -65,9 +65,17 @@ function boxOf(el: Element): Box {
   return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
 }
 
+/** While the D20 roll for who goes first covers the table, its own controls are the ones that must be reachable. */
+const FIRST_ROLL_CONTROLS: Array<[string, string]> = [
+  ["Roll", ".first-roll-roll"],
+  ["first-roll Continue", ".first-roll-close"],
+  ["first-roll panel", ".first-roll-box h2"],
+];
+
 export function collectLayout(root: Document = document): LayoutSample {
   const controls: ControlSample[] = [];
-  for (const [name, selector] of CONTROLS) {
+  const list = root.querySelector(".first-roll") ? FIRST_ROLL_CONTROLS : CONTROLS;
+  for (const [name, selector] of list) {
     const seen = new Set<Element>();
     root.querySelectorAll(selector).forEach((el, i) => {
       if (seen.has(el)) return;

@@ -1233,6 +1233,8 @@ export function applyEvent(prev: GameState | null, ev: GameEvent, seed: string):
     case "EngineLog":
     case "EngineAnswer":
     case "EngineGameOver":
+    case "EngineRoll":
+    case "EngineFirstPlayer":
       // Rules-engine tables keep their own log; the classic reducer never sees these (the relay appends them without reducing).
       fail("engine events do not apply to this table");
       break;

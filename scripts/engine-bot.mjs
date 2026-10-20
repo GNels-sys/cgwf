@@ -100,6 +100,7 @@ function answerFor(p, view) {
   }
 }
 
+let rolledRound = 0;
 const ws = new WebSocket(`${WS_BASE}/api/rooms/${CODE}/ws?token=${encodeURIComponent(reg.token)}`);
 const send = (m) => ws.send(JSON.stringify(m));
 ws.on("open", () => send({ t: "seat", seat: SEAT, deckId: deck.deck.id }));
@@ -110,6 +111,13 @@ ws.on("message", (data) => {
       console.error(`[${NAME}] game over; ${JSON.stringify(stats)}`);
       ws.close();
       process.exit(0);
+    }
+    // rolling for who goes first: roll our own die a moment after it is our turn to roll
+    const fr = m.room.firstRoll;
+    const mine = fr && fr.status === "rolling" ? fr.seats.find((x) => x.seat === SEAT) : null;
+    if (mine && mine.contending && mine.value === null && rolledRound !== fr.round) {
+      rolledRound = fr.round;
+      setTimeout(() => send({ t: "roll" }), 1200);
     }
     return;
   }
