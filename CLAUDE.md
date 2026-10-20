@@ -1236,6 +1236,20 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   return value, re-ask on illegal answers, "no question when the rules leave no choice";
   `HiddenInformationTest` still audits every prompt's view. `server/src/engine/engine.test.ts`
   round-trips each kind through the relay to the seat's socket and back.
+- **Counts are clamped to the options (2026-10-19).** Owner report: Blasphemous Edict ("each player
+  sacrifices thirteen creatures") with six creatures sent a choose-13-of-6 prompt that could never be
+  answered, so the spell never resolved. Rule 701.21a: a player sacrifices as many as they can. The
+  fix is at the root, in `BridgeController.chooseManyIndex` / `chooseManyText` (every count-carrying
+  prompt: sacrifice, destroy, discard, reveal, the cost decider, choose cards / entities for an
+  effect, zone changes, one-of-each groups): max = min(max, options), min = min(min, max); no options
+  (or max 0) = no prompt, an empty choice; when min equals the options they are all chosen without a
+  prompt and the log says so for sacrifice / destroy / discard / reveal / exile ("Alex sacrificed all
+  6 creatures (Blasphemous Edict).", "both creatures", "their only creature"; counts only, never
+  names, since the options may be hidden cards). Costs are different: a cost is paid in full or not
+  at all, so `chooseCardsForCost` answers null (unpaid) when there are fewer cards than the cost asks,
+  as Forge's human controller does, and Forge's own `canPay` keeps such a spell off the priority
+  list. Tests: `PromptRoundTripTest.countClamp*` (the Edict with six creatures and an opponent's
+  three, sacrifice two of two / of three, empty lists, Cathartic Reunion with one other card).
 - **The stack on screen (Stage 2 M2).** `SeatView.stack()` describes every stack item (public
   information): kind spell | ability | trigger, the source card with its identity (so the relay
   resolves a printing and ships it with the frame), and `targets` (cards, players, and other

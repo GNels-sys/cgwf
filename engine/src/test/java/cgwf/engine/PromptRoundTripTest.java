@@ -587,6 +587,128 @@ class PromptRoundTripTest {
         assertEquals(1, candidates.size());
     }
 
+    // ------------------------------------------------------------------ counts clamped to the options (rule 701.21a, 2026-10-19)
+
+    private static List<Card> freshOn(Player owner, String name, int count, ZoneType zone) {
+        List<Card> out = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            Card c = Card.fromPaperCard(StaticData.instance().getCommonCards().getCard(name), owner);
+            owner.getZone(zone).add(c);
+            out.add(c);
+        }
+        return out;
+    }
+
+    private static boolean logHas(String line) {
+        for (var e : game.getGameLog().getLogEntries(null)) if (e.message().equals(line)) return true;
+        return false;
+    }
+
+    /** The owner's live game: six creatures, "each player sacrifices thirteen creatures", a choose-13-of-6 prompt that could never be answered. */
+    @Test
+    void countClampBlasphemousEdictSacrificesEverythingWithoutAsking() {
+        // only the test's creatures on the battlefield: set the others aside and put them back afterwards
+        Map<Player, List<Card>> aside = new java.util.HashMap<>();
+        for (Player p : game.getRegisteredPlayers()) {
+            List<Card> mine = new ArrayList<>();
+            for (Card c : new ArrayList<>(p.getCardsIn(ZoneType.Battlefield))) if (c.isCreature()) { p.getZone(ZoneType.Battlefield).remove(c); mine.add(c); }
+            aside.put(p, mine);
+        }
+        List<Card> made = new ArrayList<>(freshOn(me, "Grizzly Bears", 6, ZoneType.Battlefield));
+        made.addAll(freshOn(opp, "Grizzly Bears", 3, ZoneType.Battlefield));
+        Card edict = fresh("Blasphemous Edict", ZoneType.Hand);
+        int asked = prompts.size();
+        try {
+            SpellAbility sa = edict.getFirstSpellAbility();
+            sa.setActivatingPlayer(me);
+            forge.game.ability.AbilityUtils.resolve(sa);
+            assertEquals(asked, prompts.size(), "no prompt: every creature has to go");
+            assertEquals(0, me.getCreaturesInPlay().size(), "all six of the human's creatures were sacrificed");
+            assertEquals(0, opp.getCreaturesInPlay().size(), "and the opponent's three likewise");
+            assertTrue(logHas(me.getName() + " sacrificed all 6 creatures (Blasphemous Edict)."), "the log says so");
+        } finally {
+            drop(edict);
+            drop(made.toArray(new Card[0]));
+            for (Map.Entry<Player, List<Card>> e : aside.entrySet()) for (Card c : e.getValue()) e.getKey().getZone(ZoneType.Battlefield).add(c);
+        }
+    }
+
+    @Test
+    void countClampSacrificeTwoAsksOnlyWhenThereIsAChoice() {
+        List<Card> two = freshOn(me, "Grizzly Bears", 2, ZoneType.Battlefield);
+        List<Card> three = freshOn(me, "Llanowar Elves", 3, ZoneType.Battlefield);
+        try {
+            int asked = prompts.size();
+            CardCollectionView both = ctl.choosePermanentsToSacrifice(null, 2, 2, new CardCollection(two), "Sacrifice two creatures");
+            assertEquals(asked, prompts.size(), "exactly two creatures: no prompt");
+            assertEquals(two, new ArrayList<>(both));
+            assertTrue(logHas(me.getName() + " sacrificed both creatures."));
+
+            script.add(p -> answer("options", ints(0, 2)));
+            CardCollectionView picked = ctl.choosePermanentsToSacrifice(null, 2, 2, new CardCollection(three), "Sacrifice two creatures");
+            JsonObject p = next("chooseMany");
+            assertEquals(2, p.get("min").getAsInt());
+            assertEquals(2, p.get("max").getAsInt());
+            assertEquals(3, p.getAsJsonArray("options").size());
+            assertEquals(List.of(three.get(0), three.get(2)), new ArrayList<>(picked));
+
+            // the reverse edge: nothing to choose from is no question at all
+            asked = prompts.size();
+            assertTrue(ctl.choosePermanentsToSacrifice(null, 0, 1, new CardCollection(), "Sacrifice up to one creature").isEmpty());
+            assertTrue(ctl.choosePermanentsToSacrifice(null, 2, 2, new CardCollection(), "Sacrifice two creatures").isEmpty());
+            assertTrue(ctl.chooseCardsForEffect(new CardCollection(), null, "Choose up to two", 0, 2, true, null).isEmpty());
+            assertEquals(asked, prompts.size(), "no prompt without options");
+            // and no prompt ever goes out whose min exceeds its options
+            for (JsonObject q : prompts) {
+                if (!"chooseMany".equals(q.get("prompt").getAsString())) continue;
+                assertTrue(q.get("min").getAsInt() <= q.getAsJsonArray("options").size(), "min within the options: " + q.get("title"));
+                assertTrue(q.get("min").getAsInt() <= q.get("max").getAsInt());
+            }
+        } finally {
+            drop(two.toArray(new Card[0]));
+            drop(three.toArray(new Card[0]));
+        }
+    }
+
+    /** Cards offered at a priority prompt (empty when the seat passed without being asked). */
+    private static List<Integer> offeredCards() {
+        int before = prompts.size();
+        List<Integer> ids = new ArrayList<>();
+        script.add(p -> {
+            for (var e : p.getAsJsonArray("options")) {
+                JsonObject o = e.getAsJsonObject();
+                if (o.has("cardId")) ids.add(o.get("cardId").getAsInt());
+            }
+            return new JsonObject(); // pass
+        });
+        ctl.chooseSpellAbilityToPlay();
+        if (prompts.size() == before) script.pollLast();
+        return ids;
+    }
+
+    /** A cost is paid in full or not at all: "discard two cards" with one other card in hand is not castable (Forge's rule too). */
+    @Test
+    void countClampDiscardCostThatCannotBePaidIsNotOffered() {
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, me, 5);
+        List<Card> handAside = new ArrayList<>(me.getCardsIn(ZoneType.Hand));
+        for (Card c : handAside) me.getZone(ZoneType.Hand).remove(c);
+        List<Card> mountains = freshOn(me, "Mountain", 2, ZoneType.Battlefield);
+        Card reunion = fresh("Cathartic Reunion", ZoneType.Hand);
+        List<Card> extra = freshOn(me, "Grizzly Bears", 1, ZoneType.Hand);
+        try {
+            assertFalse(offeredCards().contains(reunion.getId()), "one other card in hand: the discard-two cost cannot be paid");
+            extra.addAll(freshOn(me, "Grizzly Bears", 1, ZoneType.Hand));
+            assertTrue(offeredCards().contains(reunion.getId()), "two other cards: castable");
+            // and the cost decider refuses a short payment instead of taking what there is
+            assertNull(ctl.chooseCardsForCost(new CardCollection(extra.subList(0, 1)), reunion.getFirstSpellAbility(), null, 2, false, "Discard two cards"));
+        } finally {
+            drop(reunion);
+            drop(extra.toArray(new Card[0]));
+            drop(mountains.toArray(new Card[0]));
+            for (Card c : handAside) me.getZone(ZoneType.Hand).add(c);
+        }
+    }
+
     // ------------------------------------------------------------------ decisions that used to be inherited from Forge's AI (2026-10-18 audit)
 
     private static Card fresh(String name, ZoneType zone) {
@@ -774,9 +896,9 @@ class PromptRoundTripTest {
             groups.put("Red", new CardCollection(List.of(bolt, shock)));
             int before = prompts.size();
             script.add(p -> answer("options", ints(1)));
-            script.add(p -> answer("options", ints(0)));
             CardCollection got = ctl.chooseCardsForEffectMultiple(groups, bolt.getFirstSpellAbility(), "Put into your hand", false);
-            assertEquals(before + 2, prompts.size(), "one question per group");
+            // the second group has one card left after the first pick: no choice, so no question
+            assertEquals(before + 1, prompts.size(), "one question per group that still has a choice");
             assertEquals(2, got.size());
             assertTrue(got.contains(bolt) && got.contains(shock), "a card picked for one group is not offered again");
         } finally { drop(bolt, shock); }

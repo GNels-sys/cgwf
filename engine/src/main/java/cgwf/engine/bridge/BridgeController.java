@@ -356,6 +356,7 @@ public final class BridgeController extends PlayerControllerAi {
     public CardCollectionView chooseCardsForCost(CardCollectionView optionList, SpellAbility sa, CostPartWithList cpl, int amount, boolean isOptional, String prompt) {
         List<Card> valid = new ArrayList<>();
         for (Card c : optionList) valid.add(c);
+        if (valid.size() < amount) return null; // a cost is paid in full or not at all (Forge's human controller: null)
         List<Card> chosen = autopilot() ? null : chooseCards(prompt == null || prompt.isBlank() ? "Pay the cost of " + sourceOf(sa) : prompt, sourceOf(sa), valid, isOptional ? 0 : amount, amount, "cost");
         if (chosen == null) return super.chooseCardsForCost(optionList, sa, cpl, amount, isOptional, prompt);
         return new CardCollection(chosen);
@@ -1739,8 +1740,24 @@ public final class BridgeController extends PlayerControllerAi {
         return idx;
     }
 
-    /** Pick between min and max options; null = nobody answered or the answer was illegal. */
+    /**
+     * Pick between min and max options; null = nobody answered or the answer was illegal.
+     * Counts are clamped to the options first (rule 701.21a and friends: a player does as much as they
+     * can), like Forge's own human controller: nothing to choose = no question, and when every option
+     * must be chosen they all are, without a question, and the game log says so. A prompt whose min
+     * exceeds its options could never be answered and would freeze the game.
+     */
     private List<Integer> chooseManyIndex(String title, String source, List<GameObject> options, int min, int max, String reason) {
+        int n = options.size();
+        max = Math.min(max, n);
+        min = Math.max(0, Math.min(min, max));
+        if (max <= 0) return new ArrayList<>();
+        if (min == n) {
+            List<Integer> all = new ArrayList<>();
+            for (int i = 0; i < n; i++) all.add(i);
+            logChoseAll(reason, source, options);
+            return all;
+        }
         for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
             JsonObject p = prompt("chooseMany", title);
             p.addProperty("min", min);
@@ -1755,6 +1772,15 @@ public final class BridgeController extends PlayerControllerAi {
     }
 
     private List<Integer> chooseManyText(String title, String source, List<String> labels, int min, int max, String reason) {
+        int n = labels.size();
+        max = Math.min(max, n);
+        min = Math.max(0, Math.min(min, max));
+        if (max <= 0) return new ArrayList<>();
+        if (min == n) {
+            List<Integer> all = new ArrayList<>();
+            for (int i = 0; i < n; i++) all.add(i);
+            return all;
+        }
         for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
             JsonObject p = prompt("chooseMany", title);
             p.addProperty("min", min);
@@ -1779,10 +1805,30 @@ public final class BridgeController extends PlayerControllerAi {
         return out;
     }
 
-    /** Cards only (used by the cost decider too). */
+    private static final Map<String, String> CHOSE_ALL_VERBS = Map.of(
+            "sacrifice", "sacrificed", "destroy", "destroyed", "discard", "discarded", "reveal", "revealed", "exile", "exiled");
+
+    /** "Alex sacrificed all 6 creatures (Blasphemous Edict)." Counts only: the options may be hidden cards. */
+    private void logChoseAll(String reason, String source, List<GameObject> options) {
+        String verb = reason == null ? null : CHOSE_ALL_VERBS.get(reason);
+        if (verb == null) return;
+        int n = options.size();
+        boolean creatures = true, lands = true, permanents = true;
+        for (GameObject o : options) {
+            if (!(o instanceof Card c)) { creatures = lands = permanents = false; break; }
+            creatures &= c.isCreature();
+            lands &= c.isLand();
+            permanents &= c.isInZone(ZoneType.Battlefield);
+        }
+        String noun = creatures ? "creature" : lands ? "land" : permanents ? "permanent" : "card";
+        String what = n == 1 ? "their only " + noun : n == 2 ? "both " + noun + "s" : "all " + n + " " + noun + "s";
+        String from = source == null || source.isBlank() || "the ability".equals(source) ? "" : " (" + source + ")";
+        game.getGameLog().add(GameLogEntryType.INFORMATION, player.getName() + " " + verb + " " + what + from + ".");
+    }
+
+    /** Cards only (used by the cost decider too). Counts are clamped in chooseManyIndex. */
     List<Card> chooseCards(String title, String source, List<Card> cards, int min, int max, String reason) {
-        if (cards.isEmpty()) return min == 0 ? new ArrayList<>() : null;
-        List<Integer> picks = chooseManyIndex(title, source, new ArrayList<GameObject>(cards), min, Math.min(max, cards.size()), reason);
+        List<Integer> picks = chooseManyIndex(title, source, new ArrayList<GameObject>(cards), min, max, reason);
         if (picks == null) return null;
         List<Card> out = new ArrayList<>();
         for (int i : picks) out.add(cards.get(i));
