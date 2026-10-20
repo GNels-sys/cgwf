@@ -152,7 +152,7 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
             room.revert(user.id, Number(msg.toSeq));
             break;
           case "tableSettings":
-            room.setTableSettings(user.id, { testGame: msg.testGame, tableBracket: msg.tableBracket });
+            room.setTableSettings(user.id, { testGame: msg.testGame, tableBracket: msg.tableBracket, firstPlayer: msg.firstPlayer });
             room.broadcastRoom();
             break;
           case "voiceLink":
@@ -178,6 +178,9 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
           case "stops":
             if (!msg.stops || typeof msg.stops !== "object") return fail("bad stops");
             room.engineStops(user.id, msg.stops);
+            break;
+          case "roll":
+            room.engineRoll(user.id);
             break;
           case "hold":
             if (msg.turn !== null && typeof msg.turn !== "number") return fail("bad hold");

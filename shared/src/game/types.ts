@@ -386,6 +386,10 @@ export type EventPayloads = {
   EngineAnswer: { seat: number; promptId: number; prompt: string; answer: Record<string, unknown> };
   /** Engine tables: how the engine ended the game. */
   EngineGameOver: { winner: PlayerId | null; endReason: string | null; turns: number };
+  /** Engine tables, before the first turn: one D20 roll for who goes first (rolled by the server). */
+  EngineRoll: { round: number; seat: number; value: number; auto: boolean };
+  /** Engine tables: who goes first, handed to Forge as the starting player. */
+  EngineFirstPlayer: { seat: number; method: "roll" | "random" };
 };
 
 export type EventType = keyof EventPayloads;
@@ -442,10 +446,12 @@ export const EVENT_TYPES = Object.keys({
   EngineLog: 0,
   EngineAnswer: 0,
   EngineGameOver: 0,
+  EngineRoll: 0,
+  EngineFirstPlayer: 0,
 } satisfies Record<EventType, 0>) as EventType[];
 
 /** Event types only the relay appends on engine tables; a client may never send them and the classic reducer refuses them. */
-export const ENGINE_ONLY_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>(["EngineLog", "EngineAnswer", "EngineGameOver"]);
+export const ENGINE_ONLY_EVENT_TYPES: ReadonlySet<EventType> = new Set<EventType>(["EngineLog", "EngineAnswer", "EngineGameOver", "EngineRoll", "EngineFirstPlayer"]);
 
 /** What a client sends: type + payload. The server adds seq, actor and ts. */
 export type EventInput = { [K in EventType]: { type: K; payload: EventPayloads[K] } }[EventType];

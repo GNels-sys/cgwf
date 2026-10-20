@@ -38,7 +38,7 @@ import { deckForEngine } from "../engine/deck.js";
 import type { GameResults } from "../stats/results.js";
 import type { DiscordVoice } from "../discord/voice.js";
 import type { DecisionRecorder } from "../coach/snapshots.js";
-import { normaliseInvite, type RoomVoice } from "@cgwf/shared";
+import { DEFAULT_FIRST_PLAYER, isFirstPlayerMethod, normaliseInvite, type RoomVoice } from "@cgwf/shared";
 import type { AdminOpenTable, EngineAnswer, EngineStops } from "@cgwf/shared";
 
 /** What the rules-engine integration needs (null when no engine is configured). */
@@ -279,6 +279,8 @@ export class LiveRoom {
       tableBracket: row.tableBracket ?? this.autoTableBracket(members),
       tableBracketChosen: row.tableBracket !== null && row.tableBracket !== undefined,
       voice: this.voiceFor(row, Boolean(forUserId && rows.some((m) => m.userId === forUserId))),
+      firstPlayer: isFirstPlayerMethod(row.firstPlayer) ? row.firstPlayer : DEFAULT_FIRST_PLAYER,
+      firstRoll: this.engineTable?.firstRollInfo() ?? null,
     };
   }
 
@@ -290,7 +292,7 @@ export class LiveRoom {
   }
 
   /** Host, lobby only: the Test-game toggle and the table bracket (null = automatic). Frozen at start. */
-  setTableSettings(userId: string, s: { testGame?: unknown; tableBracket?: unknown }): void {
+  setTableSettings(userId: string, s: { testGame?: unknown; tableBracket?: unknown; firstPlayer?: unknown }): void {
     const row = this.refreshRow();
     if (row.hostUserId !== userId) throw new RoomError("only the host can change the table settings");
     if (row.status !== "lobby") throw new RoomError("the game has started; the table settings are frozen");
@@ -301,6 +303,10 @@ export class LiveRoom {
       const b = Number(s.tableBracket);
       if (!Number.isInteger(b) || b < 1 || b > 5) throw new RoomError("the table bracket is 1 to 5");
       set.tableBracket = b;
+    }
+    if (s.firstPlayer !== undefined) {
+      if (!isFirstPlayerMethod(s.firstPlayer)) throw new RoomError("who goes first is \"roll\" or \"random\"");
+      set.firstPlayer = s.firstPlayer;
     }
     if (!Object.keys(set).length) return;
     this.handle.db.update(rooms).set(set).where(eq(rooms.id, this.id)).run();
@@ -448,6 +454,17 @@ export class LiveRoom {
     if (!this.engineTable) throw new RoomError("this table is not run by the rules engine");
     try {
       this.engineTable.setStops(userId, stops);
+    } catch (err) {
+      if (err instanceof EngineRoomError) throw new RoomError(err.message);
+      throw err;
+    }
+  }
+
+  /** Engine tables, rolling for who goes first: the caller rolls their own D20 (the server rolls it). */
+  engineRoll(userId: string): void {
+    if (!this.engineTable) throw new RoomError("this table is not run by the rules engine");
+    try {
+      this.engineTable.rollFor(userId);
     } catch (err) {
       if (err instanceof EngineRoomError) throw new RoomError(err.message);
       throw err;

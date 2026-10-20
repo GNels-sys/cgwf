@@ -170,8 +170,9 @@ export class EngineClient extends EventEmitter {
     });
   }
 
-  async createGame(gameId: string, seed: number, seats: EngineSeatRequest[]): Promise<GameCreatedFrame> {
-    const f = await this.request({ type: "createGame", gameId, seed, seats });
+  /** `deferStart`: the engine builds the game but waits for `beginGame {startingSeat}` (the table rolls for who goes first). */
+  async createGame(gameId: string, seed: number, seats: EngineSeatRequest[], opts: { deferStart?: boolean } = {}): Promise<GameCreatedFrame> {
+    const f = await this.request({ type: "createGame", gameId, seed, seats, ...(opts.deferStart ? { deferStart: true } : {}) });
     return f as GameCreatedFrame;
   }
 }

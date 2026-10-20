@@ -1,9 +1,14 @@
+import { randomInt } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
 import {
+  D20_SIDES,
   DEFAULT_ENGINE_STOPS,
   ENGINE_PHASES,
   STARTING_LIFE,
   SYSTEM_ACTOR,
+  firstRollText,
+  isFirstPlayerMethod,
+  resolveRound,
   type CardPrinting,
   type EngineAnswer,
   type EngineNotice,
@@ -11,6 +16,8 @@ import {
   type EnginePrompt,
   type EngineStops,
   type EventInput,
+  type FirstPlayerMethod,
+  type FirstRollInfo,
   type GameEvent,
   type GameStartedPayload,
   type LogEntry,
@@ -62,6 +69,8 @@ export interface RoomPort {
 
 interface PersistedState {
   seats: SeatInfo[];
+  /** Who goes first: decided = handed to the engine (beginGame sent). Absent on games from before 2026-10-19. */
+  firstPlayer?: { method: FirstPlayerMethod; decided: boolean } | undefined;
   cards: Array<{ cardId: number; printingId: string | null }>;
   gameOver?: { winner: PlayerId | null; endReason: string | null; turns: number } | undefined;
 }
@@ -69,6 +78,22 @@ interface PersistedState {
 const SPECTATOR = -1;
 /** A seat whose sockets are all gone keeps the game waiting this long before the AI takes over. */
 export const ABSENT_GRACE_MS = Number(process.env.ENGINE_ABSENT_GRACE_MS ?? 3 * 60 * 1000);
+
+/** Rolling for who goes first: bots and players with no connection roll on their own after this (plus 0.4 s per seat). */
+export const AUTO_ROLL_MS = Number(process.env.FIRST_ROLL_AUTO_MS ?? 1500);
+/** A connected player who never taps Roll is rolled for after this, so one idle phone cannot hold up the table. */
+export const ROLL_TIMEOUT_MS = Number(process.env.FIRST_ROLL_TIMEOUT_MS ?? 60_000);
+
+interface RollState {
+  method: FirstPlayerMethod;
+  round: number;
+  /** Seats rolling this round (every seat in round 1, the tied seats after a tie). */
+  contenders: number[];
+  values: Map<number, number>;
+  history: Map<number, number[]>;
+  winner: number | null;
+  doneAt: number | null;
+}
 
 /** The relay's own log line for a new round (see the engine's RoundTracker). */
 const ROUND_LINE = /^Round (\d+) begins$/;
@@ -93,6 +118,9 @@ export class EngineTable {
   /** The last round announced in the log ("Round N begins"), restored from the event log on load. */
   private roundLogged = 0;
   private disposed = false;
+  /** Who goes first (null on games from before the roll existed). */
+  private roll: RollState | null = null;
+  private readonly rollTimers = new Map<number, NodeJS.Timeout>();
 
   constructor(
     private readonly room: RoomPort,
@@ -108,6 +136,7 @@ export class EngineTable {
       try {
         const persisted = JSON.parse(raw) as PersistedState;
         this.seats = persisted.seats ?? [];
+        if (persisted.firstPlayer) this.roll = this.newRoll(persisted.firstPlayer.method);
         this.mapper.restore(persisted.cards ?? []);
         this.cardsPersisted = persisted.cards?.length ?? 0;
       } catch (err) {
@@ -120,6 +149,15 @@ export class EngineTable {
       const round = ROUND_LINE.exec(ev.payload.text);
       if (round) this.roundLogged = Math.max(this.roundLogged, Number(round[1]));
     }
+    if (this.roll) {
+      for (const ev of this.room.loadedEvents()) {
+        if (ev.type === "EngineRoll") this.applyRoll(ev.payload.seat, ev.payload.value);
+        else if (ev.type === "EngineFirstPlayer") {
+          this.roll.winner = ev.payload.seat;
+          this.roll.doneAt = ev.ts;
+        }
+      }
+    }
     this.seq = this.room.loadedEvents().length;
     // Loaded mid-game (the relay restarted, or the room was evicted while the engine kept playing): the
     // engine may be waiting on a seat whose socket died with the old process and will not come back.
@@ -128,11 +166,17 @@ export class EngineTable {
       const online = new Set<string>();
       for (const c of this.room.connections()) online.add(c.userId);
       for (const s of this.seats) if (!online.has(s.userId)) this.armAbsent(s.seat);
+      if (this.roll && this.roll.winner === null) this.armRollTimers(); // reloaded mid-roll: bots and absent seats roll again on their own
     }
   }
 
   private persist(extra?: Partial<PersistedState>): void {
-    const state: PersistedState = { seats: this.seats, cards: this.mapper.entries(), ...extra };
+    const state: PersistedState = {
+      seats: this.seats,
+      cards: this.mapper.entries(),
+      ...(this.roll ? { firstPlayer: { method: this.roll.method, decided: this.roll.winner !== null } } : {}),
+      ...extra,
+    };
     this.room.saveEngineState(JSON.stringify(state));
     this.cardsPersisted = state.cards.length;
   }
@@ -167,13 +211,15 @@ export class EngineTable {
     }
     if (problems.length) throw new EngineRoomError(`The rules engine needs legal Commander decks. ${problems.join(" | ")}`);
     const seed = Number.parseInt(row.seed.slice(0, 12), 16) || Date.now();
-    const created = await this.client.createGame(row.id, seed, seatsReq);
+    // The engine builds the game now (so missing cards are found before anyone rolls) and waits for beginGame.
+    const created = await this.client.createGame(row.id, seed, seatsReq, { deferStart: true });
     const missing = created.players.filter((p) => p.missing.length).map((p) => `${p.name}: ${p.missing.join(", ")}`);
     if (missing.length) {
       this.client.trySend({ type: "endGame", gameId: row.id });
       throw new EngineRoomError(`The rules engine does not know these cards yet: ${missing.join(" | ")}`);
     }
     this.seats = infos.map((i) => ({ ...i, playerId: created.players.find((p) => p.seat === i.seat)?.playerId ?? -1 }));
+    this.roll = this.newRoll(isFirstPlayerMethod(row.firstPlayer) ? row.firstPlayer : "roll");
     this.persist();
     // deck statistics: freeze the table bracket, the test flag and every seat's deck now
     try {
@@ -194,7 +240,153 @@ export class EngineTable {
     this.room.appendEngine(SYSTEM_ACTOR, { type: "GameStarted", payload }, "playing");
     this.log.push({ seq: this.seq + 1, actor: SYSTEM_ACTOR, text: "The rules engine started the game.", ts: Date.now() });
     this.seq++;
+    if (this.roll.method === "random") {
+      const pick = this.seats[randomInt(this.seats.length)] as SeatInfo;
+      this.decide(pick.seat);
+    } else {
+      this.armRollTimers();
+    }
     this.room.broadcastRoom();
+  }
+
+  // ------------------------------------------------------------ who goes first (D20 roll, 2026-10-19)
+
+  private newRoll(method: FirstPlayerMethod): RollState {
+    return { method, round: 1, contenders: this.seats.map((s) => s.seat), values: new Map(), history: new Map(), winner: null, doneAt: null };
+  }
+
+  /** RoomInfo.firstRoll: public to the table (null for a random pick and for older games). */
+  firstRollInfo(): FirstRollInfo | null {
+    this.ensureLoaded();
+    const r = this.roll;
+    if (!r || r.method !== "roll") return null;
+    return {
+      method: r.method,
+      status: r.winner === null ? "rolling" : "done",
+      round: r.round,
+      seats: this.seats.map((s) => ({
+        seat: s.seat,
+        userId: s.userId,
+        name: s.name,
+        value: r.values.get(s.seat) ?? null,
+        contending: r.contenders.includes(s.seat),
+        history: r.history.get(s.seat) ?? [],
+        auto: this.rollsOnItsOwn(s.seat),
+      })),
+      winnerSeat: r.winner,
+      doneAt: r.doneAt,
+    };
+  }
+
+  /** A bot seat, or a player with no socket at the table: the server rolls for them. */
+  private rollsOnItsOwn(seat: number): boolean {
+    const user = this.seats.find((s) => s.seat === seat)?.userId;
+    if (!user) return true;
+    if (this.room.agentIds().has(user)) return true;
+    for (const c of this.room.connections()) if (c.userId === user) return false;
+    return true;
+  }
+
+  /** Only the seat's own player rolls their die (bots and absent seats are rolled for by the server). */
+  rollFor(userId: string): void {
+    this.ensureLoaded();
+    const r = this.roll;
+    if (!r || r.winner !== null) throw new EngineRoomError("nobody is rolling for who goes first");
+    const seat = this.seatOf(userId);
+    if (seat === null) throw new EngineRoomError("only seated players roll");
+    if (!r.contenders.includes(seat)) throw new EngineRoomError("you are not rolling this round");
+    if (r.values.has(seat)) throw new EngineRoomError("you have already rolled");
+    this.recordRoll(seat, false);
+  }
+
+  /** Bookkeeping shared by live rolls and a reload: the value counts; a complete round resolves (tie: the tied seats go again). */
+  private applyRoll(seat: number, value: number): { winner: number } | { tied: number[]; value: number } | null {
+    const r = this.roll as RollState;
+    if (!r.contenders.includes(seat) || r.values.has(seat)) return null;
+    r.values.set(seat, value);
+    r.history.set(seat, [...(r.history.get(seat) ?? []), value]);
+    if (r.contenders.some((s) => !r.values.has(s))) return null;
+    const res = resolveRound(r.contenders.map((s) => ({ seat: s, value: r.values.get(s) as number })));
+    if ("tied" in res) {
+      r.round++;
+      r.contenders = res.tied;
+      r.values = new Map();
+    }
+    return res;
+  }
+
+  private recordRoll(seat: number, auto: boolean): void {
+    const r = this.roll as RollState;
+    const t = this.rollTimers.get(seat);
+    if (t) clearTimeout(t);
+    this.rollTimers.delete(seat);
+    const value = randomInt(1, D20_SIDES + 1); // the server's secure RNG, never the client
+    const round = r.round;
+    const res = this.applyRoll(seat, value);
+    const ev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineRoll", payload: { round, seat, value, auto } });
+    this.seq = ev.seq;
+    this.logLine(firstRollText.rolled(this.nameOf(seat), value));
+    if (res && "winner" in res) this.decide(res.winner);
+    else if (res && "tied" in res) {
+      this.logLine(firstRollText.tied(res.tied.map((s) => this.nameOf(s)), res.value));
+      this.armRollTimers();
+    }
+    this.broadcast();
+    this.room.broadcastRoom();
+  }
+
+  /** The table's choice goes to Forge as the starting player; the game (and its mulligans) begins. */
+  private decide(seat: number): void {
+    const r = this.roll as RollState;
+    for (const t of this.rollTimers.values()) clearTimeout(t);
+    this.rollTimers.clear();
+    r.winner = seat;
+    const ev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineFirstPlayer", payload: { seat, method: r.method } });
+    this.seq = ev.seq;
+    r.doneAt = ev.ts;
+    this.logLine(r.method === "roll" ? firstRollText.goesFirst(this.nameOf(seat)) : firstRollText.randomPick(this.nameOf(seat)));
+    this.persist();
+    try {
+      this.room.results()?.recordStartingSeat(this.room.id, seat, r.method);
+    } catch (err) {
+      this.room.log.error({ err }, "recording the starting seat failed");
+    }
+    this.client.trySend({ type: "beginGame", gameId: this.room.id, startingSeat: seat });
+  }
+
+  /** Bots and absent seats roll after a short delay; a present player gets ROLL_TIMEOUT_MS to tap Roll. */
+  private armRollTimers(): void {
+    const r = this.roll;
+    if (!r || r.winner !== null || this.disposed) return;
+    let n = 0;
+    for (const seat of r.contenders) {
+      if (r.values.has(seat)) continue;
+      this.armRollTimer(seat, this.rollsOnItsOwn(seat) ? AUTO_ROLL_MS + 400 * n++ : ROLL_TIMEOUT_MS);
+    }
+  }
+
+  private armRollTimer(seat: number, ms: number): void {
+    const old = this.rollTimers.get(seat);
+    if (old) clearTimeout(old);
+    const timer = setTimeout(() => {
+      this.rollTimers.delete(seat);
+      const r = this.roll;
+      if (!r || r.winner !== null || this.disposed || !r.contenders.includes(seat) || r.values.has(seat)) return;
+      this.recordRoll(seat, true);
+    }, ms);
+    timer.unref();
+    this.rollTimers.set(seat, timer);
+  }
+
+  private nameOf(seat: number): string {
+    return this.seats.find((s) => s.seat === seat)?.name ?? `Seat ${seat + 1}`;
+  }
+
+  /** A persisted relay line in the game log (restored on reload with the engine's own lines). */
+  private logLine(text: string): void {
+    const ev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineLog", payload: { engineSeq: 0, turn: 0, logType: "FIRST_PLAYER", text } });
+    this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text, ts: ev.ts });
+    this.seq = ev.seq;
   }
 
   // ------------------------------------------------------------ frames from the engine
@@ -344,6 +536,7 @@ export class EngineTable {
   onEngineReconnected(): void {
     this.engineDown = false;
     if (this.room.row().status !== "playing") return;
+    if (this.roll && this.roll.winner !== null && this.lastState.size === 0) this.client.trySend({ type: "beginGame", gameId: this.room.id, startingSeat: this.roll.winner });
     for (const s of this.seats) this.client.trySend({ type: "resync", gameId: this.room.id, seat: s.seat });
     this.client.trySend({ type: "resync", gameId: this.room.id, seat: SPECTATOR });
     this.broadcast();
@@ -418,6 +611,7 @@ export class EngineTable {
     const seat = this.seatOf(conn.userId);
     this.sendTo(conn);
     if (this.room.row().status === "playing") {
+      if (seat !== null && this.roll && this.roll.winner === null && this.roll.contenders.includes(seat) && !this.roll.values.has(seat)) this.armRollTimer(seat, ROLL_TIMEOUT_MS);
       this.client.trySend({ type: "resync", gameId: this.room.id, seat: seat ?? SPECTATOR });
       if (seat !== null) {
         const t = this.absentTimers.get(seat);
@@ -434,6 +628,7 @@ export class EngineTable {
     const seat = this.seatOf(userId);
     if (seat === null || this.room.row().status !== "playing") return;
     for (const c of this.room.connections()) if (c.userId === userId) return; // another device is still here
+    if (this.roll && this.roll.winner === null && this.roll.contenders.includes(seat) && !this.roll.values.has(seat)) this.armRollTimer(seat, AUTO_ROLL_MS);
     this.armAbsent(seat);
   }
 
@@ -456,6 +651,8 @@ export class EngineTable {
     this.disposed = true;
     for (const t of this.absentTimers.values()) clearTimeout(t);
     this.absentTimers.clear();
+    for (const t of this.rollTimers.values()) clearTimeout(t);
+    this.rollTimers.clear();
   }
 
   /** Every socket at the table gets its own view (used after room-wide changes). */

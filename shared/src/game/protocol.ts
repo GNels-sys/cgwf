@@ -5,6 +5,7 @@ import type { EventInput, PlayerId } from "./types.js";
 import type { PlayerView } from "./view.js";
 import type { EngineAnswer, EngineNotice, EngineStops } from "../engine.js";
 import type { RoomVoice } from "../discord.js";
+import type { FirstPlayerMethod, FirstRollInfo } from "../firstRoll.js";
 
 /**
  * Room + WebSocket protocol. The socket is opened at
@@ -63,6 +64,10 @@ export interface RoomInfo {
   tableBracketChosen: boolean;
   /** Voice on Discord: only members of this table get it (null for anyone else). */
   voice: RoomVoice | null;
+  /** Engine tables, lobby setting (host): "roll" = everyone rolls a D20 for who goes first (default), "random" = the server picks. */
+  firstPlayer: FirstPlayerMethod;
+  /** Engine tables: the roll for who goes first (null before the start, and for random picks). */
+  firstRoll: FirstRollInfo | null;
 }
 
 export const ROOM_CODE_LENGTH = 6;
@@ -79,7 +84,9 @@ export type ClientMessage =
   /** Host only, once the game has ended: new table, same seats and decks, fresh seed. */
   | { t: "rematch" }
   /** Host only, in the lobby: the Test-game toggle and the table bracket (null = automatic). */
-  | { t: "tableSettings"; testGame?: boolean; tableBracket?: number | null }
+  | { t: "tableSettings"; testGame?: boolean; tableBracket?: number | null; firstPlayer?: FirstPlayerMethod }
+  /** Engine tables, while rolling for who goes first: roll your D20 (the server rolls it). */
+  | { t: "roll" }
   /** Host only (or the owner): close the table without recording a result. */
   | { t: "endTable" }
   /** Host only: the manual voice link (a Discord invite), or null to clear it. */

@@ -56,6 +56,9 @@ public final class GameSession {
     private long lastFlushNanos;
     private int logSent;
     private volatile boolean over;
+    private final StartingPlayer starting = new StartingPlayer();
+    private final java.util.concurrent.atomic.AtomicBoolean started = new java.util.concurrent.atomic.AtomicBoolean();
+    private final long createdAt = System.currentTimeMillis();
     private boolean cardsSent;
     /** Rounds for people (Forge's turn stays the truth): see RoundTracker. */
     private final RoundTracker rounds = new RoundTracker();
@@ -77,9 +80,10 @@ public final class GameSession {
                 final int seat = s.seat();
                 session.attach(frame -> emit(frame, seat));
                 humans.put(seat, session);
+                session.setStartingPlayer(starting);
                 lp = new BridgeLobbyPlayer(s.name(), session);
             } else {
-                lp = GameFactory.ai(s.name());
+                lp = new BridgeAiLobbyPlayer(s.name(), starting);
             }
             seatOfLobby.put(lp, s.seat());
             seats.add(new GameFactory.Seat(s.name(), s.deck().deck(), lp));
@@ -141,7 +145,28 @@ public final class GameSession {
         return j;
     }
 
-    public void start() { thread.start(); }
+    public void start() { begin(null); }
+
+    /**
+     * Starts the game thread (Match.startGame: who goes first, then mulligans). {@code startingSeat}
+     * = the table's choice (D20 roll or random pick), fixed before Forge flips; null = Forge decides.
+     * A second call is refused.
+     */
+    public void begin(Integer startingSeat) {
+        if (over) throw new IllegalStateException("the game is over");
+        if (startingSeat != null) {
+            Player p = playerBySeat.get(startingSeat);
+            if (p == null) throw new IllegalArgumentException("no player in seat " + startingSeat);
+            starting.set(p);
+        }
+        if (!started.compareAndSet(false, true)) throw new IllegalStateException("the game has already begun");
+        thread.start();
+    }
+
+    public boolean hasBegun() { return started.get(); }
+
+    /** Created with deferStart and never begun for this long: the relay forgot it (restart mid-roll). */
+    public boolean isStale(long maxWaitMs) { return !started.get() && System.currentTimeMillis() - createdAt > maxWaitMs; }
 
     private void run() {
         try {
@@ -265,6 +290,7 @@ public final class GameSession {
 
     /** Ends the table (host closed the room): the game finishes as a draw on its own thread. */
     public void end() {
+        if (!started.get()) { over = true; return; } // ended during the roll: no game thread to stop
         if (!game.isGameOver()) game.setGameOver(GameEndReason.Draw);
         for (BridgeSession s : humans.values()) s.setAbsent(true);
     }

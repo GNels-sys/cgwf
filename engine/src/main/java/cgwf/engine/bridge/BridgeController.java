@@ -1050,6 +1050,8 @@ public final class BridgeController extends PlayerControllerAi {
 
     @Override
     public Player chooseStartingPlayer(boolean isFirstGame) {
+        Player fixed = session.startingPlayer();
+        if (fixed != null) return fixed; // decided at the table (D20 roll / random pick): no question, no re-flip
         if (autopilot()) return super.chooseStartingPlayer(isFirstGame);
         List<Player> players = new ArrayList<>(game.getPlayersInTurnOrder());
         Integer i = chooseIndex("Who plays first?", null, new ArrayList<GameObject>(players), false);
