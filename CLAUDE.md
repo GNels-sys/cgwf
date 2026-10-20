@@ -634,6 +634,60 @@ runs in-process with no engine, so coverage stays unchecked). Owner route: `POST
   `edhrec/importer.test.ts` (polite client, partner mapping, import, coverage, idempotency) with fixture
   JSON (`edhrec/fixtures.ts`), no network.
 
+## Deck Doctor (2026-10-19, free, no model spend)
+
+Owner request: "a programmatic way to determine if there is a card that could be added into the deck to
+increase synergy, and then recommend a cut of a card to make room". Code: `server/src/analysis/doctor/`
+(`edhrec.ts` commander data, `roles.ts`, `plan.ts` pure planner, `service.ts`), `server/src/routes/doctor.ts`,
+`shared/src/doctor.ts`, `client/src/components/DoctorPanel.tsx` (deck page and library deck page, under
+Performance). Inspired by the Singles site's swap planner (vegas-mtg `lib/synergy.ts`, `lib/power.ts`); no
+code is shared.
+
+- **Routes.** `GET /api/decks/:id/doctor?bracket=N&allowHigher=1` (own deck), `GET /api/library-decks/:id/doctor`
+  (library deck, any signed-in player, read-only: `canApply` false), both 20/min; `POST
+  /api/decks/:id/doctor/apply {cutEntryId, addOracleId}` (own deck only: the cut line gives up one copy or
+  is replaced, the add's default printing goes in, same filters as the suggestions, bumps `updatedAt` so
+  Bracket / Stats / Performance / the shop refresh); `POST|DELETE /api/doctor/prefs {deckRef, oracleId,
+  name, kind: keep|dismiss}` (migration 0015 `deck_doctor_prefs`, per player and deck, by oracle id).
+- **EDHREC data** (`edhrec.ts`): the commander page `commanders/<slug>.json` and, when the target bracket
+  maps to one, `commanders/<slug>/<core|upgraded|optimized|cedh>.json` (B2..B5; verified 2026-10-19). Each
+  listed card has `synergy` (-1..1) and `num_decks / potential_decks` = inclusion. Slug = the front face
+  name without accents or punctuation, hyphenated; partner / background pairs try "a-b" then "b-a"; the
+  page's own commander name must mention every commander or it is not used. Through the import's polite
+  client (1 req/s, named User-Agent, disk cache) with `maxAgeMs` 7 days and `failFast` (one attempt, then a
+  stale cached copy if there is one). No page: "No EDHREC data for X" and no suggestions.
+- **Candidates**: every card on the commander's EDHREC lists, plus Commander Spellbook "almostIncluded"
+  combos that are exactly one card away (only when the target is Bracket 3+ or a higher bracket is
+  allowed). Hard filters: the default printing, paper, not a token, not a basic land, Commander-legal,
+  inside the commanders' colour identity, not already in the deck (by oracle id or name), not dismissed.
+- **Scoring** (`plan.ts`): add = 60 x inclusion + 100 x positive synergy, + 15 when it fills a short role,
+  + 20 per completed combo (two at most), dropped under 8. Roles come from the Stats finders: ramp, card
+  draw, removal, board wipes, protection, lands; targets (`DOCTOR_ROLE_TARGETS`) are rules of thumb 10 / 10 /
+  8 / 2 / 3 / 35. **Bracket**: the 80 best adds are replayed through `analyzeDeck` with the add and any
+  combo it completes; one whose floor exceeds the target (or the deck's own floor, if that is already
+  higher) is dropped unless "Allow a higher bracket", where the swap says "Raises the bracket floor to N".
+  Target bracket = the deck's suggested bracket unless the player picks one.
+- **Cuts**: never a commander, a "keep" card, a piece of a combo the deck already has, or a land unless the
+  add is a land (so the land count never drops otherwise; a basic line gives up one copy). Cut value =
+  60 x inclusion + 100 x synergy (0 when EDHREC does not list it) + 25 per short role it fills that the add
+  does not - 8 per over-filled role - 5 at mana value 6+. The cut is the lowest-valued card sharing a role
+  with the add ("ramp for ramp"), else the lowest overall; each card is cut once. A swap is kept when the
+  add outscores the cut; the best 10 by gain. The reason sentence is built from those numbers ("+57%
+  synergy with Cloud, in 66% of Cloud decks; the deck has 4 ramp of 10 suggested. Replaces Garruk's
+  Uprising, your lowest-synergy card draw card."). Local stock for the adds from the Phase 10 bridge.
+- **Attribution**: "Synergy data from EDHREC" (link to the commander page used) and "Combos by Commander
+  Spellbook" (link) at the foot of the panel.
+- **Known limits**: synergy measures what decks with this commander play, not card quality, so pet cards
+  and new printings score low; role detection is the Stats regexes (same misses); a card on several
+  EDHREC lists keeps the entry with the most decks; the bracket check sees combos only through Spellbook's
+  one-card-away list (a three-card combo completed by two adds is not caught); EDHREC lists ~300 cards per
+  commander, so niche picks outside them are never suggested.
+- **Tests**: `analysis/doctor/doctor.test.ts` (fixture cards: same-role cut and reason text, dismissed /
+  keep / combo pieces / commander protected, the land rule, a Game Changer held back at Bracket 2 unless
+  allowed, an early two-card combo refused at B3 and offered at B4, ranking; EDHREC slugs, page parsing,
+  page match), `routes/doctor.test.ts` (fixture EDHREC page: colours, cache, prefs, apply + its refusals,
+  library read-only, no page), `client/src/components/doctorText.test.ts`.
+
 ## Computer opponents (Phase 7, owner only)
 
 "Agents" are Claude-driven seats. Everything lives in `server/src/agents/`; nothing here runs unless

@@ -60,15 +60,34 @@ export class EdhrecClient {
     return path.join(this.cacheDir, `${safe}.json`);
   }
 
-  /** The parsed JSON for `p` (no leading slash, no .json), or null when EDHREC has no such page. */
-  async get(p: string, opts: { refresh?: boolean } = {}): Promise<unknown | null> {
+  /**
+   * The parsed JSON for `p` (no leading slash, no .json), or null when EDHREC has no such page.
+   * `maxAgeMs`: a cached answer older than this is fetched again (the Deck Doctor uses 7 days; the import
+   * keeps answers forever). `failFast`: one attempt, no back-off waits (a player is waiting); when that
+   * attempt fails a stale cached answer is returned instead, and only with no cache does it throw.
+   */
+  async get(p: string, opts: { refresh?: boolean; maxAgeMs?: number; failFast?: boolean } = {}): Promise<unknown | null> {
     const file = this.cacheFile(p);
+    let stale: { missing?: boolean; body?: unknown } | null = null;
     if (!opts.refresh && fs.existsSync(file)) {
-      this.cacheHits++;
-      const cached = JSON.parse(fs.readFileSync(file, "utf8")) as { missing?: boolean; status?: number; body?: unknown };
-      return cached.missing ? null : (cached.body ?? null);
+      const cached = JSON.parse(fs.readFileSync(file, "utf8")) as { missing?: boolean; status?: number; body?: unknown; fetchedAt?: string };
+      const age = cached.fetchedAt ? Date.now() - Date.parse(cached.fetchedAt) : 0;
+      if (opts.maxAgeMs === undefined || age <= opts.maxAgeMs) {
+        this.cacheHits++;
+        return cached.missing ? null : (cached.body ?? null);
+      }
+      stale = cached;
     }
-    const body = await this.fetchWithRetry(p);
+    let body: unknown | null;
+    try {
+      body = await this.fetchWithRetry(p, opts.failFast ? 0 : this.backoff.length);
+    } catch (err) {
+      if (stale) {
+        this.cacheHits++;
+        return stale.missing ? null : (stale.body ?? null);
+      }
+      throw err;
+    }
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify(body === null ? { missing: true, fetchedAt: new Date().toISOString() } : { body, fetchedAt: new Date().toISOString() }));
     return body;
@@ -84,7 +103,7 @@ export class EdhrecClient {
     return turn;
   }
 
-  private async fetchWithRetry(p: string): Promise<unknown | null> {
+  private async fetchWithRetry(p: string, retries = this.backoff.length): Promise<unknown | null> {
     const url = `${EDHREC_BASE}${p}.json`;
     for (let attempt = 0; ; attempt++) {
       await this.slot();
@@ -93,14 +112,14 @@ export class EdhrecClient {
       try {
         res = await this.fetchImpl(url, { headers: { "User-Agent": EDHREC_USER_AGENT, Accept: "application/json" }, signal: AbortSignal.timeout(20_000) });
       } catch (err) {
-        if (attempt >= this.backoff.length) throw new EdhrecError(`EDHREC unreachable for ${p}: ${err instanceof Error ? err.message : String(err)}`, 0);
+        if (attempt >= retries) throw new EdhrecError(`EDHREC unreachable for ${p}: ${err instanceof Error ? err.message : String(err)}`, 0);
         await this.sleep(this.backoff[attempt]!);
         continue;
       }
       if (res.ok) return (await res.json()) as unknown;
       if (res.status === 403 || res.status === 404) return null;
       if (res.status === 429 || res.status >= 500) {
-        if (attempt >= this.backoff.length) throw new EdhrecError(`EDHREC answered ${res.status} for ${p} after ${attempt + 1} tries`, res.status);
+        if (attempt >= retries) throw new EdhrecError(`EDHREC answered ${res.status} for ${p} after ${attempt + 1} tries`, res.status);
         const retryAfter = Number(res.headers.get("retry-after"));
         const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? Math.min(300, retryAfter) * 1000 : this.backoff[attempt]!;
         this.opts.log?.warn({ status: res.status, path: p, wait }, "EDHREC asked us to slow down");

@@ -1782,3 +1782,34 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
   .perf-grid thead th { font-size: .68rem; }
   .perf-baseline { font-size: .57rem; }
 }
+
+/* Deck Doctor (2026-10-19): same fantasy-console panel as Performance; add = B1 green, cut = B5 red. */
+.doctor-panel { margin-block: 18px; padding: 22px; border-top: 3px solid var(--signal); background: radial-gradient(ellipse at top left, color-mix(in srgb, var(--power-1) 7%, transparent), transparent 65%), var(--bg-elev); }
+.doctor-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; }
+.doctor-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.doctor-controls select { min-height: 44px; }
+.doctor-controls label.small { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.doctor-roles { list-style: none; margin: 14px 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.doctor-roles li { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 8px 10px; border: 1px solid var(--tech-line, var(--border)); border-radius: 3px 10px 3px 10px; background: var(--bg-elev-2); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.doctor-roles li.is-short { border-color: color-mix(in srgb, var(--power-4) 70%, var(--border)); }
+.doctor-roles li.is-short strong { color: var(--power-4); }
+.doctor-swaps { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.doctor-swap { padding: 12px; border: 1px solid var(--tech-line, var(--border)); border-radius: 4px 16px 4px 16px; background: color-mix(in srgb, var(--glass-strong, var(--bg-elev)) 90%, transparent); }
+.doctor-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 600px) { .doctor-pair { grid-template-columns: 1fr; } .doctor-panel { padding: 16px; } }
+.doctor-card { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elev); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.doctor-card .doctor-card-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doctor-card.is-add { box-shadow: inset 3px 0 var(--power-1); }
+.doctor-card.is-cut { box-shadow: inset 3px 0 var(--power-5); }
+.doctor-sign { font: 700 1rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; width: 1ch; }
+.doctor-card.is-add .doctor-sign { color: var(--power-1); }
+.doctor-card.is-cut .doctor-sign { color: var(--power-5); }
+.doctor-card:hover, .doctor-card:focus-visible { border-color: var(--signal, var(--accent)); }
+.doctor-reason { margin: 8px 2px 6px; }
+.doctor-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.doctor-meta .is-combo { border-color: var(--power-5); color: var(--power-5); }
+.doctor-bracket { display: inline-flex; align-items: center; gap: 6px; }
+.doctor-actions { margin-top: 8px; flex-wrap: wrap; }
+.doctor-prefs { margin-top: 12px; }
+.doctor-prefs li { margin: 4px 0; }
+.doctor-credit { margin-top: 14px; }

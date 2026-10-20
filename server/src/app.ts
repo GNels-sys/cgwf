@@ -36,6 +36,8 @@ import { DecisionRecorder } from "./coach/snapshots.js";
 import type { FetchLike as DiscordFetch } from "./discord/client.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerSinglesRoutes } from "./routes/singles.js";
+import { registerDoctorRoutes } from "./routes/doctor.js";
+import { DeckDoctor } from "./analysis/doctor/service.js";
 import { SinglesClient } from "./singles/client.js";
 import { registerSocialRoutes } from "./routes/social.js";
 import { presence } from "./social/presence.js";
@@ -157,6 +159,8 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   // Library-wide Forge check (any source); precon imports run it for the decks they add.
   const libraryCoverage = new LibraryCoverage(handle, library, coverageChecker, app.log);
   precons.setCoverage(libraryCoverage);
+  const doctor = new DeckDoctor({ handle, index, analyzer, edhrec: edhrecClient, singles, log: app.log });
+  registerDoctorRoutes(app, { handle, doctor });
   registerLibraryRoutes(app, { handle, library, precons, edhrec, coverage: libraryCoverage });
   registerStatsRoutes(app, { handle, analyzer, library });
   registerAgentRoutes(app, { handle, agents, roomsManager });
