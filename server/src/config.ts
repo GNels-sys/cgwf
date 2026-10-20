@@ -44,6 +44,13 @@ export const config = {
   /** Needed when the key is not scoped to a workspace (the API then demands an anthropic-workspace-id header). */
   anthropicWorkspaceId: env("ANTHROPIC_WORKSPACE_ID", ""),
   agentModel: env("AGENT_MODEL", "claude-sonnet-5-5"),
+  /** AI Coach (owner only): off unless COACH_AI_ENABLED=1 (and ANTHROPIC_API_KEY is set). */
+  coachAiEnabled: env("COACH_AI_ENABLED", "0") === "1",
+  coachModel: env("COACH_MODEL", "claude-opus-5-5"),
+  coachMaxUsdPerReport: Number(env("COACH_MAX_USD_PER_REPORT", "4")),
+  coachMaxUsdPerDay: Number(env("COACH_MAX_USD_PER_DAY", "20")),
+  /** Input + output tokens across every call of one report (or one follow-up). */
+  coachMaxTokensPerReport: Number(env("COACH_MAX_TOKENS_PER_REPORT", "600000")),
   agentMaxUsdPerGame: Number(env("AGENT_MAX_USD_PER_GAME", "6")),
   agentMaxUsdPerDay: Number(env("AGENT_MAX_USD_PER_DAY", "25")),
   /**

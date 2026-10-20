@@ -255,6 +255,56 @@ export const decisionSnapshots = sqliteTable(
   (t) => [index("decision_snapshots_room_user_idx").on(t.roomId, t.userId), index("decision_snapshots_created_idx").on(t.createdAt)],
 );
 
+/** AI Coach M2 (owner only): one cached coach report per game and player, with its model spend. */
+export const coachReports = sqliteTable(
+  "coach_reports",
+  {
+    id: text("id").primaryKey(),
+    roomId: text("room_id").notNull(),
+    roomCode: text("room_code").notNull(),
+    userId: text("user_id").notNull(),
+    /** "full" (decision snapshots) | "light" (public log + recorded answers only) */
+    kind: text("kind").notNull(),
+    /** "running" | "done" | "error" | "capped" */
+    status: text("status").notNull(),
+    model: text("model").notNull(),
+    /** The report (JSON: summary, turning points, habits), null until done. */
+    report: text("report", { mode: "json" }).$type<unknown>(),
+    error: text("error"),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: real("cost_usd").notNull().default(0),
+    calls: integer("calls").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("coach_reports_room_user_idx").on(t.roomId, t.userId), index("coach_reports_created_idx").on(t.createdAt)],
+);
+
+/** One follow-up question on a coach report (one at a time), counted in spend. */
+export const coachFollowups = sqliteTable(
+  "coach_followups",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    reportId: text("report_id")
+      .notNull()
+      .references(() => coachReports.id, { onDelete: "cascade" }),
+    question: text("question").notNull(),
+    answer: text("answer"),
+    /** "running" | "done" | "error" */
+    status: text("status").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: real("cost_usd").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("coach_followups_report_idx").on(t.reportId)],
+);
+
 /** One seat of a recorded game: who, with which deck (snapshot survives deletions), and how it went. */
 export const gameResultSeats = sqliteTable(
   "game_result_seats",

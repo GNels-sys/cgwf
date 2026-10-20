@@ -1,3 +1,4 @@
+import { CoachUsageCard } from "../coach/CoachPanels";
 import { PageHeading } from "../components/PageHeading";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -372,6 +373,7 @@ function Overview() {
       </p>
       <Tiles t={data.totals} />
       <DiscordStatusCard />
+      <CoachUsageCard />
       <OpenTables />
       <section className="admin-charts" aria-label="Twelve-week trends">
         <WeeklyChart title="Sign-ups per week" points={data.signupsPerWeek} unit="sign-ups" summary="total" />

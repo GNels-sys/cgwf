@@ -1,3 +1,4 @@
+import { CoachGamesPanel } from "../coach/CoachPanels";
 import { useEffect, useMemo, useState } from "react";
 import type { DeckStatsRow } from "@cgwf/shared";
 import { api } from "../api";
@@ -132,6 +133,7 @@ export function DeckStatsPage() {
       </PageHeading>
       <RequireUser>
         <DeckStats />
+        <CoachGamesPanel />
       </RequireUser>
     </main>
   );

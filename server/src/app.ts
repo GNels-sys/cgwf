@@ -33,6 +33,9 @@ import { DeckBrackets } from "./stats/brackets.js";
 import { GameResults } from "./stats/results.js";
 import { DiscordVoice, type VoiceConfig } from "./discord/voice.js";
 import { DecisionRecorder } from "./coach/snapshots.js";
+import { CoachService, type CoachLimits } from "./coach/coach.js";
+import { AnthropicCoachLlm, type CoachLlm } from "./coach/llm.js";
+import { registerCoachRoutes } from "./routes/coach.js";
 import type { FetchLike as DiscordFetch } from "./discord/client.js";
 import { registerSettingsRoutes } from "./routes/settings.js";
 import { registerSinglesRoutes } from "./routes/singles.js";
@@ -67,6 +70,8 @@ export interface AppContext {
   singles: SinglesClient;
   /** Rules engine control socket (enabled only when ENGINE_URL is set). */
   engine: EngineClient;
+  /** AI Coach (owner only). */
+  coach: CoachService;
 }
 
 export interface BuildOptions {
@@ -107,6 +112,9 @@ export interface BuildOptions {
   discordClientOpts?: { sleep?: (ms: number) => Promise<void>; maxWaitMs?: number };
   /** Run the boot check + orphan sweep (default true; tests call verify() themselves). */
   discordBoot?: boolean;
+  /** AI Coach: tests pass a scripted model (null = off); production builds one from config. */
+  coachLlm?: CoachLlm | null;
+  coachLimits?: Partial<CoachLimits>;
 }
 
 /** Build the Fastify app with every route wired. Listening is the caller's job. */
@@ -207,6 +215,15 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
     setTimeout(clean, 90_000).unref();
     app.addHook("onClose", async () => clearInterval(daily));
   }
+  // AI Coach M2 (owner only): COACH_AI_ENABLED=1 and an API key, else every coach route is 404
+  const coachLlm = opts.coachLlm !== undefined ? opts.coachLlm : config.coachAiEnabled && config.anthropicApiKey ? new AnthropicCoachLlm(config.coachModel, config.anthropicApiKey, config.anthropicWorkspaceId) : null;
+  const coach = new CoachService(handle, app.log, coachLlm, decisions, index, {
+    maxUsdPerReport: config.coachMaxUsdPerReport,
+    maxUsdPerDay: config.coachMaxUsdPerDay,
+    maxTokensPerReport: config.coachMaxTokensPerReport,
+    ...(opts.coachLimits ?? {}),
+  });
+  registerCoachRoutes(app, { handle, coach });
   if (opts.discordBoot !== false && voice.status.state === "checking") {
     void voice.verify().then(() => voice.sweepOrphans()).catch((err: unknown) => app.log.warn({ err: (err as Error).message }, "discord boot sweep failed"));
     const sweep = setInterval(() => void voice.sweepOrphans().catch(() => undefined), 60 * 60 * 1000);
@@ -250,5 +267,5 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
     handle.close();
   });
 
-  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, edhrec, libraryCoverage, doctorAi, agents, social, submissions, singles, engine };
+  return { app, handle, index, ingestor, roomsManager, analyzer, library, precons, edhrec, libraryCoverage, doctorAi, agents, social, submissions, singles, engine, coach };
 }

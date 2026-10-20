@@ -1,3 +1,4 @@
+import { CoachLink } from "../coach/coach";
 import { PageHeading } from "../components/PageHeading";
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -129,6 +130,7 @@ function PlayHome() {
                     {r.status === "lobby" ? "Waiting" : r.status === "playing" ? "In progress" : "Finished"} &middot; {r.players} player{r.players === 1 ? "" : "s"} &middot; host {r.hostName}
                   </span>
                 </Link>
+                {r.engine && r.status === "ended" && <CoachLink code={r.code} className="btn btn-small room-end" />}
                 {r.isHost && r.status !== "ended" && (
                   <button className="btn btn-small btn-danger room-end" onClick={() => void endTable(r.code)} disabled={busy}>
                     End table
