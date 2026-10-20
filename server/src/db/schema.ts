@@ -634,3 +634,40 @@ export const deckDoctorPrefs = sqliteTable(
   },
   (t) => [uniqueIndex("deck_doctor_prefs_unique").on(t.userId, t.deckRef, t.oracleId, t.kind)],
 );
+
+/**
+ * Deck Doctor AI upgrade runs (2026-10-19, owner only): one row per run with its usage and cost, the
+ * result (read of the deck + up to 5 swaps) and the deck version it was made for (cache key: re-opening
+ * the same version costs nothing; "Run again" forces a new row).
+ */
+export const doctorAiRuns = sqliteTable(
+  "doctor_ai_runs",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    deckRef: text("deck_ref").notNull(),
+    deckName: text("deck_name").notNull(),
+    /** The deck's updatedAt when the run started. */
+    deckVersion: text("deck_version").notNull(),
+    targetBracket: integer("target_bracket").notNull(),
+    allowHigher: integer("allow_higher", { mode: "boolean" }).notNull().default(false),
+    model: text("model").notNull(),
+    /** running | done | capped | refused | error */
+    status: text("status").notNull(),
+    calls: integer("calls").notNull().default(0),
+    toolCalls: integer("tool_calls").notNull().default(0),
+    invalidSubmissions: integer("invalid_submissions").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    cacheReadTokens: integer("cache_read_tokens").notNull().default(0),
+    cacheWriteTokens: integer("cache_write_tokens").notNull().default(0),
+    costUsd: real("cost_usd").notNull().default(0),
+    /** Which model actually answered (a refusal fallback can switch it). */
+    servedBy: text("served_by"),
+    result: text("result", { mode: "json" }),
+    error: text("error"),
+    startedAt: text("started_at").notNull(),
+    finishedAt: text("finished_at"),
+  },
+  (t) => [index("doctor_ai_runs_deck_idx").on(t.deckRef, t.deckVersion), index("doctor_ai_runs_started_idx").on(t.startedAt)],
+);
