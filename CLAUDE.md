@@ -1317,6 +1317,14 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
     refusals, a scripted tie re-rolled among the tied, beginGame + game_results, bot and absent seats
     rolling on their own, client reload and relay reload mid-roll), `shared/src/firstRoll.test.ts`,
     `client/src/game/firstRoll.test.ts`. `scripts/engine-bot.mjs` rolls its own die.
+- **Ending a game never calls Forge from another thread (2026-10-20).** `GameSession.end()` (the relay's
+  `endGame`: "End table", the owner's close, the idle sweep) used to call `game.setGameOver` on the control
+  socket's thread. That takes Game's monitor and fires an event, while the game thread may sit inside
+  `GameSession.onEvent` (the event bus's per-subscriber lock) waiting for Game's monitor: a deadlock that
+  would have frozen the control socket, so every table. Found by `StartingPlayerTest` in the full suite.
+  Now `end()` only sets a flag and marks the humans absent (a waiting prompt returns at once); the game
+  thread sets the game over at its next event. Rule: from outside the game thread, never call a Forge method
+  that fires events.
 - **Counts are clamped to the options (2026-10-19).** Owner report: Blasphemous Edict ("each player
   sacrifices thirteen creatures") with six creatures sent a choose-13-of-6 prompt that could never be
   answered, so the spell never resolved. Rule 701.21a: a player sacrifices as many as they can. The

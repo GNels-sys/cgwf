@@ -57,6 +57,8 @@ public final class GameSession {
     private int logSent;
     private volatile boolean over;
     private final StartingPlayer starting = new StartingPlayer();
+    /** end() was called: the game thread sets the game over at its next event. */
+    private volatile boolean endRequested;
     private final java.util.concurrent.atomic.AtomicBoolean started = new java.util.concurrent.atomic.AtomicBoolean();
     private final long createdAt = System.currentTimeMillis();
     private boolean cardsSent;
@@ -291,7 +293,12 @@ public final class GameSession {
     /** Ends the table (host closed the room): the game finishes as a draw on its own thread. */
     public void end() {
         if (!started.get()) { over = true; return; } // ended during the roll: no game thread to stop
-        if (!game.isGameOver()) game.setGameOver(GameEndReason.Draw);
+        // The GAME thread ends it, at its next event (onEvent). Calling setGameOver from here deadlocked:
+        // it takes Game's monitor and fires an event, while the game thread sits inside onEvent (the event
+        // bus's per-subscriber lock) waiting for Game's monitor (found 2026-10-20; this runs on the
+        // control socket's thread, so it could have frozen every table). Absent seats let a waiting
+        // prompt return at once, so that next event comes promptly.
+        endRequested = true;
         for (BridgeSession s : humans.values()) s.setAbsent(true);
     }
 
@@ -299,6 +306,10 @@ public final class GameSession {
 
     @Subscribe
     public void onEvent(GameEvent e) {
+        if (endRequested && Thread.currentThread() == thread && !game.isGameOver()) {
+            endRequested = false;
+            game.setGameOver(GameEndReason.Draw); // the table was closed (see end())
+        }
         noteEliminations();
         if (e instanceof GameEventTurnBegan tb) {
             List<Player> order = game.getRegisteredPlayers();

@@ -70,7 +70,11 @@ class StartingPlayerTest {
             }
             throw new AssertionError("turn 1 never began");
         } finally {
+            // ending a running game from another thread must not deadlock with the game thread (it did, 2026-10-20)
             g[0].end();
+            long until = System.currentTimeMillis() + 60_000;
+            while (!g[0].isOver() && System.currentTimeMillis() < until) Thread.sleep(50);
+            assertTrue(g[0].isOver(), "the game thread finished after end()");
         }
     }
 
