@@ -63,6 +63,13 @@ export function registerRoomRoutes(app: FastifyInstance, deps: Deps): void {
     return { closed };
   });
 
+  /** AI Coach M1: the caller's OWN decision snapshots for one game (never another seat's). */
+  app.get<{ Params: { code: string } }>("/api/rooms/:code/decisions", { preHandler: auth }, async (req, reply) => {
+    const room = findRoom(req.params.code);
+    if (!room || !roomsManager.decisions) return reply.code(404).send({ error: "no room with that code" });
+    return { decisions: roomsManager.decisions.forUser(room.id, req.user!.id) };
+  });
+
   app.get("/api/rooms/mine", { preHandler: auth }, async (req): Promise<MyRoomsResponse> => {
     return { rooms: roomsManager.listForUser(req.user!.id) };
   });

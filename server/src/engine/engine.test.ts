@@ -365,6 +365,42 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(alex.frames.slice(ma).filter((f) => f.t === "notice")).toHaveLength(2);
   });
 
+  it("records a decision snapshot of the answering seat's own view only, collapses repeated passes, and serves it only to that seat", async () => {
+    const gameId = ctx.roomsManager.get(code)!.id;
+    const A = pid[0]!;
+    const B = pid[1]!;
+    const me = { id: A, seat: 0, name: "Alex", isYou: true, human: true, life: 37, poison: 0, lost: false, handCount: 2, libraryCount: 90, landsPlayedThisTurn: 0, commanderDamage: {}, manaPool: { G: 1 },
+      hand: [card(301, "Llanowar Elves", "Hand", A), card(302, "Giant Growth", "Hand", A)], battlefield: [card(303, "Forest", "Battlefield", A, { tapped: true })], graveyard: [], exile: [], command: [card(304, "Atraxa, Praetors' Voice", "Command", A)] };
+    // a misbehaving engine that leaks Blair's hand and a library list must still not reach the snapshot
+    const blairP = { id: B, seat: 1, name: "Blair", isYou: false, human: true, life: 40, poison: 0, lost: false, handCount: 1, libraryCount: 95, landsPlayedThisTurn: 0, commanderDamage: {},
+      hand: [card(401, "Secret Counterspell", "Hand", B)], library: [card(402, "Secret Tutor", "Library", B)], battlefield: [], graveyard: [], exile: [card(403, "Hidden Exile", "Exile", B, { faceDown: true })], command: [] };
+    const view = { type: "state", turn: 5, round: 3, phase: "MAIN1", activePlayer: A, priorityPlayer: A, viewer: A, gameOver: false, players: [me, blairP], stack: [], combat: null, log: [] };
+    const options = [{ index: 0, cardId: 302, cardName: "Giant Growth", zone: "Hand", kind: "spell", description: "Cast Giant Growth", cost: "{G}", targets: true }];
+    const ask = async (promptId: number) => {
+      const m = alex.mark();
+      engine.send({ type: "prompt", gameId, seat: 0, promptId, prompt: "priority", title: "You have priority", phase: "MAIN1", myTurn: true, stackEmpty: true, stackTopMine: false, view, options });
+      await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === promptId, m);
+      alex.send({ t: "engine", answer: { promptId, option: null } });
+      await engine.waitFor((f) => f.type === "answer" && f.promptId === promptId);
+    };
+    await ask(90);
+    await ask(91); // the same pass again: collapsed
+    await ctx.roomsManager.decisions!.flush();
+    const mine = (await ctx.app.inject({ method: "GET", url: `/api/rooms/${code}/decisions`, headers: auth(alex.token) })).json() as { decisions: Array<{ seat: number; snapshot: { me: { hand: string[] }; prompt: { kind: string; options: string[] }; answer: { chosen: string[] }; round: number; players: Array<{ seat: number; handCount: number; libraryCount: number; exile: string[] }> } }> };
+    expect(mine.decisions).toHaveLength(1);
+    const snap = mine.decisions[0]!.snapshot;
+    expect(snap.me.hand).toEqual(["Llanowar Elves", "Giant Growth"]);
+    expect(snap.prompt).toMatchObject({ kind: "priority", options: ["Cast Giant Growth"] });
+    expect(snap.answer.chosen).toEqual(["pass"]);
+    expect(snap.round).toBe(3);
+    const text = JSON.stringify(mine);
+    expect(text).not.toMatch(/Secret Counterspell|Secret Tutor|Hidden Exile/); // another hand, a library, a face-down card
+    expect(snap.players.find((p) => p.seat === 1)).toMatchObject({ handCount: 1, libraryCount: 95, exile: ["face-down card"] });
+    // Blair cannot read Alex's decisions: the route only ever returns the caller's own
+    const theirs = (await ctx.app.inject({ method: "GET", url: `/api/rooms/${code}/decisions`, headers: auth(blair.token) })).json() as { decisions: unknown[] };
+    expect(theirs.decisions).toEqual([]);
+  });
+
   it("maps attack answers back to Forge ids and refuses classic events on an engine table", async () => {
     const gameId = ctx.roomsManager.get(code)!.id;
     const ma = alex.mark();
