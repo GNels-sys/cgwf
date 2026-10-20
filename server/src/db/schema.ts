@@ -589,3 +589,25 @@ export type RoomRow = typeof rooms.$inferSelect;
 export type RoomMemberRow = typeof roomMembers.$inferSelect;
 export type RoomEventRow = typeof roomEvents.$inferSelect;
 export type UploadRow = typeof uploads.$inferSelect;
+
+/**
+ * Deck Doctor choices (2026-10-19): per player and deck, cards pinned as "keep" (never suggested as a
+ * cut) and suggestions dismissed as "not interested" (never suggested again). `deck_ref` = an own deck
+ * id or `library:<id>`; keyed by oracle id so a printing change does not lose the choice.
+ */
+export const deckDoctorPrefs = sqliteTable(
+  "deck_doctor_prefs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deckRef: text("deck_ref").notNull(),
+    oracleId: text("oracle_id").notNull(),
+    name: text("name").notNull(),
+    /** "keep" | "dismiss" */
+    kind: text("kind").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("deck_doctor_prefs_unique").on(t.userId, t.deckRef, t.oracleId, t.kind)],
+);

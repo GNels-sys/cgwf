@@ -77,6 +77,12 @@ export class DeckAnalyzer {
       .run();
   }
 
+  /** The cached Spellbook answer for this exact list (after `analyze`), incl. one-card-away combos. */
+  cachedCombos(cards: AnalysisCard[]): SpellbookResults | null {
+    const row = this.handle.db.select().from(comboCache).where(eq(comboCache.listHash, DeckAnalyzer.listHash(cards))).get();
+    return row ? (row.results as SpellbookResults) : null;
+  }
+
   /** Engine only, no Spellbook request (uses a cached answer when one exists). For list views. */
   analyzeSync(cards: AnalysisCard[]): DeckAnalysis {
     const cached = this.readCache(DeckAnalyzer.listHash(cards));
