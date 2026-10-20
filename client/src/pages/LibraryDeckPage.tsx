@@ -201,14 +201,14 @@ function Editor({ id }: { id: string }) {
       <div className="analysis-row">
         {a && (
           <section className="bracket-panel">
-            <h3>Engine analysis</h3>
+            <div className="analysis-panel-heading"><div className="analysis-panel-title"><span className="analysis-panel-glyph" aria-hidden="true">◇</span><div><p className="eyebrow">Power profile</p><h3>Engine analysis</h3></div></div></div>
             <AnalysisBody a={a} />
           </section>
         )}
         <StatsPanel load={loadStats} version={deck.updatedAt} />
       </div>
 
-      <PerformancePanel deckRef={`library:${deck.id}`} title="Performance (all players)" />
+      <PerformancePanel deckRef={`library:${deck.id}`} title="Performance (all players)" analysis={a ?? null} />
 
       <ShoppingPanel load={loadShopping} version={deck.updatedAt} />
 

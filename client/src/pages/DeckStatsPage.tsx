@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { DeckStatsRow } from "@cgwf/shared";
 import { api } from "../api";
+import { PowerBadge } from "../components/PowerBadge";
 import { PageHeading } from "../components/PageHeading";
 import { PerformancePanel, pct } from "../components/PerformancePanel";
 import { RequireUser } from "../components/RequireUser";
@@ -8,7 +9,7 @@ import { RequireUser } from "../components/RequireUser";
 type SortKey = "deckName" | "deckBracket" | "games" | "wins" | "winRate" | "avgPlace";
 const COLUMNS: Array<{ key: SortKey; label: string }> = [
   { key: "deckName", label: "Deck" },
-  { key: "deckBracket", label: "Bracket" },
+  { key: "deckBracket", label: "Recorded bracket" },
   { key: "games", label: "Games" },
   { key: "wins", label: "Wins" },
   { key: "winRate", label: "Win rate" },
@@ -36,6 +37,8 @@ function DeckStats() {
 
   useEffect(() => {
     let live = true;
+    setRows(null);
+    setError(null);
     api.deckStats
       .list(bots)
       .then((r) => live && setRows(r.decks))
@@ -62,6 +65,7 @@ function DeckStats() {
         <span className="muted small">Counted games only: finished rules-engine games not marked Test. Games before 2026-10-19 were tests.</span>
       </div>
       {error && <p className="error">{error}</p>}
+      {!rows && !error && <p className="muted" role="status">Loading deck records…</p>}
       {rows && rows.length === 0 && <p className="muted">No counted games yet. Play a rules-engine game that is not marked Test and it will show here.</p>}
       {rows && rows.length > 0 && (
         <div className="deck-stats-wrap">
@@ -80,7 +84,7 @@ function DeckStats() {
             </thead>
             <tbody>
               {sorted.map((d) => (
-                <DeckRow key={d.deckRef} d={d} open={open === d.deckRef} onToggle={() => setOpen((o) => (o === d.deckRef ? null : d.deckRef))} />
+                <DeckRow key={d.deckRef} d={d} includeBots={bots} onIncludeBotsChange={setBots} open={open === d.deckRef} onToggle={() => setOpen((o) => (o === d.deckRef ? null : d.deckRef))} />
               ))}
             </tbody>
           </table>
@@ -90,7 +94,7 @@ function DeckStats() {
   );
 }
 
-function DeckRow({ d, open, onToggle }: { d: DeckStatsRow; open: boolean; onToggle: () => void }) {
+function DeckRow({ d, open, onToggle, includeBots, onIncludeBotsChange }: { d: DeckStatsRow; open: boolean; onToggle: () => void; includeBots: boolean; onIncludeBotsChange: (value: boolean) => void }) {
   return (
     <>
       <tr className={open ? "is-open" : undefined}>
@@ -103,7 +107,7 @@ function DeckRow({ d, open, onToggle }: { d: DeckStatsRow; open: boolean; onTogg
             {d.commanders.length ? ` · ${d.commanders.join(" / ")}` : ""}
           </span>
         </th>
-        <td>{d.deckBracket ? `B${d.deckBracket}` : "–"}</td>
+        <td><PowerBadge level={d.deckBracket} /></td>
         <td>{d.games}</td>
         <td>{d.wins}</td>
         <td>{pct(d.winRate)}</td>
@@ -112,7 +116,7 @@ function DeckRow({ d, open, onToggle }: { d: DeckStatsRow; open: boolean; onTogg
       {open && (
         <tr className="deck-stats-detail">
           <td colSpan={6}>
-            <PerformancePanel deckRef={d.deckRef} title={d.deckName} />
+            <PerformancePanel deckRef={d.deckRef} title={d.deckName} includeBots={includeBots} onIncludeBotsChange={onIncludeBotsChange} />
           </td>
         </tr>
       )}

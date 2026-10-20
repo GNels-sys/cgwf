@@ -1714,3 +1714,71 @@ body:has(.deck-page[data-realm="ember"]) { --realm-position: 100%; }
 .bracket-count.is-low { border-color: color-mix(in srgb, var(--danger, #d66) 60%, var(--border)); }
 .bracket-count.is-low strong { color: var(--danger, #d66); }
 @media (max-width: 600px) { .bracket-count-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Site-wide record surfaces use the same fantasy-console frame as analysis. */
+.surface, .deck-stats-wrap, .printing-picker, .queue-admin { border-color: var(--tech-line); border-radius: 4px 20px 4px 20px; }
+.perf-panel { background: radial-gradient(ellipse at top right, color-mix(in srgb, var(--signal) 8%, transparent), transparent 65%), var(--bg-elev); border-top: 3px solid var(--signal); padding: 22px; }
+.perf-head { padding-bottom: 16px; border-bottom: 1px solid var(--tech-line); }
+.perf-head h2 { font: 500 1.45rem var(--font-display); }
+.perf-head .analysis-panel-glyph { border-color: var(--signal); color: var(--signal); background: color-mix(in srgb, var(--signal) 8%, var(--bg-elev)); }
+.perf-bots { font-size: .78rem; color: var(--fg-muted); }
+.perf-bots input { accent-color: var(--signal); width: 18px; height: 18px; }
+.perf-overall { gap: 12px; margin-block: 18px; }
+.perf-overall div { padding: 16px; border-radius: 4px 14px 4px 14px; border-color: var(--tech-line); background: color-mix(in srgb, var(--signal) 5%, var(--bg-elev)); }
+.perf-overall dt { text-transform: uppercase; letter-spacing: .07em; font-size: .65rem; }
+.perf-overall dd { font-size: 1.7rem; font-variant-numeric: tabular-nums; color: var(--fg); }
+.perf-empty { padding: 22px 0 4px; }
+.perf-fit { border: 1px dashed var(--tech-line); border-radius: 4px 18px 4px 18px; padding: 18px; margin-block: 18px; }
+.perf-fit.has-fit { border-style: solid; border-color: var(--power-color); background: linear-gradient(120deg, color-mix(in srgb, var(--power-color) 10%, var(--bg-elev)), var(--bg-elev)); box-shadow: inset 3px 0 var(--power-color); }
+.perf-fit-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; }
+.perf-fit-heading h3 { font: 500 1.2rem var(--font-display); margin: 4px 0; }
+.perf-fit-heading .eyebrow { margin: 0 0 4px; color: var(--power-color, var(--signal)); font-size: .63rem; }
+.perf-fit-heading > .power-badge { font-size: 1.15rem; padding: 9px 12px; }
+.perf-fit p { line-height: 1.55; }
+.perf-analysis-comparison { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding-top: 12px; border-top: 1px solid var(--tech-line); }
+.perf-analysis-comparison.is-different > span.small { font-weight: 600; }
+.perf-floor-note { flex-basis: 100%; padding: 12px; border: 1px solid color-mix(in srgb, var(--danger) 50%, var(--border)); border-radius: 3px 12px 3px 12px; margin: 0; color: var(--fg); background: color-mix(in srgb, var(--danger) 6%, var(--bg-elev)); }
+.perf-grid-wrap, .deck-stats-wrap { max-width: 100%; min-width: 0; overscroll-behavior-inline: contain; scrollbar-color: var(--border) var(--bg-elev); }
+.perf-grid { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.perf-grid th, .perf-grid td { padding: 14px 10px; border-bottom-color: var(--tech-line); vertical-align: middle; }
+.perf-grid th:first-child { width: 74px; }
+.perf-grid thead th { font-size: .78rem; background: color-mix(in srgb, var(--signal) 7%, var(--bg-elev)); }
+.perf-grid thead th:first-child { border-radius: 3px 0 0 12px; }
+.perf-grid thead th:last-child { border-radius: 0 12px 3px 0; }
+.perf-grid caption { padding-bottom: 12px; line-height: 1.45; }
+.perf-baseline { display: block; font-size: .63rem; color: var(--fg-muted); font-weight: 400; margin-top: 5px; }
+.perf-grid td.is-low { opacity: 1; }
+.perf-grid td.is-recommended { outline: 2px solid var(--power-color); outline-offset: -2px; background: color-mix(in srgb, var(--power-color) 11%, var(--bg-elev)); border-radius: 3px 12px 3px 12px; }
+.perf-cell-pick { display: block; margin-bottom: 6px; color: var(--power-color); font-weight: 700; font-size: .66rem; letter-spacing: .02em; }
+.perf-cell-record { display: block; font-size: .87rem; font-variant-numeric: tabular-nums; }
+.perf-cell-record .muted { display: inline-block; margin-left: 4px; }
+.perf-win-track { display: block; margin-top: 7px; height: 4px; border-radius: 99px; background: var(--bg-elev-2); overflow: hidden; }
+.perf-win-track i { display: block; height: 100%; border-radius: inherit; background: var(--power-color, var(--signal)); }
+.perf-method, .perf-h2h { border: 1px solid var(--tech-line); border-radius: 4px 14px 4px 14px; margin-top: 12px; padding: 0 12px; }
+.perf-method > summary, .perf-h2h > summary { min-height: 44px; padding-block: 12px; cursor: pointer; font-size: .85rem; font-weight: 600; }
+.perf-method p { line-height: 1.6; }
+.perf-h2h-table { min-width: 500px; margin-bottom: 12px; }
+.perf-h2h-table th, .perf-h2h-table td { padding: 12px 10px; }
+.perf-h2h-table thead th, .deck-stats-table thead th { background: color-mix(in srgb, var(--signal) 7%, var(--bg-elev)); color: var(--fg-muted); font-size: .75rem; }
+.deck-stats-bar { padding: 12px 16px; border: 1px solid var(--tech-line); border-radius: 4px 16px 4px 16px; background: var(--bg-elev); margin-block: 16px; }
+.deck-stats-wrap { border: 1px solid var(--tech-line); background: var(--bg-elev); }
+.deck-stats-table { min-width: 640px; }
+.deck-stats-table th, .deck-stats-table td { padding: 12px 16px; }
+.deck-stats-sort, .deck-stats-name { min-height: 44px; }
+.deck-stats-table tr.is-open > th, .deck-stats-table tr.is-open > td { background: color-mix(in srgb, var(--signal) 6%, var(--bg-elev)); }
+.deck-stats-table tbody > tr:hover:not(.deck-stats-detail) { background: color-mix(in srgb, var(--signal) 3%, var(--bg-elev)); }
+@media (max-width: 600px) {
+  .perf-panel { padding: 16px; }
+  .perf-overall { gap: 8px; }
+  .perf-overall div { padding: 12px; }
+  .perf-overall dd { font-size: 1.5rem; }
+  .perf-fit { padding: 14px; }
+  .perf-grid th, .perf-grid td { padding: 12px 6px; }
+  .perf-grid th:first-child { width: 54px; }
+  .perf-grid .power-badge { padding: 5px; font-size: .7rem; }
+  .perf-cell-record { font-size: .73rem; }
+  .perf-cell-record .muted { display: block; margin: 3px 0 0; }
+  .perf-cell-pick { font-size: .59rem; overflow-wrap: anywhere; }
+  .perf-grid thead th { font-size: .68rem; }
+  .perf-baseline { font-size: .57rem; }
+}

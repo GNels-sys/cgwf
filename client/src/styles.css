@@ -443,3 +443,20 @@ button, input, select, textarea { touch-action: manipulation; }
 :root[data-ui="light"] .eyebrow,
 :root[data-ui="light"] .warn { color: #805b21; }
 :root[data-ui="light"] .page-header h1 { color: #805b21; }
+
+/* Bracket identity is shared everywhere; B3+ is explicitly an informal results band. */
+:root { --power-1: #97d3a9; --power-2: #8ebcf1; --power-3: #dfb76d; --power-3plus: #c1adef; --power-4: #efaa78; --power-5: #ef9489; }
+:root[data-ui="light"] { --power-1: #28623b; --power-2: #245d98; --power-3: #79530e; --power-3plus: #70449e; --power-4: #934313; --power-5: #a2362c; }
+[data-power="1"], .bracket-pill.b1 { --power-color: var(--power-1); }
+[data-power="2"], .bracket-pill.b2 { --power-color: var(--power-2); }
+[data-power="3"], .bracket-pill.b3 { --power-color: var(--power-3); }
+[data-power="3+"], .bracket-pill.b3plus { --power-color: var(--power-3plus); }
+[data-power="4"], .bracket-pill.b4 { --power-color: var(--power-4); }
+[data-power="5"], .bracket-pill.b5 { --power-color: var(--power-5); }
+.power-badge { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 9px; border: 1px solid color-mix(in srgb, var(--power-color, var(--fg-muted)) 65%, var(--border)); border-radius: 3px 10px 3px 10px; color: var(--power-color, var(--fg-muted)); background: color-mix(in srgb, var(--power-color, var(--fg-muted)) 8%, var(--bg-elev)); font-size: .78rem; line-height: 1.25; }
+.power-badge strong { color: inherit; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.power-badge-label { font-size: .65rem; letter-spacing: .04em; }
+.bracket-badge[data-power], .deck-bracket[data-power] { border-color: var(--power-color, var(--border)); }
+.analysis-row .bracket-badge .bracket-badge-num { color: var(--power-color, var(--accent)); }
+.deck-bracket[data-power] { color: var(--power-color, var(--fg)); }
+:root .bracket-badge[data-power], :root .bracket-pill[class*=" b"] { border-color: var(--power-color, var(--border)); color: var(--power-color, var(--fg)); }

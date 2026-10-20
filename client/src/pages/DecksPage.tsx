@@ -13,7 +13,7 @@ function DeckTileMetrics({ value }: { value: DeckMetrics | undefined }) {
   const bracket = value?.bracket;
   const pips = value?.pips;
   return <div className="deck-tile-metrics">
-    <span className="deck-bracket" title="Suggested bracket from deck analysis">
+    <span className="deck-bracket" data-power={bracket ?? "unknown"} title="Suggested bracket from deck analysis">
       {bracket ? `B${bracket} · ${BRACKET_NAMES[bracket]}` : value ? "Bracket unavailable" : "Bracket loading…"}
     </span>
     {pips ? <>

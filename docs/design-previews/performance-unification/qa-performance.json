@@ -1,0 +1,368 @@
+[
+  {
+    "size": "portrait",
+    "ui": "dark",
+    "colors": {
+      "result": "rgb(193, 173, 239)",
+      "analysis": "rgb(239, 170, 120)"
+    },
+    "highlight": true,
+    "comparison": true,
+    "floor": true,
+    "lowSample": true,
+    "empty": true,
+    "retry": true,
+    "bots": true,
+    "stats": true,
+    "library": true,
+    "collection": true,
+    "requests": [
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/library%3Areview",
+        "bots": true
+      }
+    ],
+    "errors": []
+  },
+  {
+    "size": "portrait",
+    "ui": "light",
+    "colors": {
+      "result": "rgb(112, 68, 158)",
+      "analysis": "rgb(147, 67, 19)"
+    },
+    "highlight": true,
+    "comparison": true,
+    "floor": true,
+    "lowSample": true,
+    "empty": true,
+    "retry": true,
+    "bots": true,
+    "stats": true,
+    "library": true,
+    "collection": true,
+    "requests": [
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/library%3Areview",
+        "bots": true
+      }
+    ],
+    "errors": []
+  },
+  {
+    "size": "landscape",
+    "ui": "dark",
+    "colors": {
+      "result": "rgb(193, 173, 239)",
+      "analysis": "rgb(239, 170, 120)"
+    },
+    "highlight": true,
+    "comparison": true,
+    "floor": true,
+    "lowSample": true,
+    "empty": true,
+    "retry": true,
+    "bots": true,
+    "stats": true,
+    "library": true,
+    "collection": true,
+    "requests": [
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/library%3Areview",
+        "bots": true
+      }
+    ],
+    "errors": []
+  },
+  {
+    "size": "landscape",
+    "ui": "light",
+    "colors": {
+      "result": "rgb(112, 68, 158)",
+      "analysis": "rgb(147, 67, 19)"
+    },
+    "highlight": true,
+    "comparison": true,
+    "floor": true,
+    "lowSample": true,
+    "empty": true,
+    "retry": true,
+    "bots": true,
+    "stats": true,
+    "library": true,
+    "collection": true,
+    "requests": [
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/library%3Areview",
+        "bots": true
+      }
+    ],
+    "errors": []
+  },
+  {
+    "size": "desktop",
+    "ui": "dark",
+    "colors": {
+      "result": "rgb(193, 173, 239)",
+      "analysis": "rgb(239, 170, 120)"
+    },
+    "highlight": true,
+    "comparison": true,
+    "floor": true,
+    "lowSample": true,
+    "empty": true,
+    "retry": true,
+    "bots": true,
+    "stats": true,
+    "library": true,
+    "collection": true,
+    "requests": [
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/library%3Areview",
+        "bots": true
+      }
+    ],
+    "errors": []
+  },
+  {
+    "size": "desktop",
+    "ui": "light",
+    "colors": {
+      "result": "rgb(112, 68, 158)",
+      "analysis": "rgb(147, 67, 19)"
+    },
+    "highlight": true,
+    "comparison": true,
+    "floor": true,
+    "lowSample": true,
+    "empty": true,
+    "retry": true,
+    "bots": true,
+    "stats": true,
+    "library": true,
+    "collection": true,
+    "requests": [
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": true
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/review",
+        "bots": false
+      },
+      {
+        "p": "/api/deck-stats/deck/library%3Areview",
+        "bots": true
+      }
+    ],
+    "errors": []
+  }
+]
