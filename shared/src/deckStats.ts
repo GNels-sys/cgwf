@@ -22,6 +22,9 @@ export interface ResultSeatRow {
   conceded: boolean;
 }
 
+/** A seat with the bracket its opponents played at (see `opponentBracket`). */
+export type RatedSeatRow = ResultSeatRow & { opponentBracket: number | null };
+
 export interface Record3 {
   games: number;
   wins: number;
@@ -30,7 +33,8 @@ export interface Record3 {
 }
 
 export interface GridCell extends Record3 {
-  tableBracket: number;
+  /** The bracket most of this deck's opponents played at (ties: the higher one). */
+  opponentBracket: number;
   players: number;
   /** Fewer than LOW_SAMPLE games: shown, but marked as too few to read much into. */
   lowSample: boolean;
@@ -59,7 +63,7 @@ export interface DeckPerformance {
   /** The deck's bracket in its most recent counted game (or as supplied). */
   deckBracket: number | null;
   overall: Record3 & { avgPlace: number | null; conceded: number };
-  /** Table bracket 1-5 by player count 2-4; cells with no games are omitted. */
+  /** Opponents' bracket 1-5 by player count 2-4; cells with no games are omitted. */
   grid: GridCell[];
   /** Plain-language indication, or null when the data says nothing clear. */
   hint: string | null;
@@ -81,12 +85,36 @@ export function gamesInScope(rows: ResultSeatRow[], includeBots: boolean): Resul
 }
 
 /**
+ * The bracket a seat played against: the most common deck bracket among the OTHER seats of its game
+ * (the deck's own bracket is left out, so a B4 deck at a table of B2 decks counts as a game against
+ * B2). A tie goes to the higher bracket, so a record is never flattered. Seats with no recorded
+ * bracket are ignored; with none at all, the table bracket agreed in the lobby is used.
+ */
+export function opponentBracket(me: ResultSeatRow, gameSeats: ResultSeatRow[]): number | null {
+  const counts = new Map<number, number>();
+  for (const s of gameSeats) {
+    if (s.seat === me.seat || s.deckBracket === null) continue;
+    counts.set(s.deckBracket, (counts.get(s.deckBracket) ?? 0) + 1);
+  }
+  let best: number | null = null;
+  for (const [b, c] of counts) if (best === null || c > counts.get(best)! || (c === counts.get(best)! && b > best)) best = b;
+  return best ?? me.tableBracket;
+}
+
+/** Every row with its opponents' bracket, computed from the other seats of the same game in `rows`. */
+export function withOpponentBrackets(rows: ResultSeatRow[]): RatedSeatRow[] {
+  const byGame = new Map<string, ResultSeatRow[]>();
+  for (const r of rows) byGame.set(r.gameId, [...(byGame.get(r.gameId) ?? []), r]);
+  return rows.map((r) => ({ ...r, opponentBracket: opponentBracket(r, byGame.get(r.gameId) ?? []) }));
+}
+
+/**
  * One deck's performance. `rows` = every seat of every counted game in scope (all decks, so head-to-head
  * can see the opponents); the deck's own seats are those with its `deckRef` (and, for a personal deck,
  * the caller has already restricted them to the owner).
  */
 export function deckPerformance(allRows: ResultSeatRow[], deckRef: string, includeBots: boolean): DeckPerformance {
-  const rows = gamesInScope(allRows, includeBots);
+  const rows = withOpponentBrackets(gamesInScope(allRows, includeBots));
   const mine = rows.filter((r) => r.deckRef === deckRef);
   const latest = [...mine].sort((a, b) => (b.endedAt ?? "").localeCompare(a.endedAt ?? ""))[0];
   const wins = mine.filter((r) => r.won).length;
@@ -99,12 +127,12 @@ export function deckPerformance(allRows: ResultSeatRow[], deckRef: string, inclu
     conceded: mine.filter((r) => r.conceded).length,
   };
   const grid: GridCell[] = [];
-  for (const tb of TABLE_BRACKETS) {
+  for (const ob of TABLE_BRACKETS) {
     for (const pc of PLAYER_COUNTS) {
-      const cell = mine.filter((r) => r.tableBracket === tb && r.playerCount === pc);
+      const cell = mine.filter((r) => r.opponentBracket === ob && r.playerCount === pc);
       if (!cell.length) continue;
       const w = cell.filter((r) => r.won).length;
-      grid.push({ tableBracket: tb, players: pc, games: cell.length, wins: w, winRate: rate(w, cell.length), lowSample: cell.length < LOW_SAMPLE });
+      grid.push({ opponentBracket: ob, players: pc, games: cell.length, wins: w, winRate: rate(w, cell.length), lowSample: cell.length < LOW_SAMPLE });
     }
   }
   // head to head: every opposing seat in this deck's games
@@ -149,23 +177,23 @@ export function deckPerformance(allRows: ResultSeatRow[], deckRef: string, inclu
 
 /**
  * An indication, never a verdict: compares wins with what an even table would give (1 / players per
- * game) at tables above and at-or-below the deck's own bracket. Needs LOW_SAMPLE games in a group.
+ * game) against opponents above and at-or-below the deck's own bracket. Needs LOW_SAMPLE games in a group.
  */
-export function bracketHint(mine: ResultSeatRow[], deckBracket: number | null): string | null {
+export function bracketHint(mine: RatedSeatRow[], deckBracket: number | null): string | null {
   if (deckBracket === null) return null;
-  const group = (pred: (r: ResultSeatRow) => boolean) => {
-    const g = mine.filter((r) => r.tableBracket !== null && pred(r));
+  const group = (pred: (r: RatedSeatRow) => boolean) => {
+    const g = mine.filter((r) => r.opponentBracket !== null && pred(r));
     const expected = g.reduce((n, r) => n + 1 / Math.max(2, r.playerCount), 0);
     return { games: g.length, wins: g.filter((r) => r.won).length, expected };
   };
-  const above = group((r) => (r.tableBracket as number) > deckBracket);
-  const atOrBelow = group((r) => (r.tableBracket as number) <= deckBracket);
+  const above = group((r) => (r.opponentBracket as number) > deckBracket);
+  const atOrBelow = group((r) => (r.opponentBracket as number) <= deckBracket);
   const pct = (x: number) => `${Math.round(x * 100)}%`;
   if (above.games >= LOW_SAMPLE && above.wins >= above.expected * 1.5 && above.wins >= 2) {
-    return `Wins ${above.wins} of ${above.games} games at tables above Bracket ${deckBracket} (an even share would be about ${Math.round(above.expected)}, ${pct(above.expected / above.games)}). This may indicate the deck plays stronger than its bracket.`;
+    return `Wins ${above.wins} of ${above.games} games against opponents above Bracket ${deckBracket} (an even share would be about ${Math.round(above.expected)}, ${pct(above.expected / above.games)}). This may indicate the deck plays stronger than its bracket.`;
   }
   if (atOrBelow.games >= LOW_SAMPLE && atOrBelow.wins <= atOrBelow.expected * 0.5) {
-    return `Wins ${atOrBelow.wins} of ${atOrBelow.games} games at Bracket ${deckBracket} tables or lower (an even share would be about ${Math.round(atOrBelow.expected)}, ${pct(atOrBelow.expected / atOrBelow.games)}). This may indicate the deck plays weaker than its bracket.`;
+    return `Wins ${atOrBelow.wins} of ${atOrBelow.games} games against Bracket ${deckBracket} opponents or lower (an even share would be about ${Math.round(atOrBelow.expected)}, ${pct(atOrBelow.expected / atOrBelow.games)}). This may indicate the deck plays weaker than its bracket.`;
   }
   return null;
 }
