@@ -39,9 +39,9 @@ describe("deck performance from counted games", () => {
     expect(p.overall).toMatchObject({ games: 4, wins: 2, winRate: 0.5, conceded: 0 });
     expect(p.overall.avgPlace).toBeCloseTo((1 + 3 + 1 + 2) / 4);
     expect(p.grid).toEqual([
-      { opponentBracket: 3, players: 2, games: 1, wins: 1, winRate: 1, lowSample: true },
-      { opponentBracket: 3, players: 4, games: 2, wins: 1, winRate: 0.5, lowSample: true },
-      { opponentBracket: 4, players: 3, games: 1, wins: 0, winRate: 0, lowSample: true },
+      { opponentBracket: 3, tableBracket: 3, players: 2, games: 1, wins: 1, winRate: 1, lowSample: true },
+      { opponentBracket: 3, tableBracket: 3, players: 4, games: 2, wins: 1, winRate: 0.5, lowSample: true },
+      { opponentBracket: 4, tableBracket: 4, players: 3, games: 1, wins: 0, winRate: 0, lowSample: true },
     ]);
     expect(p.deckName).toBe("My Deck");
   });
@@ -86,9 +86,9 @@ describe("deck performance from counted games", () => {
       ...game(4, [["D", true, 1], ["library:ghyrson", false, 2, true, 3], ["library:henzie", false, 3, true, 3], ["library:prosper", false, 4, true, 3]], 4),
     ];
     expect(deckPerformance(sting, "D", true).grid).toEqual([
-      { opponentBracket: 2, players: 3, games: 1, wins: 1, winRate: 1, lowSample: true },
-      { opponentBracket: 3, players: 3, games: 1, wins: 1, winRate: 1, lowSample: true },
-      { opponentBracket: 3, players: 4, games: 1, wins: 1, winRate: 1, lowSample: true },
+      { opponentBracket: 2, tableBracket: 2, players: 3, games: 1, wins: 1, winRate: 1, lowSample: true },
+      { opponentBracket: 3, tableBracket: 3, players: 3, games: 1, wins: 1, winRate: 1, lowSample: true },
+      { opponentBracket: 3, tableBracket: 3, players: 4, games: 1, wins: 1, winRate: 1, lowSample: true },
     ]);
   });
 
