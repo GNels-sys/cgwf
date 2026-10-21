@@ -32,7 +32,7 @@ export function PerformancePanel({ deckRef, title = "Performance", analysis, inc
   const fit = p ? performanceFit(p) : null;
   const belowFloor = Boolean(fit && analysis && powerValue(fit.level) < analysis.floor);
   const differs = Boolean(fit && analysis && powerValue(fit.level) !== analysis.suggested);
-  const cell = (tb: number, pc: number) => p?.grid.find((c) => c.tableBracket === tb && c.players === pc);
+  const cell = (tb: number, pc: number) => p?.grid.find((c) => c.opponentBracket === tb && c.players === pc);
 
   return <section className="surface perf-panel" aria-label={title}>
     <div className="perf-head analysis-panel-heading">
@@ -66,7 +66,7 @@ export function PerformancePanel({ deckRef, title = "Performance", analysis, inc
           {fit && <PowerBadge level={fit.level} label="Results fit" />}
         </div>
         {fit ? <>
-          <p className="small">{fit.between ? "Above an even share at B3, below it at B4 for this player count. B3+ is an informal discussion label, not a change to the recorded table brackets." : "Closest tested win rate to an even share for this table size; it is not the matchup with the most wins."} Based on {fit.evidenceGames} counted games{bots ? ", including games against bots" : ", with bot games excluded"}.</p>
+          <p className="small">{fit.between ? "Above an even share at B3, below it at B4 for this player count. B3+ is an informal discussion label, not a change to any deck's bracket." : "Closest tested win rate to an even share for this table size; it is not the matchup with the most wins."} Based on {fit.evidenceGames} counted games{bots ? ", including games against bots" : ", with bot games excluded"}.</p>
           {fit.provisional && <p className="small muted">Early signal: fewer than 20 games in at least one supporting matchup. Keep testing before treating this as a settled rating.</p>}
           <div className={`perf-analysis-comparison${differs ? " is-different" : ""}`}>
             {analysis ? <>
@@ -81,15 +81,15 @@ export function PerformancePanel({ deckRef, title = "Performance", analysis, inc
         </> : <p className="small muted">Each matchup needs at least {LOW_SAMPLE} games. Untested or consistently one-sided matchups are not recommended.</p>}
       </div>
       {p.hint && <p className="perf-hint small">{p.hint}</p>}
-      <div className="perf-grid-wrap" role="region" aria-label="Win rates by table bracket and player count" tabIndex={0}>
+      <div className="perf-grid-wrap" role="region" aria-label="Win rates by opponents' bracket and player count" tabIndex={0}>
         <table className="perf-grid">
-          <caption className="small muted">Wins / games by table bracket and number of players{p.deckBracket ? ` (last recorded deck bracket: B${p.deckBracket})` : ""}</caption>
-          <thead><tr><th scope="col">Table</th>{PLAYER_COUNTS.map((pc) => <th key={pc} scope="col">{pc} players<span className="perf-baseline">Even share {pct(1 / pc)}</span></th>)}</tr></thead>
+          <caption className="small muted">Wins / games by the bracket most opponents played and the number of players{p.deckBracket ? ` (last recorded deck bracket: B${p.deckBracket})` : ""}</caption>
+          <thead><tr><th scope="col">Opponents</th>{PLAYER_COUNTS.map((pc) => <th key={pc} scope="col">{pc} players<span className="perf-baseline">Even share {pct(1 / pc)}</span></th>)}</tr></thead>
           <tbody>{TABLE_BRACKETS.map((tb) => <tr key={tb} className={p.deckBracket === tb ? "is-own-bracket" : undefined} data-power={tb}>
             <th scope="row"><PowerBadge level={tb} /></th>
             {PLAYER_COUNTS.map((pc) => {
               const c = cell(tb, pc);
-              const best = fit?.cell.tableBracket === tb && fit.cell.players === pc;
+              const best = fit?.cell.opponentBracket === tb && fit.cell.players === pc;
               return <td key={pc} data-power={best ? fit.level : tb} className={`${c ? c.lowSample ? "is-low" : "" : "is-empty"}${best ? " is-recommended" : ""}`} title={c?.lowSample ? `Fewer than ${LOW_SAMPLE} games: too few to read much into` : undefined}>
                 {c ? <>
                   {best && <span className="perf-cell-pick"><span aria-hidden="true">✦ </span>{belowFloor ? "Best observed fit" : "Recommended"}{fit?.level === "3+" ? " · B3+" : ""}</span>}
@@ -101,7 +101,7 @@ export function PerformancePanel({ deckRef, title = "Performance", analysis, inc
           </tr>)}</tbody>
         </table>
       </div>
-      <p className="small muted">* fewer than {LOW_SAMPLE} games. An even share at a table of N players is 1 in N. A B3+ highlight marks a tested B3 cell and an inferred fit between B3 and B4.</p>
+      <p className="small muted">* fewer than {LOW_SAMPLE} games. Each game sits under the bracket most of your opponents' decks were (your own deck is left out; a tie counts as the higher bracket). An even share at a table of N players is 1 in N. A B3+ highlight marks a tested B3 cell and an inferred fit between B3 and B4.</p>
       <details className="perf-method"><summary>How the recommendation is chosen</summary>
         <p className="small muted">Compare each tested matchup with its own 1/N baseline. Prefer the closest win rate, then more games, then larger tables, then the higher bracket if tied. At least {LOW_SAMPLE} games are required per cell. B3+ needs the same player count tested at both B3 and B4: at least 1.25× an even share at B3 and at most 0.75× at B4. Other recommendations need between 0.5× and 1.5× an even share. Results include earlier recorded versions of this deck. This is a table-discussion aid, not a rules classification.</p>
       </details>

@@ -129,7 +129,7 @@ export function DeckStatsPage() {
   return (
     <main className="page deck-stats-page">
       <PageHeading title="Deck stats" eyebrow="How your decks perform">
-        Win rates by table bracket and number of players, and head to head, from counted rules-engine games.
+        Win rates by opponents' bracket and number of players, and head to head, from counted rules-engine games.
       </PageHeading>
       <RequireUser>
         <DeckStats />

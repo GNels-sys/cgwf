@@ -45,7 +45,7 @@ describe("deck stats: counted games only, personal decks private, library decks 
   it("counts only counted games (test and abandoned games are left out)", async () => {
     const p = (await ctx.app.inject({ method: "GET", url: "/api/deck-stats/deck/alex-deck", headers: auth(alex.token) })).json() as DeckPerformance;
     expect(p.overall).toMatchObject({ games: 2, wins: 1, winRate: 0.5 });
-    expect(p.grid).toEqual([{ tableBracket: 3, players: 2, games: 2, wins: 1, winRate: 0.5, lowSample: true }]);
+    expect(p.grid).toEqual([{ opponentBracket: 3, players: 2, games: 2, wins: 1, winRate: 0.5, lowSample: true }]);
     expect(p.headToHead).toEqual([expect.objectContaining({ deckRef: "library:precon-1", games: 2, wins: 1, losses: 1 })]);
   });
 

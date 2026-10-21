@@ -1627,13 +1627,19 @@ draw ignored, idle close), `stats/backfill.test.ts`, deckOptions.test (owner-onl
 `bracketHint`, `gamesInScope`), rows loaded by `server/src/routes/deckStats.ts` from COUNTED games
 only. `GET /api/deck-stats[?bots=0]` lists the caller's own decks (by `deck_owner_id`) and the library
 decks they have played; `GET /api/deck-stats/deck/:ref[?bots=0]` (own deck id or `library:<id>`)
-returns overall (games, wins, win rate, average place, concedes), the grid of table bracket B1-B5 by
+returns overall (games, wins, win rate, average place, concedes), the grid of OPPONENTS' bracket B1-B5 by
 player count 2/3/4 (wins/games, win rate, `lowSample` under 5 games), a hint and head-to-head (per
 opposing deck: games together, this deck won, lost to it, placed above it; once per game even when
 two opponents played the same deck). Privacy: a personal deck's numbers answer only its owner (404 for
 anyone else, so its existence is not confirmed); library decks aggregate every player's games and are
 open to every signed-in player. "Include games vs bots" (default on) off = any game that had a bot
-seat is left out. The hint is an indication, never a verdict: with at least 5 games at tables above
+seat is left out. **Opponents' bracket (2026-10-20, owner report):** the automatic table bracket is the
+highest seated deck, so a B4 deck's games all landed in the B4 row even against B2 bots. A grid row is now
+`opponentBracket` (shared `opponentBracket` / `withOpponentBrackets`, computed at read time from
+`game_result_seats.deck_bracket`, so every past game re-sorts with no migration): the most common deck
+bracket among the OTHER seats, ties to the higher bracket (a record is never flattered), seats without a
+bracket ignored, none at all = the stored table bracket. The stored `table_bracket` itself is unchanged.
+The hint is an indication, never a verdict: with at least 5 games against opponents above
 the deck's own bracket and wins >= 1.5x an even share (1 / players per game) it says the deck "may
 play stronger than its bracket"; with 5+ games at its bracket or below and wins <= 0.5x an even share,
 "may play weaker". UI: `client/src/components/PerformancePanel.tsx` on the deck page and the library
