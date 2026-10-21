@@ -35,6 +35,8 @@ export interface Record3 {
 export interface GridCell extends Record3 {
   /** The bracket most of this deck's opponents played at (ties: the higher one). */
   opponentBracket: number;
+  /** The same number under the field's old name, for copies of the app cached before 2026-10-20. */
+  tableBracket: number;
   players: number;
   /** Fewer than LOW_SAMPLE games: shown, but marked as too few to read much into. */
   lowSample: boolean;
@@ -132,7 +134,7 @@ export function deckPerformance(allRows: ResultSeatRow[], deckRef: string, inclu
       const cell = mine.filter((r) => r.opponentBracket === ob && r.playerCount === pc);
       if (!cell.length) continue;
       const w = cell.filter((r) => r.won).length;
-      grid.push({ opponentBracket: ob, players: pc, games: cell.length, wins: w, winRate: rate(w, cell.length), lowSample: cell.length < LOW_SAMPLE });
+      grid.push({ opponentBracket: ob, tableBracket: ob, players: pc, games: cell.length, wins: w, winRate: rate(w, cell.length), lowSample: cell.length < LOW_SAMPLE });
     }
   }
   // head to head: every opposing seat in this deck's games

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DeckPerformance, GridCell } from "@cgwf/shared";
 import { performanceFit, powerValue } from "./performanceFit";
 
-const cell = (opponentBracket: number, players: number, games: number, wins: number): GridCell => ({ opponentBracket, players, games, wins, winRate: games ? wins / games : null, lowSample: games < 5 });
+const cell = (opponentBracket: number, players: number, games: number, wins: number): GridCell => ({ opponentBracket, tableBracket: opponentBracket, players, games, wins, winRate: games ? wins / games : null, lowSample: games < 5 });
 const performance = (...grid: GridCell[]): DeckPerformance => ({ deckRef: "deck", deckName: "Test", commanders: [], library: false, deckBracket: 4, overall: { games: 20, wins: 5, winRate: .25, avgPlace: 2, conceded: 0 }, grid, hint: null, headToHead: [], includeBots: true });
 
 describe("results-based seating hints", () => {
