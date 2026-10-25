@@ -2703,3 +2703,14 @@ button.engine-row { cursor: pointer; width: 100%; }
   .choice-sheet { max-height: 96dvh; }
 }
 .choice-sheet .optional-source { display: block; padding: 6px 10px; }
+
+/* Cards playable from exile, a graveyard, a command zone or the library (owner report 2026-10-25, Fire Lord Zuko):
+   nothing on the table glows for them, so the priority bar lists them. */
+.offzone-plays { flex: 1 1 100%; display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: thin; }
+.offzone-play { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 3px 11px 3px 11px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.offzone-play { --tile-h: 44px; --tile-w: calc(44px * 63 / 88); }
+.offzone-play-label { display: flex; flex-direction: column; align-items: flex-start; min-height: 44px; justify-content: center; background: none; border: 0; padding: 0; color: inherit; text-align: left; cursor: pointer; max-width: 11rem; }
+.offzone-play-label strong { font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.offzone-play-label .small { font-size: 0.7rem; line-height: 1.2; }
+.zone-btn { position: relative; }
+.zone-playable { position: absolute; top: -7px; right: -6px; padding: 1px 5px; border-radius: 8px; background: var(--accent); color: var(--bg, #000); font: 600 0.62rem/1.4 var(--font-ui, inherit); font-style: normal; white-space: nowrap; pointer-events: none; }

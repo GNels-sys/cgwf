@@ -37,6 +37,7 @@ import { TriggersPanel } from "./Triggers";
 import { AgentsPanel } from "./AgentsPanel";
 import { isOwner, useUser } from "../user";
 import { isOptionalChoice } from "./optionalChoice";
+import { offZonePlays, playableIn } from "./offZonePlays";
 import { isGroupedChoice } from "./choiceGroups";
 
 /**
@@ -440,6 +441,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const canEdit = canAct && !engineMode;
 
   const legalPrompt = canAct && !engine?.engineDown ? prompt : null;
+  /** Priority options in exile / graveyards / command zones / the library: shown in the bar and counted on the zone buttons. */
+  const offZone = useMemo(() => (engineMode && me && legalPrompt ? offZonePlays(legalPrompt, view, me) : []), [engineMode, me, legalPrompt, view]);
   const availableHand = engineMode ? playableHand(mePlayer?.hand.cards ?? [], legalPrompt) : canEdit ? mePlayer?.hand.cards ?? [] : [];
   const zoomInHand = zoom ? mePlayer?.hand.cards.some((card) => card.iid === zoom.iid) : false;
   const zoomIndex = availableHand.findIndex((card) => card.iid === zoom?.iid);
@@ -679,7 +682,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           onHold={engine ? (turn) => sock.send({ t: "hold", turn }) : undefined}
         >
           {engineMode && prompt && me && mePlayer && (
-            <EngineBar prompt={prompt} view={view} printings={printings} members={room.members} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} openList={() => setSheet(SHEET_PROMPT_KINDS.has(prompt.kind) ? { kind: "enginePrompt" } : { kind: "engineList" })} />
+            <EngineBar prompt={prompt} view={view} printings={printings} members={room.members} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} offZone={offZone} onPlayCard={tapCard} onHoldCard={engineHold} openList={() => setSheet(SHEET_PROMPT_KINDS.has(prompt.kind) ? { kind: "enginePrompt" } : { kind: "engineList" })} />
           )}
           {mode && me && (
             <CombatBar
@@ -749,14 +752,17 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               <DropButton id="zone:graveyard" onClick={() => showCards("Your graveyard", mePlayer.graveyard)} label={`Graveyard, ${mePlayer.graveyard.length} cards`}>
                 <span>Grave</span>
                 <strong>{mePlayer.graveyard.length}</strong>
+                <PlayableBadge count={playableIn(offZone, me ?? "", "graveyard")} />
               </DropButton>
               <DropButton id="zone:exile" onClick={() => showCards("Your exile", mePlayer.exile)} label={`Exile, ${mePlayer.exile.length} cards`}>
                 <span>Exile</span>
                 <strong>{mePlayer.exile.length}</strong>
+                <PlayableBadge count={playableIn(offZone, me ?? "", "exile")} />
               </DropButton>
               <DropButton id="zone:command" className="is-command" onClick={() => showCards("Your command zone", mePlayer.command)} label={`Command zone, ${mePlayer.command.length} cards`}>
                 <span>Cmd</span>
                 <strong>{mePlayer.command.length}</strong>
+                <PlayableBadge count={playableIn(offZone, me ?? "", "command")} />
               </DropButton>
               <button className="zone-btn is-tokens" onClick={() => setShowTokens(true)} disabled={!canEdit} aria-label="Create tokens">
                 <span>Token</span>
@@ -907,7 +913,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               </button>
             </div>
           )}
-          <CardList cards={liveCardsPanel.cards} printings={printings} onTap={tapCard} onHold={holdCard} sleeveOf={sleeveOf} empty="No cards here." />
+          <CardList cards={liveCardsPanel.cards} printings={printings} onTap={tapCard} onHold={engineMode ? engineHold : holdCard} sleeveOf={sleeveOf} highlighted={highlighted} empty="No cards here." />
         </Panel>
       )}
       {opponent && view.players[opponent] && (
@@ -978,4 +984,10 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       )}
     </DndContext>
   );
+}
+
+/** "2 to play" on a zone button when cards in that zone may be played right now. */
+function PlayableBadge({ count }: { count: number }) {
+  if (count === 0) return null;
+  return <em className="zone-playable" aria-label={`${count} playable`}>{count} to play</em>;
 }

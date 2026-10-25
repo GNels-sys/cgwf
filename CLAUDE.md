@@ -1315,6 +1315,17 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   React render: primary cannot send empty, x / backdrop / Escape never answer, the confirm path sends
   `options: []`), engine `CloudAttachTest` (a real game: the human casts Cloud, the trigger asks the human,
   choosing the Axe leaves it attached).
+- **Playing cards from exile and other zones (2026-10-25).** Owner report (Fire Lord Zuko deck): Party Thrasher's
+  chosen card and Inside Information's cards "never went to the board". The engine was right all along: engine
+  `PlayFromExileTest` (a real game) shows the chosen card and both of an opponent's exiled cards in the priority list
+  (Inside Information's as "{0}, Pay 1 life"), in the seat's view, and casting them puts them on the battlefield
+  for the right price. The table only glowed hand and battlefield cards, so a card in exile (above all in an
+  OPPONENT's exile) had no visible way to be played. Now `offZonePlays` (`client/src/game/offZonePlays.ts`) lists
+  every priority option whose card sits in an exile, a graveyard, a command zone or the known top of a library,
+  mine first, then turn order; the priority bar shows them as a row of buttons ("Llanowar Elves · Blair's exile ·
+  Pay 1 life"; tap = the same as tapping a glowing card, long-press = Pay with), my Exile / Grave / Cmd buttons get
+  an "N to play" badge, and zone card lists glow like the table. Tests: `offZonePlays.test.ts`,
+  `offZoneBar.test.tsx` (a real render: the row, the cost, a tap plays it).
 - **Opening hand (2026-10-20).** Owner request: free mulligans for the table, and a "draw 10, put 3 back"
   start. Lobby setting (host, frozen at start, shown to everyone with its rules in plain words from
   `OPENING_HAND_TEXT` in `shared/src/openingHand.ts`; `rooms.opening_hand` / `free_mulligans`, migration
