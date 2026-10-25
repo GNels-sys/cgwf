@@ -8,6 +8,7 @@ import { mulliganNote } from "./openingHandText";
 import { canConfirm, choiceLabel, isOptionalChoice, noneAnswer, noneLabel, noneQuestion } from "./optionalChoice";
 import { GroupedChoiceSheet, primaryLabel } from "./ChoiceSheet";
 import { isGroupedChoice } from "./choiceGroups";
+import { playCostLabel, type OffZonePlay } from "./offZonePlays";
 
 /**
  * Rules-engine tables: the UI for the prompt the engine is waiting on. The engine decides what is
@@ -109,10 +110,16 @@ export interface EngineBarProps {
   onZoom: (c: ViewCard) => void;
   /** Open the list sheet for the current prompt (choose / chooseMany / targets with non-card options). */
   openList: () => void;
+  /** Priority: cards playable from exile, a graveyard, a command zone or the library (nothing glows for them). */
+  offZone?: OffZonePlay[];
+  /** Tap on one of those: the same as tapping a glowing card. */
+  onPlayCard?: (c: ViewCard) => void;
+  /** Long-press on one of those: "Pay with". */
+  onHoldCard?: (c: ViewCard) => void;
 }
 
 /** The bar inside the phase strip while the engine waits on me. */
-export function EngineBar({ prompt, view, printings, members, me, pick, setPick, answer, onZoom, openList }: EngineBarProps) {
+export function EngineBar({ prompt, view, printings, members, me, pick, setPick, answer, onZoom, openList, offZone = [], onPlayCard, onHoldCard }: EngineBarProps) {
   const id = prompt.promptId;
   switch (prompt.kind) {
     case "priority": {
@@ -124,8 +131,22 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
         <div className="engine-bar" role="region" aria-label="Your priority">
           <div className="engine-bar-head">
             <strong>{prompt.stackEmpty ? (prompt.myTurn ? "Your move" : "You may respond") : prompt.stackTopMine ? "Your spell or ability is on the stack" : "Something is on the stack: respond?"}</strong>
-            <span className="muted small">{prompt.options.length === 0 ? "Nothing to play right now." : `Tap a glowing card to play it (${parts.join(", ")}). Mana is paid for you; hold a card to choose what to tap.`}</span>
+            <span className="muted small">{prompt.options.length === 0 ? "Nothing to play right now." : `Tap a glowing card to play it (${parts.join(", ")}${offZone.length ? `; ${offZone.length} from elsewhere below` : ""}). Mana is paid for you; hold a card to choose what to tap.`}</span>
           </div>
+          {offZone.length > 0 && onPlayCard && (
+            <div className="offzone-plays" role="group" aria-label="Playable from exile and other zones">
+              {offZone.map((play) => (
+                <div key={play.card.iid} className="offzone-play">
+                  <CardTile card={play.card} printings={printings} onTap={onPlayCard} onHold={onHoldCard ?? onZoom} />
+                  <button className="offzone-play-label" onClick={() => onPlayCard(play.card)} aria-label={`Play ${play.options[0]!.cardName} (${play.where})`}>
+                    <strong>{play.options[0]!.cardName}</strong>
+                    <span className="small muted">{play.where}</span>
+                    <span className="small">{play.options.length > 1 ? `${play.options.length} ways to play` : playCostLabel(play.options[0]!)}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="engine-bar-actions">
             <button className={`btn btn-small${prompt.options.length === 0 ? " btn-primary" : ""}`} onClick={() => answer({ promptId: id, option: null })}>
               {prompt.stackEmpty ? "Pass" : "Let it resolve"}

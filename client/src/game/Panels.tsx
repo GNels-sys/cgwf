@@ -39,13 +39,13 @@ export function Panel({ title, subtitle, onClose, children, wide = false, classN
 
 type SleeveOf = (ownerId: string) => SleeveStyle;
 
-export function CardList({ cards, printings, onTap, onHold, sleeveOf, empty = "Nothing here." }: { cards: ViewCard[]; printings: Printings; onTap: (c: ViewCard) => void; onHold: (c: ViewCard) => void; sleeveOf?: SleeveOf; empty?: string }) {
+export function CardList({ cards, printings, onTap, onHold, sleeveOf, highlighted, empty = "Nothing here." }: { cards: ViewCard[]; printings: Printings; onTap: (c: ViewCard) => void; onHold: (c: ViewCard) => void; sleeveOf?: SleeveOf; /** Cards the open prompt can use (they glow, as on the table). */ highlighted?: Set<string>; empty?: string }) {
   if (cards.length === 0) return <p className="muted">{empty}</p>;
   return (
     <div className="card-list">
       {cards.map((c) => (
         <div key={c.iid} className="card-list-item">
-          <CardTile card={c} printings={printings} onTap={onTap} onHold={onHold} sleeve={sleeveOf?.(c.owner)} />
+          <CardTile card={c} printings={printings} onTap={onTap} onHold={onHold} sleeve={sleeveOf?.(c.owner)} highlight={highlighted?.has(c.iid)} />
           <span className="small">{nameOf(c, printings)}</span>
         </div>
       ))}
