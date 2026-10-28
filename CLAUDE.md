@@ -1190,7 +1190,12 @@ them) with tests in `shared/src/game/hygiene.test.ts` and on the wire in `rooms.
   graveyard/exile cards I do not control. Opponent chips, the life widget and the menu show
   `eliminated` as OUT. `CardZoom` fits the WHOLE card: `.zoom` is a grid, the image width is
   `min(100vw - 48px, (100dvh - 90px) * 63/88, 440px)` beside the text in landscape and
-  `min(100vw - 48px, 56dvh * 63/88)` above a scrolling text pane in portrait (`game.css`).
+  `min(100vw - 48px, 56dvh * 63/88)` above a scrolling text pane in portrait (`game.css`). The grid's
+  row is `minmax(0, 1fr)` (2026-10-27, owner report: a planeswalker holding every other walker's
+  abilities): without it the row grew to its content in landscape and `.zoom`'s `overflow: hidden` cut
+  the ability list off, so only the first few could be chosen; now the text column scrolls at every
+  size (checked at 812x375, 667x375, 375x812, 375x667 with 14 abilities) and the list says how many
+  there are ("14 available, scroll for all").
   `scripts/bots.mjs` bots act whenever they are the active player (a turn now opens on upkeep).
 
 ## Rules engine tables (Forge, Stage 1)

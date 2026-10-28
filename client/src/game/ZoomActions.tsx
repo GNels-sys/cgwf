@@ -13,7 +13,7 @@ export function playableHand(hand: ViewCard[], prompt: EnginePrompt | null): Vie
 
 export function ZoomActions({ options, hand = false, onPick }: { options: EnginePlayable[]; hand?: boolean; onPick: (index: number) => void }) {
   return <section className="zoom-decisions" aria-label={hand ? "Play this card" : "Available abilities"}>
-    <p className="eyebrow">{hand ? "Your next move" : "Choose an ability"}</p>
+    <p className="eyebrow">{hand ? "Your next move" : options.length > 3 ? `Choose an ability · ${options.length} available, scroll for all` : "Choose an ability"}</p>
     {options.length === 0 ? <>
       <button className="btn btn-primary" disabled>{hand ? "Play now" : "Activate ability"}</button>
       <p className="muted small">{hand ? "This card cannot be played at this moment. The rules engine controls timing and costs." : "No ability is available at this moment."}</p>
