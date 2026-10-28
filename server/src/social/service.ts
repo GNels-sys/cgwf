@@ -115,6 +115,32 @@ export class SocialService {
     const target = this.handle.db.select().from(users).where(eq(users.friendCode, code)).get();
     if (!target || target.isAgent) throw new SocialError("no player has that code", 404);
     if (target.id === fromId) throw new SocialError("that is your own code");
+    return this.requestTo(from, target);
+  }
+
+  /** Send a request to a player by id (the Players page); same rules as by code. */
+  requestUser(fromId: string, targetId: string): { outcome: "sent" | "accepted"; user: PublicProfile } {
+    const from = this.user(fromId);
+    if (from.isAgent) throw new SocialError("computer opponents have no friends");
+    const target = this.handle.db.select().from(users).where(eq(users.id, targetId)).get();
+    if (!target || target.isAgent) throw new SocialError("no such player", 404);
+    if (target.id === fromId) throw new SocialError("you cannot add yourself");
+    return this.requestTo(from, target);
+  }
+
+  /** Whether a friend request is waiting between two players: sent by `a`, sent to `a`, or none. */
+  pendingBetween(a: string, b: string): "sent" | "received" | null {
+    const pending = (from: string, to: string) =>
+      this.handle.db
+        .select({ id: friendRequests.id })
+        .from(friendRequests)
+        .where(and(eq(friendRequests.fromUserId, from), eq(friendRequests.toUserId, to), eq(friendRequests.status, "pending")))
+        .get();
+    return pending(a, b) ? "sent" : pending(b, a) ? "received" : null;
+  }
+
+  private requestTo(from: UserRow, target: UserRow): { outcome: "sent" | "accepted"; user: PublicProfile } {
+    const fromId = from.id;
     if (this.areFriends(fromId, target.id)) throw new SocialError(`you and ${target.displayName} are already friends`, 409);
     if (this.friendIds(fromId).length >= MAX_FRIENDS) throw new SocialError("friend list is full");
     const reverse = this.handle.db

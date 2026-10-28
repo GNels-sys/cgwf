@@ -1,4 +1,6 @@
 import type {
+  PlayerDetailResponse,
+  PlayersResponse,
   CoachAdminResponse,
   CoachGameRow,
   CoachRoomResponse,
@@ -314,6 +316,12 @@ export const api = {
   },
 
   features: () => request<FeaturesResponse>("/api/features"),
+  /** The Players page: everyone signed up, their decks' brackets and record (decks only as commanders + bracket). */
+  players: {
+    list: () => request<PlayersResponse>("/api/players"),
+    get: (id: string) => request<PlayerDetailResponse>(`/api/players/${encodeURIComponent(id)}`),
+    friendRequest: (id: string) => request<{ outcome: "sent" | "accepted" }>(`/api/players/${encodeURIComponent(id)}/friend-request`, { json: {} }),
+  },
   /** Deck statistics from counted rules-engine games (personal decks: owner only; library decks: everyone). */
   deckStats: {
     list: (bots: boolean) => request<DeckStatsListResponse>(`/api/deck-stats${bots ? "" : "?bots=0"}`),

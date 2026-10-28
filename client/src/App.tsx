@@ -16,6 +16,7 @@ import { SearchPage } from "./pages/SearchPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StoresPage } from "./pages/StoresPage";
 import { DeckStatsPage } from "./pages/DeckStatsPage";
+import { PlayersPage } from "./pages/PlayersPage";
 import { SignInPage, SignUpPage } from "./pages/AccountPages";
 import { FriendsPage } from "./pages/FriendsPage";
 import { Landing, StartPage, WelcomePage } from "./pages/WelcomePage";
@@ -47,6 +48,7 @@ export function App() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/stores" element={<StoresPage />} />
             <Route path="/stats" element={<DeckStatsPage />} />
+            <Route path="/players" element={<PlayersPage />} />
             <Route path="/coach/:code" element={<CoachPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/library" element={<LibraryPage />} />
