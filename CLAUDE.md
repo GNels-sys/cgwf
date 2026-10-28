@@ -1664,6 +1664,33 @@ deck page ("Performance (all players)"), and the Deck stats page `/stats` (nav "
 (grid by players and brackets, head-to-head, bots toggle, hint), `routes/deckStats.test.ts` (test and
 abandoned games excluded, personal-deck privacy, library aggregation).
 
+## Players page (2026-10-28)
+
+Owner request: "a section that shows people who are signed up", with each player's deck count, average bracket,
+decks per bracket and performance, so players can see who tends to play at their level before inviting them (no
+B4 regular at a B2 table). Code: pure `shared/src/players.ts` (`playerSummaries`, `playerDetail`, `bracketCounts`,
+`performanceOf`, `matchWith`), `server/src/routes/players.ts`, `client/src/pages/PlayersPage.tsx` (nav "Players",
+`/players`), styles at the end of `pages.css`.
+
+- **Who is listed**: every non-bot user with an account, plus device-only profiles with a deck or a counted game,
+  minus anyone with `UserSettings.hideFromPlayers` (profile page: "Show me on the Players page", on by default). A
+  hidden player still sees their own card, marked hidden; anyone else gets 404 for them, including friend requests.
+- **Card**: deck count, average bracket (one decimal), one column per bracket B1-B5 (unrated decks counted apart),
+  "Plays at" = the most common OPPONENTS' bracket in their counted games (`withOpponentBrackets`, ties to the
+  higher), else their most common deck bracket; record = wins / counted games, performance = wins over an even
+  share (1 / players per game): strong >= 1.25x, below <= 0.75x, else even, "few games" under 5. Deck brackets
+  are the analysis engine's suggestion (`DeckBrackets.ownDeck`, cached per deck version).
+- **Match with my decks** (`matchWith`): "Good match: you have 2 B3 decks" when I own a deck at their level,
+  else "Plays around B4; your highest deck is B2" / lowest / nearest; filter chips Everyone / Good matches /
+  Friends / Online now, and a name search.
+- **Detail** (tap a card): decks as commanders + bracket only (deck names and lists never leave the server; tests
+  check the payload), record by opponents' bracket with the even-share ratio, by table size, the last ten counted
+  games, and Add friend (`POST /api/players/:id/friend-request`, `SocialService.requestUser`: same rules as a
+  friend code; answering a crossed request accepts it). Friends are then invited from the lobby as before.
+- Tests: `shared/src/players.test.ts`, `server/src/routes/players.test.ts`. Checked in a browser against a copy
+  of the local dev database with seeded games at 1280 wide, 375x812 and 812x375 (cards, detail scrolling,
+  Add friend, the profile switch).
+
 ## Voice on Discord (2026-10-19)
 
 The owner chose "a CGwF bot that creates a temporary voice channel per table" (option 2 of 3). Code:

@@ -61,6 +61,8 @@ export interface UserSettings {
   };
   /** Manual voice fallback: a Discord invite used for tables this player hosts when the CGwF bot is off. */
   discordInvite: string | null;
+  /** Leave me off the Players page (others then see nothing about my decks or games there). */
+  hideFromPlayers: boolean;
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -73,6 +75,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   ambient: "none",
   layout: { cardScale: 1, hand: "bottom", opponentSize: "medium", opponents: "strip", compact: false },
   discordInvite: null,
+  hideFromPlayers: false,
 };
 
 export const CARD_SCALE_MIN = 0.7;
@@ -117,6 +120,7 @@ export function sanitizeSettings(raw: unknown, base: UserSettings = DEFAULT_SETT
       compact: typeof layout.compact === "boolean" ? layout.compact : base.layout.compact,
     },
     discordInvite: r.discordInvite === null ? null : (normaliseInvite(r.discordInvite) ?? base.discordInvite ?? null),
+    hideFromPlayers: typeof r.hideFromPlayers === "boolean" ? r.hideFromPlayers : base.hideFromPlayers,
   };
 }
 

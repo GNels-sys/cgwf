@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { PASSWORD_MIN, type SessionInfo } from "@cgwf/shared";
 import { api } from "../api";
+import { useSettings } from "../settings";
 import { ProfileForm } from "../components/ProfileForm";
 import { RequireUser } from "../components/RequireUser";
 import { FriendCode } from "./FriendsPage";
@@ -206,6 +207,21 @@ function FriendCodeLine() {
   );
 }
 
+/** Show me on the Players page (on by default). */
+function PlayersVisibility() {
+  const { settings, update, saving } = useSettings();
+  return (
+    <p>
+      <label className="check">
+        <input type="checkbox" checked={!settings.hideFromPlayers} disabled={saving} onChange={(e) => update({ hideFromPlayers: !e.target.checked })} /> Show me on the{" "}
+        <Link to="/players">Players page</Link>
+      </label>
+      <br />
+      <span className="muted small">Others see your deck count, your decks' brackets and commanders (never the lists) and your record in counted games.</span>
+    </p>
+  );
+}
+
 export function ProfilePage() {
   const { user, update, signOut } = useUser();
   const navigate = useNavigate();
@@ -229,6 +245,7 @@ export function ProfilePage() {
             <section className="surface profile-connections">
               <h2>Your circle</h2>
               <FriendCodeLine />
+              <PlayersVisibility />
               <p>
                 <Link to="/settings" className="btn">
                   Personalize your table

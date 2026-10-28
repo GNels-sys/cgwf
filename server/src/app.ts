@@ -29,6 +29,7 @@ import { registerMeRoutes } from "./routes/me.js";
 import { registerRoomRoutes } from "./routes/rooms.js";
 import { registerDeckOptionRoutes } from "./routes/deckOptions.js";
 import { registerDeckStatsRoutes } from "./routes/deckStats.js";
+import { registerPlayerRoutes } from "./routes/players.js";
 import { DeckBrackets } from "./stats/brackets.js";
 import { GameResults } from "./stats/results.js";
 import { DiscordVoice, type VoiceConfig } from "./discord/voice.js";
@@ -233,6 +234,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   registerRoomRoutes(app, { handle, roomsManager, agents });
   registerDeckOptionRoutes(app, { handle, brackets: deckBrackets });
   registerDeckStatsRoutes(app, { handle });
+  registerPlayerRoutes(app, { handle, brackets: deckBrackets, social, presence });
   registerSettingsRoutes(app, { handle, onSettingsChanged: (userId) => roomsManager.userChanged(userId) });
   registerSinglesRoutes(app, { handle, singles, library });
 

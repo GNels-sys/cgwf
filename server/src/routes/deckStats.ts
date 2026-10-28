@@ -11,7 +11,7 @@ interface Deps {
 }
 
 /** Every seat of every COUNTED game (test games, abandoned games and unfinished games never appear). */
-function countedRows(handle: DbHandle): ResultSeatRow[] {
+export function countedRows(handle: DbHandle): ResultSeatRow[] {
   return handle.db
     .select({ g: gameResults, s: gameResultSeats })
     .from(gameResultSeats)
