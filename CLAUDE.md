@@ -175,8 +175,16 @@ of 77; 35 of the 171 lines were The List.
   commander make exactly 100** (`deckSizeProblem` in `shared/src/deck/types.ts`, the same check on the page and
   the server): "Your deck currently has 101 cards. Please remove 1 card prior to saving." (or "...98 cards.
   Please add 2 cards..."). Companion, sideboard and maybeboard sit outside the 100 (`COUNTED_BOARDS`). Imports
-  (`POST /api/decks`) still only warn, so a short import can be finished in the editor. No official Commander
-  rule allows more than 100 today; `COMMANDER_DECK_SIZE` is the one place to change if that ever changes.
+  (`POST /api/decks`) still only warn, so a short import can be finished in the editor.
+  **Commanders that lift the maximum** (owner, 2026-10-28): Whtz, the Bibliophile ("Rulebreaker — A deck with this
+  commander has no maximum deck size", released 2026-10-19) and The Covert Blue Mage ("any number of cards beyond
+  the maximum deck size"). `deckSizeRule(commanders)` (shared `deck/types.ts`) reads the commanders' Oracle text
+  (`NO_MAXIMUM_DECK_SIZE`, so a new card with the same wording counts) -> `{min: 100, max: null, grantedBy}`; the
+  standard rule is `STANDARD_DECK_SIZE` (100/100). It drives the PUT save check (from the commander lines being
+  saved), the deck page's "size" warning (which engine tables treat as blocking, so a 150-card Whtz deck can sit
+  down; Forge reads the same cards' `DeckRule:Size:AdjustMax$ Unlimited`) and `DeckDetail.sizeRule`; the editor bar
+  shows "N cards · at least 100, no maximum (Whtz, the Bibliophile)" while that commander is still in the draft
+  (`draftSizeRule`). One line may hold up to 300 copies (`MAX_LINE_COPIES`, was 99) for big basic-land counts.
   Tests: `deckDraft.test.ts`, `server/src/routes/deckEdit.test.ts`; older tests that saved small lists through
   PUT now top them up to 100 with Forests (`padTo100`).
 - URL import finding (2026-10-15): Archidekt's `https://archidekt.com/api/decks/{id}/` is public

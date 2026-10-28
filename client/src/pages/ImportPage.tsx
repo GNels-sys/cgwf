@@ -276,7 +276,7 @@ function ImportFlow() {
                 </>
               )}
             </p>
-            {summary.total !== 100 && <p className="muted small">Commander decks are 100 cards. Saving is still allowed; the deck page will show the warning.</p>}
+            {summary.total !== 100 && <p className="muted small">Commander decks are 100 cards (Whtz, the Bibliophile and The Covert Blue Mage allow more). Saving is still allowed; the deck page will show any warning.</p>}
           </div>
 
           {problemIdx.length > 0 && (

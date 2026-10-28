@@ -5,6 +5,7 @@ import {
   COMMANDER_DECK_SIZE,
   countedCards,
   deckSizeProblem,
+  deckSizeRule,
   type Board,
   type CreateDeckRequest,
   type DeckCardEntry,
@@ -28,6 +29,8 @@ import type { NameIndex } from "../search/index.js";
 const BOARDS: ReadonlySet<string> = new Set<Board>(["main", "commander", "sideboard", "maybeboard", "companion"]);
 const MAX_TEXT = 100_000;
 const MAX_ENTRIES = 400;
+/** Copies on one line. Was 99; a no-maximum deck (Whtz, the Bibliophile rewards 200+ cards) can run more basics than that. */
+const MAX_LINE_COPIES = 300;
 
 interface Deps {
   handle: DbHandle;
@@ -59,8 +62,12 @@ export function deckWarnings(entries: Array<{ row: CardRow; quantity: number; bo
     }
   }
 
+  // Whtz, the Bibliophile and The Covert Blue Mage lift the maximum (deckSizeRule); engine tables block on this warning.
   const total = [...main, ...commanders].reduce((n, e) => n + e.quantity, 0);
-  if (total !== COMMANDER_DECK_SIZE) {
+  const size = deckSizeRule(commanders.map((c) => c.row));
+  if (size.max === null && total < size.min) {
+    warnings.push({ code: "size", message: `${total} cards including commander(s); a deck with ${size.grantedBy} needs at least ${size.min} (no maximum).` });
+  } else if (size.max !== null && total !== COMMANDER_DECK_SIZE) {
     warnings.push({ code: "size", message: `${total} cards including commander(s); Commander decks have exactly ${COMMANDER_DECK_SIZE}.` });
   }
 
@@ -124,7 +131,8 @@ export function registerDeckRoutes(app: FastifyInstance, deps: Deps): void {
       card: rowToSummary(e.row),
       entryId: e.entryId,
     }));
-    return { ...toSummary(deck, entries), cards: cardsOut, warnings: deckWarnings(entries), sourceUrl: deck.sourceUrl, createdAt: deck.createdAt };
+    const sizeRule = deckSizeRule(entries.filter((e) => e.board === "commander").map((e) => e.row));
+    return { ...toSummary(deck, entries), cards: cardsOut, warnings: deckWarnings(entries), sizeRule, sourceUrl: deck.sourceUrl, createdAt: deck.createdAt };
   };
 
   const ownDeck = (userId: string, id: string): DeckRow | undefined =>
@@ -140,7 +148,7 @@ export function registerDeckRoutes(app: FastifyInstance, deps: Deps): void {
       const quantity = Math.floor(Number(raw.quantity ?? 1));
       const board = typeof raw.board === "string" && BOARDS.has(raw.board) ? (raw.board as Board) : "main";
       const category = typeof raw.category === "string" && raw.category.trim() ? raw.category.trim().slice(0, 40) : null;
-      if (!cardId || !Number.isFinite(quantity) || quantity < 1 || quantity > 99) return { ok: false, error: "bad card entry" };
+      if (!cardId || !Number.isFinite(quantity) || quantity < 1 || quantity > MAX_LINE_COPIES) return { ok: false, error: "bad card entry" };
       out.push({ cardId, quantity, board, category });
     }
     const known = existingCardIds(handle, [...new Set(out.map((c) => c.cardId))]);
@@ -248,8 +256,11 @@ export function registerDeckRoutes(app: FastifyInstance, deps: Deps): void {
     if (!deck) return reply.code(404).send({ error: "deck not found" });
     const cleaned = cleanCards(req.body?.cards);
     if (!cleaned.ok) return reply.code(400).send({ error: cleaned.error });
-    // The deck editor's save (owner request 2026-10-28): a saved list is exactly 100 cards with its commander(s).
-    const sizeProblem = deckSizeProblem(countedCards(cleaned.cards));
+    // The deck editor's save (owner request 2026-10-28): a saved list is exactly 100 cards with its commander(s),
+    // or at least 100 when the commander being saved lifts the maximum (Whtz, the Bibliophile).
+    const commanderIds = cleaned.cards.filter((c) => c.board === "commander").map((c) => c.cardId);
+    const commanderRows = commanderIds.length ? handle.db.select().from(cards).where(inArray(cards.id, commanderIds)).all() : [];
+    const sizeProblem = deckSizeProblem(countedCards(cleaned.cards), deckSizeRule(commanderRows));
     if (sizeProblem) return reply.code(400).send({ error: sizeProblem });
     handle.sqlite.transaction(() => {
       handle.db.delete(deckCards).where(eq(deckCards.deckId, deck.id)).run();

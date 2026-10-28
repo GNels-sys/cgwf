@@ -1,4 +1,4 @@
-import { countedCards, hasBackFace, type Board, type CardPrinting, type CardSummary, type DeckCardEntry, type DeckCardInput } from "@cgwf/shared";
+import { countedCards, hasBackFace, STANDARD_DECK_SIZE, type Board, type CardPrinting, type CardSummary, type DeckCardEntry, type DeckCardInput, type DeckSizeRule } from "@cgwf/shared";
 
 /**
  * The deck editor's draft (owner request 2026-10-28): add cards from a search, take one copy off a line with "−",
@@ -76,6 +76,16 @@ export function lastChange(s: DraftState): string | null {
 
 export function draftTotal(s: DraftState): number {
   return countedCards(s.lines);
+}
+
+/**
+ * The size rule while editing: the saved deck's rule (from its commanders, worked out by the server) as long as the
+ * commander that lifts the maximum is still in the draft; take it off and the standard 100 applies again. The
+ * server checks the list it is sent, so this only keeps the bar and the message honest.
+ */
+export function draftSizeRule(s: DraftState, saved: DeckSizeRule | undefined): DeckSizeRule {
+  if (!saved?.grantedBy) return STANDARD_DECK_SIZE;
+  return s.lines.some((l) => l.board === "commander" && l.card.name === saved.grantedBy) ? saved : STANDARD_DECK_SIZE;
 }
 
 /** Copies of this card (any printing) already in the 100. */

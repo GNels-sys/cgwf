@@ -78,6 +78,8 @@ export interface DeckSummary {
 export interface DeckDetail extends DeckSummary {
   cards: DeckCardEntry[];
   warnings: DeckWarning[];
+  /** How many cards this deck may have, from its saved commander(s). Absent from servers before 2026-10-28. */
+  sizeRule?: DeckSizeRule;
   sourceUrl: string | null;
   createdAt: string;
 }
@@ -93,15 +95,38 @@ export function countedCards(lines: Array<{ board: Board; quantity: number }>): 
 }
 
 /**
- * The deck editor's save check (owner request 2026-10-28): a Commander deck is exactly 100 cards including the
- * commander(s). Null when the count is right, else the message the player sees. Saving from the editor is refused
- * with this message, on the page and by the server.
+ * How many cards (main + commanders) a deck may have. Normally exactly 100. A commander can lift the maximum
+ * (owner, 2026-10-28): Whtz, the Bibliophile ("Rulebreaker — A deck with this commander has no maximum deck size.")
+ * and The Covert Blue Mage ("your starting deck can contain any number of cards beyond the maximum deck size").
+ * The minimum of 100 still applies. Forge reads the same cards' `DeckRule:Size:AdjustMax$ Unlimited`.
  */
-export function deckSizeProblem(total: number, size: number = COMMANDER_DECK_SIZE): string | null {
-  if (total === size) return null;
-  const diff = Math.abs(total - size);
-  const cards = `${diff} card${diff === 1 ? "" : "s"}`;
-  return total > size
-    ? `Your deck currently has ${total} cards. Please remove ${cards} prior to saving.`
-    : `Your deck currently has ${total} cards. Please add ${cards} prior to saving.`;
+export interface DeckSizeRule {
+  min: number;
+  /** null = no maximum. */
+  max: number | null;
+  /** The commander that lifts the maximum, null for the standard rule. */
+  grantedBy: string | null;
+}
+
+export const STANDARD_DECK_SIZE: DeckSizeRule = { min: COMMANDER_DECK_SIZE, max: COMMANDER_DECK_SIZE, grantedBy: null };
+
+/** Oracle wording of the commanders that lift the maximum deck size. */
+export const NO_MAXIMUM_DECK_SIZE = /no maximum deck size|any number of cards beyond the maximum deck size/i;
+
+/** The size rule for a deck with these commanders (read from their Oracle text, so a reprint or a new card with the same wording counts). */
+export function deckSizeRule(commanders: Array<{ name: string; oracleText?: string | null }>): DeckSizeRule {
+  const lifts = commanders.find((c) => NO_MAXIMUM_DECK_SIZE.test(c.oracleText ?? ""));
+  return lifts ? { min: COMMANDER_DECK_SIZE, max: null, grantedBy: lifts.name } : STANDARD_DECK_SIZE;
+}
+
+/**
+ * The deck editor's save check (owner request 2026-10-28): a Commander deck is exactly 100 cards including the
+ * commander(s), or at least 100 when a commander lifts the maximum. Null when the count is fine, else the message
+ * the player sees. Saving from the editor is refused with this message, on the page and by the server.
+ */
+export function deckSizeProblem(total: number, rule: DeckSizeRule = STANDARD_DECK_SIZE): string | null {
+  const plural = (n: number) => `${n} card${n === 1 ? "" : "s"}`;
+  if (total < rule.min) return `Your deck currently has ${total} cards. Please add ${plural(rule.min - total)} prior to saving.`;
+  if (rule.max !== null && total > rule.max) return `Your deck currently has ${total} cards. Please remove ${plural(total - rule.max)} prior to saving.`;
+  return null;
 }

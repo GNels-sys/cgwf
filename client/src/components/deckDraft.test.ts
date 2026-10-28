@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { deckSizeProblem, type CardSummary, type DeckCardEntry } from "@cgwf/shared";
-import { addCard, copiesInDeck, draftTotal, isDirty, lastChange, removeOne, setLinePrinting, startDraft, toSaveInput, undo, HISTORY_MAX } from "./deckDraft";
+import { deckSizeProblem, STANDARD_DECK_SIZE, type CardSummary, type DeckCardEntry } from "@cgwf/shared";
+import { addCard, copiesInDeck, draftSizeRule, draftTotal, isDirty, lastChange, removeOne, setLinePrinting, startDraft, toSaveInput, undo, HISTORY_MAX } from "./deckDraft";
 
 const card = (id: string, name: string, oracleId = `o-${name}`): CardSummary => ({ id, oracleId, name, set: "cmm", collectorNumber: id, manaCost: "{1}", typeLine: "Artifact", layout: "normal", isToken: false, faceCount: 1 });
 const entry = (entryId: number, c: CardSummary, quantity: number, board: DeckCardEntry["board"] = "main"): DeckCardEntry => ({ entryId, cardId: c.id, quantity, board, category: null, card: c });
@@ -80,5 +80,18 @@ describe("the deck editor's draft", () => {
     let d = startDraft(saved);
     for (let i = 0; i < HISTORY_MAX + 10; i++) d = addCard(d, mountain);
     expect(d.history).toHaveLength(HISTORY_MAX);
+  });
+
+  it("keeps a no-maximum rule only while its commander is still in the draft", () => {
+    const whtz = card("w1", "Whtz, the Bibliophile");
+    const rule = { min: 100, max: null, grantedBy: "Whtz, the Bibliophile" };
+    let d = startDraft([entry(1, whtz, 1, "commander"), entry(3, mountain, 99)]);
+    d = addCard(d, sol);
+    expect(draftTotal(d)).toBe(101);
+    expect(draftSizeRule(d, rule)).toBe(rule);
+    expect(deckSizeProblem(draftTotal(d), draftSizeRule(d, rule))).toBeNull();
+    d = removeOne(d, d.lines[0]!.key);
+    expect(draftSizeRule(d, rule)).toEqual(STANDARD_DECK_SIZE);
+    expect(draftSizeRule(startDraft(saved), undefined)).toEqual(STANDARD_DECK_SIZE);
   });
 });
