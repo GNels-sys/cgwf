@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { EnginePrompt, ViewCard } from "@cgwf/shared";
@@ -39,4 +40,18 @@ describe("zoom decisions use the live engine prompt", () => {
     expect(cardEnergy(["U", "B"])).toBe("var(--accent)");
     expect(cardEnergy([])).toBe("var(--mana-C)");
   });
+
+  it("a long ability list says how many there are, and the zoom's text column can scroll (owner report 2026-10-27)", () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({ ...prompt.options[1]!, index: 100 + i, description: `Ability ${i + 1}` }));
+    const html = renderToStaticMarkup(<ZoomActions options={many} onPick={() => {}} />);
+    expect(html).toContain("14 available, scroll for all");
+    expect(html).toContain("Ability 14");
+    expect(renderToStaticMarkup(<ZoomActions options={zoomOptions(prompt, "walker")} onPick={() => {}} />)).not.toContain("scroll for all");
+    // the row must be capped at the window's height, or .zoom's overflow: hidden cuts the list off on a phone
+    const css = readFileSync(new URL("../game.css", import.meta.url), "utf8");
+    const start = css.search(/^\.zoom \{/m);
+    const zoomRule = css.slice(start, css.indexOf("}", start));
+    expect(zoomRule).toContain("grid-template-rows: minmax(0, 1fr)");
+  });
 });
+

@@ -2224,6 +2224,10 @@
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  /* One row no taller than the window, so the text column scrolls. Without it the row grew to the content and
+     .zoom's overflow: hidden cut it off: on a phone in landscape only the first few of a long ability list
+     (a planeswalker borrowing every other walker's abilities, owner report 2026-10-27) could be chosen. */
+  grid-template-rows: minmax(0, 1fr);
   gap: 14px;
   width: min(100%, 980px);
   max-height: calc(100dvh - 16px);
