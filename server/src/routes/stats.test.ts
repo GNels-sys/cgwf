@@ -6,6 +6,12 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { DeckDetail, DeckStatsResponse, LibraryDeckDetail, RegisterResponse } from "@cgwf/shared";
 
+
+/** The deck editor's save takes exactly 100 cards (2026-10-28): top a test list up with Forests. */
+const padTo100 = <T extends { cardId: string; quantity: number; board: string }>(cards: T[]) => {
+  const n = cards.filter((c) => c.board === "main" || c.board === "commander").reduce((s, c) => s + c.quantity, 0);
+  return n < 100 ? [...cards, { cardId: "a1b2c3d4-0000-4000-8000-000000000011", quantity: 100 - n, board: "main" }] : cards;
+};
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cgwf-stats-"));
 process.env.DATA_DIR = tmp;
 process.env.SKIP_AUTO_INGEST = "1";
@@ -101,13 +107,13 @@ describe("deck stats routes", () => {
       method: "PUT",
       url: `/api/decks/${deck.id}/cards`,
       headers: auth(),
-      payload: { cards: deck.cards.filter((c) => c.card.name !== "Lightning Bolt").map((c) => ({ cardId: c.cardId, quantity: c.quantity, board: c.board })) },
+      payload: { cards: padTo100(deck.cards.filter((c) => c.card.name !== "Lightning Bolt").map((c) => ({ cardId: c.cardId, quantity: c.quantity, board: c.board }))) },
     });
     expect(replaced.statusCode).toBe(200);
     const res = await ctx.app.inject({ method: "GET", url: `/api/decks/${deck.id}/stats`, headers: auth() });
     const body = res.json() as DeckStatsResponse;
     expect(body.cached).toBe(false);
-    expect(body.stats.manaValue.cardCount).toBe(7);
+    expect(body.stats.manaValue.cardCount).toBe(100); // the saved list is topped up to 100 with Forests
     expect(body.stats.functional.find((f) => f.key === "removal")!.count).toBe(0);
   });
 
@@ -121,7 +127,7 @@ describe("deck stats routes", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as DeckStatsResponse;
     expect(body.cached).toBe(false);
-    expect(body.stats.manaValue.cardCount).toBe(7);
+    expect(body.stats.manaValue.cardCount).toBe(100); // the saved list is topped up to 100 with Forests
     expect(body.stats.commanders).toEqual(["Atraxa, Praetors' Voice"]);
     expect(((await ctx.app.inject({ method: "GET", url: `/api/library/${lib.id}/stats`, headers: auth() })).json() as DeckStatsResponse).cached).toBe(true);
     expect((await ctx.app.inject({ method: "GET", url: `/api/library/nope/stats`, headers: auth() })).statusCode).toBe(404);

@@ -164,6 +164,21 @@ of 77; 35 of the 171 lines were The List.
   colour identity, commander count/partners) are computed on read, never block saving.
   Phase 8 adds `users.friend_code`, `friendships`, `friend_requests`, `room_invites`,
   `notifications`, `library_submissions`.
+- **Deck editor (2026-10-28, owner request).** Deck page -> "Edit cards" opens a local draft
+  (`client/src/components/deckDraft.ts`, pure + `deckDraft.test.ts`; UI `DeckEditor.tsx`): "Add a card" searches
+  the card data (`/api/cards/search`, 250 ms debounce, 8 results, "In deck xN") and adds one copy per tap to the
+  main board (same printing = same line); every line (commanders too) gets a "−" to the right of its printing chip
+  that takes one copy off (the line goes with its last copy); "Undo" steps back through the last 50 changes and
+  names the one it takes back ("Undo: Removed Sol Ring"); the printing picker changes the draft line instead of
+  saving. A slim bar (count against 100, Undo, Cancel, Save) stays pinned while scrolling the list; leaving with
+  unsaved changes asks first. **Save = `PUT /api/decks/:id/cards` with the whole list, refused unless main +
+  commander make exactly 100** (`deckSizeProblem` in `shared/src/deck/types.ts`, the same check on the page and
+  the server): "Your deck currently has 101 cards. Please remove 1 card prior to saving." (or "...98 cards.
+  Please add 2 cards..."). Companion, sideboard and maybeboard sit outside the 100 (`COUNTED_BOARDS`). Imports
+  (`POST /api/decks`) still only warn, so a short import can be finished in the editor. No official Commander
+  rule allows more than 100 today; `COMMANDER_DECK_SIZE` is the one place to change if that ever changes.
+  Tests: `deckDraft.test.ts`, `server/src/routes/deckEdit.test.ts`; older tests that saved small lists through
+  PUT now top them up to 100 with Forests (`padTo100`).
 - URL import finding (2026-10-15): Archidekt's `https://archidekt.com/api/decks/{id}/` is public
   JSON (cards carry Scryfall `uid`, set code, collector number, categories; "Commander" category =
   commander; categories with `includedInDeck=false` = maybeboard). Moxfield's API returns 403 to

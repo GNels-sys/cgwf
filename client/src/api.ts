@@ -1,4 +1,5 @@
 import type {
+  DeckCardInput,
   PlayerDetailResponse,
   PlayersResponse,
   CoachAdminResponse,
@@ -161,6 +162,8 @@ export const api = {
     importUrl: (url: string) => request<ImportUrlResponse>(`/api/decks/import-url?url=${encodeURIComponent(url)}`),
     setPrinting: (id: string, entryId: number, cardId: string) =>
       request<{ deck: DeckDetail }>(`/api/decks/${encodeURIComponent(id)}/cards/${entryId}`, { method: "PATCH", json: { cardId } }),
+    /** The deck editor's save: the whole list at once; refused unless main + commander make exactly 100. */
+    replaceCards: (id: string, cards: DeckCardInput[]) => request<{ deck: DeckDetail }>(`/api/decks/${encodeURIComponent(id)}/cards`, { method: "PUT", json: { cards } }),
   },
 
   /** Deck Doctor (free): suggested swaps for an own deck or a library deck (read-only). */

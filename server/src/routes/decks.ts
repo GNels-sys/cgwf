@@ -3,6 +3,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import {
   COMMANDER_DECK_SIZE,
+  countedCards,
+  deckSizeProblem,
   type Board,
   type CreateDeckRequest,
   type DeckCardEntry,
@@ -246,6 +248,9 @@ export function registerDeckRoutes(app: FastifyInstance, deps: Deps): void {
     if (!deck) return reply.code(404).send({ error: "deck not found" });
     const cleaned = cleanCards(req.body?.cards);
     if (!cleaned.ok) return reply.code(400).send({ error: cleaned.error });
+    // The deck editor's save (owner request 2026-10-28): a saved list is exactly 100 cards with its commander(s).
+    const sizeProblem = deckSizeProblem(countedCards(cleaned.cards));
+    if (sizeProblem) return reply.code(400).send({ error: sizeProblem });
     handle.sqlite.transaction(() => {
       handle.db.delete(deckCards).where(eq(deckCards.deckId, deck.id)).run();
       cleaned.cards.forEach((c, position) => {

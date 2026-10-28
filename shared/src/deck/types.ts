@@ -83,3 +83,25 @@ export interface DeckDetail extends DeckSummary {
 }
 
 export const COMMANDER_DECK_SIZE = 100;
+
+/** The boards that make up the 100: main deck and commander(s). A companion, sideboard and maybeboard sit outside. */
+export const COUNTED_BOARDS: readonly Board[] = ["main", "commander"];
+
+/** Cards that count toward the 100 (main + commander lines). */
+export function countedCards(lines: Array<{ board: Board; quantity: number }>): number {
+  return lines.filter((l) => COUNTED_BOARDS.includes(l.board)).reduce((n, l) => n + l.quantity, 0);
+}
+
+/**
+ * The deck editor's save check (owner request 2026-10-28): a Commander deck is exactly 100 cards including the
+ * commander(s). Null when the count is right, else the message the player sees. Saving from the editor is refused
+ * with this message, on the page and by the server.
+ */
+export function deckSizeProblem(total: number, size: number = COMMANDER_DECK_SIZE): string | null {
+  if (total === size) return null;
+  const diff = Math.abs(total - size);
+  const cards = `${diff} card${diff === 1 ? "" : "s"}`;
+  return total > size
+    ? `Your deck currently has ${total} cards. Please remove ${cards} prior to saving.`
+    : `Your deck currently has ${total} cards. Please add ${cards} prior to saving.`;
+}
