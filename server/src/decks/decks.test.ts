@@ -5,6 +5,12 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { DeckDetail, DeckSummary, RegisterResponse, ResolveResponse } from "@cgwf/shared";
 
+
+/** The deck editor's save takes exactly 100 cards (2026-10-28): top a test list up with Forests. */
+const padTo100 = <T extends { cardId: string; quantity: number; board: string }>(cards: T[]) => {
+  const n = cards.filter((c) => c.board === "main" || c.board === "commander").reduce((s, c) => s + c.quantity, 0);
+  return n < 100 ? [...cards, { cardId: "a1b2c3d4-0000-4000-8000-000000000011", quantity: 100 - n, board: "main" }] : cards;
+};
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cgwf-decks-"));
 process.env.DATA_DIR = tmp;
 process.env.SKIP_AUTO_INGEST = "1";
@@ -127,10 +133,10 @@ describe("identity + decks", () => {
       method: "PUT",
       url: `/api/decks/${deckId}/cards`,
       headers: auth(),
-      payload: { cards: [{ cardId: "a1b2c3d4-0000-4000-8000-000000000001", quantity: 2, board: "main" }] },
+      payload: { cards: padTo100([{ cardId: "a1b2c3d4-0000-4000-8000-000000000001", quantity: 2, board: "main" }]) },
     });
     const deck = (rep.json() as { deck: DeckDetail }).deck;
-    expect(deck.cards).toHaveLength(1);
+    expect(deck.cards).toHaveLength(2); // 2 Sol Ring + 98 Forest
     expect(deck.warnings.map((w) => w.code)).toContain("singleton");
     const bad = await ctx.app.inject({ method: "POST", url: "/api/decks", headers: auth(), payload: { name: "x", cards: [{ cardId: "nope", quantity: 1 }] } });
     expect(bad.statusCode).toBe(400);

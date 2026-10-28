@@ -7,6 +7,12 @@ import { eq } from "drizzle-orm";
 import WebSocket from "ws";
 import type { CreateRoomResponse, DeckDetail, FriendsResponse, LibraryListResponse, NotificationsResponse, RegisterResponse, RoomInviteInfo, SubmissionInfo } from "@cgwf/shared";
 
+
+/** The deck editor's save takes exactly 100 cards (2026-10-28): top a test list up with Forests. */
+const padTo100 = <T extends { cardId: string; quantity: number; board: string }>(cards: T[]) => {
+  const n = cards.filter((c) => c.board === "main" || c.board === "commander").reduce((s, c) => s + c.quantity, 0);
+  return n < 100 ? [...cards, { cardId: "a1b2c3d4-0000-4000-8000-000000000011", quantity: 100 - n, board: "main" }] : cards;
+};
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cgwf-social-"));
 process.env.DATA_DIR = tmp;
 process.env.SKIP_AUTO_INGEST = "1";
@@ -294,7 +300,7 @@ describe("Phase 8: friends, invites, notifications and the agent deck queue", ()
     expect(Array.isArray(queue.submissions[0]!.tags)).toBe(true);
 
     // Casey edits the deck after submitting: the frozen copy is what gets approved.
-    const renamed = await ctx.app.inject({ method: "PUT", url: `/api/decks/${deck.id}/cards`, headers: as(casey), payload: { cards: deck.cards.slice(0, 2).map((c) => ({ cardId: c.cardId, quantity: c.quantity, board: c.board })) } });
+    const renamed = await ctx.app.inject({ method: "PUT", url: `/api/decks/${deck.id}/cards`, headers: as(casey), payload: { cards: padTo100(deck.cards.slice(0, 2).map((c) => ({ cardId: c.cardId, quantity: c.quantity, board: c.board }))) } });
     expect(renamed.statusCode).toBe(200);
 
     const approved = await ctx.app.inject({ method: "POST", url: `/api/library/submissions/${s.id}/approve`, headers: as(owner) });

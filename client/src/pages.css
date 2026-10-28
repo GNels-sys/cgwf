@@ -1902,3 +1902,37 @@ label.check input { width: 20px; height: 20px; }
   .players-grid { grid-template-columns: minmax(0, 1fr); }
   .players-search { max-width: none; }
 }
+
+/* ---- Deck editor (2026-10-28): search to add, minus to remove, undo, 100-card save check ---- */
+.deck-edit-scope { scroll-margin-top: 12px; }
+.deck-edit-sticky { position: sticky; top: 8px; z-index: 6; margin: 0 0 10px; padding: 10px 14px; box-shadow: var(--shadow); }
+.deck-editor { display: flex; flex-direction: column; gap: 10px; margin: 0 0 16px; padding: 12px 14px; }
+.deck-edit-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+.deck-edit-count { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.deck-edit-count strong { font-size: 1.5rem; line-height: 1; }
+.deck-edit-count strong.is-ok { color: var(--signal); }
+.deck-edit-count strong.is-off { color: var(--danger); }
+.deck-edit-off { color: var(--danger); }
+.deck-edit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.deck-edit-actions .btn { min-height: 44px; }
+.deck-edit-undo-what { display: inline-block; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; font-weight: 400; }
+.deck-edit-error { flex: 1 1 100%; margin: 0; padding: 8px 10px; border: 1px solid var(--danger); border-radius: var(--radius); color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); font-weight: 600; }
+.deck-add { display: flex; flex-direction: column; gap: 6px; }
+.deck-add-label { font-weight: 600; font-size: .9rem; }
+.deck-add input { min-height: 44px; }
+.deck-add-results { list-style: none; margin: 0; padding: 0; max-height: min(45dvh, 360px); overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.deck-add-results li { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px; border-top: 1px solid var(--border); }
+.deck-add-results li:first-child { border-top: 0; }
+.deck-add-name { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; background: none; border: 0; padding: 4px 0; color: inherit; text-align: left; cursor: pointer; font: inherit; }
+.deck-add-name strong, .deck-add-name span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.deck-add-have { color: var(--fg-muted); white-space: nowrap; }
+.deck-add-btn { min-height: 44px; min-width: 64px; }
+.deck-card-remove { flex: none; min-width: 44px; min-height: 36px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--danger) 60%, var(--border)); border-radius: 3px 10px 3px 10px; background: color-mix(in srgb, var(--danger) 10%, var(--bg-elev)); color: var(--danger); font: 700 1.15rem/1 var(--font-ui, inherit); cursor: pointer; }
+.deck-card-remove:hover, .deck-card-remove:focus-visible { background: color-mix(in srgb, var(--danger) 22%, var(--bg-elev)); }
+.commander-slot .deck-card-remove { align-self: center; margin-top: 6px; }
+.deck-saved-note { margin: 0 0 12px; }
+@media (max-width: 600px) {
+  .deck-edit-sticky { top: 4px; padding: 8px 10px; }
+  .deck-editor { padding: 10px; }
+  .deck-edit-undo-what { display: none; }
+}

@@ -1,13 +1,15 @@
 import { PerformancePanel } from "../components/PerformancePanel";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deckScenery } from "../components/deckScenery";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { SUBMISSION_NOTE_MAX, type Board, type DeckAnalysis, type DeckCardEntry, type DeckDetail, type SubmissionInfo } from "@cgwf/shared";
+import { deckSizeProblem, SUBMISSION_NOTE_MAX, type Board, type CardSummary, type DeckAnalysis, type DeckDetail, type SubmissionInfo } from "@cgwf/shared";
 import { api } from "../api";
 import { BracketPanel } from "../components/BracketPanel";
 import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
 import { DoctorPanel } from "../components/DoctorPanel";
+import { AddCardSearch, DeckEditBar } from "../components/DeckEditor";
+import { addCard, draftTotal, isDirty, lastChange, removeOne, setLinePrinting, startDraft, summaryOf, toSaveInput, undo, type DraftState } from "../components/deckDraft";
 import { useCardHover } from "../components/CardHoverPreview";
 import { PrintingPicker, printingLabel } from "../components/PrintingPicker";
 import { ShoppingPanel } from "../components/LocalStores";
@@ -24,8 +26,17 @@ function primaryType(typeLine: string): (typeof TYPE_ORDER)[number] {
   return "Other";
 }
 
-function groupByType(entries: DeckCardEntry[]) {
-  const groups = new Map<string, DeckCardEntry[]>();
+/** One line of the list, from the saved deck or the editor's draft. */
+interface Line {
+  key: string;
+  card: CardSummary;
+  quantity: number;
+  board: Board;
+  entryId?: number;
+}
+
+function groupByType(entries: Line[]) {
+  const groups = new Map<string, Line[]>();
   for (const e of entries) {
     const t = primaryType(e.card.typeLine);
     const list = groups.get(t) ?? [];
@@ -37,7 +48,7 @@ function groupByType(entries: DeckCardEntry[]) {
 
 type HoverBind = ReturnType<typeof useCardHover>["bind"];
 
-function CardLine({ entry, onOpen, onPrinting, hover }: { entry: DeckCardEntry; onOpen: (id: string) => void; onPrinting: ((e: DeckCardEntry) => void) | null; hover: HoverBind }) {
+function CardLine({ entry, onOpen, onPrinting, onRemove, hover }: { entry: Line; onOpen: (id: string) => void; onPrinting: ((e: Line) => void) | null; onRemove?: ((e: Line) => void) | undefined; hover: HoverBind }) {
   const label = printingLabel(entry.card);
   return (
     <li className="deck-card-row">
@@ -49,6 +60,11 @@ function CardLine({ entry, onOpen, onPrinting, hover }: { entry: DeckCardEntry; 
       {onPrinting && (
         <button type="button" className="printing-chip" onClick={() => onPrinting(entry)} title="Change printing" aria-label={`Change printing of ${entry.card.name}, now ${label}`}>
           {label}
+        </button>
+      )}
+      {onRemove && (
+        <button type="button" className="deck-card-remove" onClick={() => onRemove(entry)} aria-label={`Remove one ${entry.card.name}`} title="Remove one copy">
+          −
         </button>
       )}
     </li>
@@ -173,8 +189,21 @@ function DeckView({ id }: { id: string }) {
   const [renaming, setRenaming] = useState(false);
   const [newName, setNewName] = useState("");
   const [libraryNote, setLibraryNote] = useState<string | null>(null);
-  const [picking, setPicking] = useState<DeckCardEntry | null>(null);
+  const [picking, setPicking] = useState<Line | null>(null);
   const hover = useCardHover();
+  // the deck editor (owner request 2026-10-28): a local draft until Save
+  const [draft, setDraft] = useState<DraftState | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const dirty = Boolean(draft && deck && isDirty(draft, deck.cards));
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   useEffect(() => {
     api.decks
@@ -191,7 +220,10 @@ function DeckView({ id }: { id: string }) {
 
   const sections = useMemo(() => {
     if (!deck) return null;
-    const by = (b: Board) => deck.cards.filter((c) => c.board === b);
+    const lines: Line[] = draft
+      ? draft.lines
+      : deck.cards.map((c, i) => ({ key: c.entryId !== undefined ? `e${c.entryId}` : `s${i}`, card: c.card, quantity: c.quantity, board: c.board, ...(c.entryId !== undefined ? { entryId: c.entryId } : {}) }));
+    const by = (b: Board) => lines.filter((c) => c.board === b);
     return {
       commanders: by("commander"),
       main: groupByType(by("main")),
@@ -199,7 +231,7 @@ function DeckView({ id }: { id: string }) {
       sideboard: by("sideboard"),
       maybeboard: by("maybeboard"),
     };
-  }, [deck]);
+  }, [deck, draft]);
 
   // Follow the displayed section order, visiting each printing once rather than
   // repeating basic lands or the same printing listed on multiple boards.
@@ -213,11 +245,49 @@ function DeckView({ id }: { id: string }) {
   if (error) return <p className="error">{error}</p>;
   if (!deck || !sections) return <p className="muted">Loading deck...</p>;
 
-  const changePrinting = (e: DeckCardEntry) => (e.entryId !== undefined && e.card.oracleId ? () => setPicking(e) : null);
-  const openPicker = (e: DeckCardEntry) => {
+  const changePrinting = (e: Line) => (e.card.oracleId && (draft || e.entryId !== undefined) ? () => setPicking(e) : null);
+  const openPicker = (e: Line) => {
     hover.hide();
     setPicking(e);
   };
+
+  const startEditing = () => {
+    setDraft(startDraft(deck.cards));
+    setEditError(null);
+    setSavedNote(null);
+    setTimeout(() => editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
+  const cancelEditing = () => {
+    if (dirty && !confirm("Discard your changes to this deck?")) return;
+    setDraft(null);
+    setEditError(null);
+  };
+  const saveEdits = async () => {
+    if (!draft) return;
+    const problem = deckSizeProblem(draftTotal(draft));
+    if (problem) {
+      setEditError(problem);
+      return;
+    }
+    setSaving(true);
+    setEditError(null);
+    try {
+      const r = await api.decks.replaceCards(deck.id, toSaveInput(draft));
+      setDeck(r.deck);
+      setDraft(null);
+      setSavedNote("Deck saved.");
+    } catch (e) {
+      setEditError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const removeLine = draft
+    ? (e: Line) => {
+        setDraft(removeOne(draft, e.key));
+        setEditError(null);
+      }
+    : undefined;
 
   const rename = async () => {
     const r = await api.decks.rename(deck.id, newName);
@@ -265,6 +335,11 @@ function DeckView({ id }: { id: string }) {
             <h1>{deck.name}</h1>
           )}
           <div className="actions">
+            {!draft && (
+              <button className="btn btn-small btn-primary" onClick={startEditing}>
+                Edit cards
+              </button>
+            )}
             <button
               className="btn btn-small"
               onClick={() => {
@@ -312,7 +387,7 @@ function DeckView({ id }: { id: string }) {
 
       <section className="commanders">
         {sections.commanders.map((c) => (
-          <div key={c.entryId ?? c.cardId} className="commander-slot">
+          <div key={c.key} className="commander-slot">
             <button className="commander-card" onClick={() => setOpen(c.card.id)}>
               <CardImage id={c.card.id} name={c.card.name} size="normal" loading="eager" />
               <span>{c.card.name}</span>
@@ -320,6 +395,11 @@ function DeckView({ id }: { id: string }) {
             {changePrinting(c) && (
               <button type="button" className="printing-chip" onClick={() => openPicker(c)} title="Change printing" aria-label={`Change printing of ${c.card.name}, now ${printingLabel(c.card)}`}>
                 {printingLabel(c.card)}
+              </button>
+            )}
+            {removeLine && (
+              <button type="button" className="deck-card-remove" onClick={() => removeLine(c)} aria-label={`Remove ${c.card.name}`} title="Remove the commander">
+                −
               </button>
             )}
           </div>
@@ -339,6 +419,41 @@ function DeckView({ id }: { id: string }) {
 
       <QueuePanel deck={deck} />
 
+      <div className="deck-edit-scope" ref={editorRef}>
+      {savedNote && !draft && (
+        <p className="notice small deck-saved-note" role="status">
+          {savedNote}
+        </p>
+      )}
+      {draft && (
+        <div className="surface deck-edit-sticky">
+          <DeckEditBar
+            total={draftTotal(draft)}
+            lastChange={lastChange(draft)}
+            error={editError}
+            saving={saving}
+            onUndo={() => {
+              setDraft(undo(draft));
+              setEditError(null);
+            }}
+            onCancel={cancelEditing}
+            onSave={() => void saveEdits()}
+          />
+        </div>
+      )}
+      {draft && (
+        <section className="surface deck-editor">
+          <AddCardSearch
+            draft={draft}
+            onAdd={(card) => {
+              setDraft(addCard(draft, card));
+              setEditError(null);
+            }}
+            onOpen={setOpen}
+          />
+          <p className="small muted">Tap − beside a card to take one copy out. Nothing changes until you save; a saved deck has exactly 100 cards including the commander.</p>
+        </section>
+      )}
       <div className="deck-columns">
         {sections.main.map((g) => (
           <section key={g.type} className="deck-group">
@@ -347,7 +462,7 @@ function DeckView({ id }: { id: string }) {
             </h3>
             <ul>
               {g.entries.map((e) => (
-                <CardLine key={e.entryId ?? e.cardId + e.board} entry={e} onOpen={setOpen} onPrinting={changePrinting(e) ? openPicker : null} hover={hover.bind} />
+                <CardLine key={e.key} entry={e} onOpen={setOpen} onPrinting={changePrinting(e) ? openPicker : null} onRemove={removeLine} hover={hover.bind} />
               ))}
             </ul>
           </section>
@@ -358,22 +473,29 @@ function DeckView({ id }: { id: string }) {
               <h3>{b[0]!.toUpperCase() + b.slice(1)}</h3>
               <ul>
                 {sections[b].map((e) => (
-                  <CardLine key={e.entryId ?? e.cardId + e.board} entry={e} onOpen={setOpen} onPrinting={changePrinting(e) ? openPicker : null} hover={hover.bind} />
+                  <CardLine key={e.key} entry={e} onOpen={setOpen} onPrinting={changePrinting(e) ? openPicker : null} onRemove={removeLine} hover={hover.bind} />
                 ))}
               </ul>
             </section>
           ) : null,
         )}
       </div>
+      </div>
 
       {hover.preview}
-      {picking && picking.card.oracleId && picking.entryId !== undefined && (
+      {picking && picking.card.oracleId && (draft || picking.entryId !== undefined) && (
         <PrintingPicker
           oracleId={picking.card.oracleId}
           cardName={picking.card.name}
           currentId={picking.card.id}
           onClose={() => setPicking(null)}
           onPick={async (cardId) => {
+            if (draft) {
+              // while editing, the new printing goes into the draft and is saved with everything else
+              const r = await api.card(cardId);
+              setDraft((d) => (d ? setLinePrinting(d, picking.key, summaryOf(r.card)) : d));
+              return;
+            }
             const r = await api.decks.setPrinting(deck.id, picking.entryId!, cardId);
             setDeck(r.deck);
           }}

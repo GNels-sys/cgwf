@@ -5,6 +5,12 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { DeckAnalysisResponse, DeckDetail, RegisterResponse } from "@cgwf/shared";
 
+
+/** The deck editor's save takes exactly 100 cards (2026-10-28): top a test list up with Forests. */
+const padTo100 = <T extends { cardId: string; quantity: number; board: string }>(cards: T[]) => {
+  const n = cards.filter((c) => c.board === "main" || c.board === "commander").reduce((s, c) => s + c.quantity, 0);
+  return n < 100 ? [...cards, { cardId: "a1b2c3d4-0000-4000-8000-000000000011", quantity: 100 - n, board: "main" }] : cards;
+};
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "cgwf-analysis-"));
 process.env.DATA_DIR = tmp;
 process.env.SKIP_AUTO_INGEST = "1";
@@ -108,7 +114,7 @@ describe("deck analysis route", () => {
       method: "PUT",
       url: `/api/decks/${deck.id}/cards`,
       headers: auth(),
-      payload: { cards: deck.cards.filter((c) => c.card.name !== "Sol Ring").map((c) => ({ cardId: c.cardId, quantity: c.quantity, board: c.board })) },
+      payload: { cards: padTo100(deck.cards.filter((c) => c.card.name !== "Sol Ring").map((c) => ({ cardId: c.cardId, quantity: c.quantity, board: c.board }))) },
     });
     expect(replaced.statusCode).toBe(200);
     const res = await ctx.app.inject({ method: "GET", url: `/api/decks/${deck.id}/analysis`, headers: auth() });
