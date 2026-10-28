@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { COMMANDER_DECK_SIZE, type CardSummary } from "@cgwf/shared";
+import { type CardSummary, type DeckSizeRule } from "@cgwf/shared";
 import { api } from "../api";
 import { ManaCost } from "./ManaCost";
 import { copiesInDeck, type DraftState } from "./deckDraft";
 
-/** The editor's sticky bar: the running count against 100, Undo, Cancel and Save. */
-export function DeckEditBar({ total, lastChange, error, saving, onUndo, onCancel, onSave }: {
+/** The editor's sticky bar: the running count against 100 (or "no maximum" under Whtz), Undo, Cancel and Save. */
+export function DeckEditBar({ total, rule, lastChange, error, saving, onUndo, onCancel, onSave }: {
   total: number;
+  rule: DeckSizeRule;
   lastChange: string | null;
   error: string | null;
   saving: boolean;
@@ -14,13 +15,15 @@ export function DeckEditBar({ total, lastChange, error, saving, onUndo, onCancel
   onCancel: () => void;
   onSave: () => void;
 }) {
-  const off = total - COMMANDER_DECK_SIZE;
+  // Positive = too many, negative = short, 0 = fine.
+  const off = total < rule.min ? total - rule.min : rule.max !== null && total > rule.max ? total - rule.max : 0;
   return (
     <div className="deck-edit-bar" role="region" aria-label="Editing the deck">
       <div className="deck-edit-count" aria-live="polite">
         <strong className={off === 0 ? "is-ok" : "is-off"}>{total}</strong>
-        <span> / {COMMANDER_DECK_SIZE} cards</span>
+        {rule.max === null ? <span> cards · at least {rule.min}, no maximum</span> : <span> / {rule.max} cards</span>}
         {off !== 0 && <span className="small deck-edit-off">{off > 0 ? `${off} too many` : `${-off} to add`}</span>}
+        {rule.max === null && rule.grantedBy && <span className="small muted deck-edit-rule">({rule.grantedBy})</span>}
       </div>
       <div className="deck-edit-actions">
         <button type="button" className="btn btn-small" onClick={onUndo} disabled={!lastChange} title={lastChange ? `Undo: ${lastChange}` : "Nothing to undo"}>

@@ -1908,7 +1908,7 @@ label.check input { width: 20px; height: 20px; }
 .deck-edit-sticky { position: sticky; top: 8px; z-index: 6; margin: 0 0 10px; padding: 10px 14px; box-shadow: var(--shadow); }
 .deck-editor { display: flex; flex-direction: column; gap: 10px; margin: 0 0 16px; padding: 12px 14px; }
 .deck-edit-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
-.deck-edit-count { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.deck-edit-count { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
 .deck-edit-count strong { font-size: 1.5rem; line-height: 1; }
 .deck-edit-count strong.is-ok { color: var(--signal); }
 .deck-edit-count strong.is-off { color: var(--danger); }

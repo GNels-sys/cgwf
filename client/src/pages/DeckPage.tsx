@@ -9,7 +9,7 @@ import { CardDetail } from "../components/CardDetail";
 import { CardImage } from "../components/CardImage";
 import { DoctorPanel } from "../components/DoctorPanel";
 import { AddCardSearch, DeckEditBar } from "../components/DeckEditor";
-import { addCard, draftTotal, isDirty, lastChange, removeOne, setLinePrinting, startDraft, summaryOf, toSaveInput, undo, type DraftState } from "../components/deckDraft";
+import { addCard, draftSizeRule, draftTotal, isDirty, lastChange, removeOne, setLinePrinting, startDraft, summaryOf, toSaveInput, undo, type DraftState } from "../components/deckDraft";
 import { useCardHover } from "../components/CardHoverPreview";
 import { PrintingPicker, printingLabel } from "../components/PrintingPicker";
 import { ShoppingPanel } from "../components/LocalStores";
@@ -264,7 +264,7 @@ function DeckView({ id }: { id: string }) {
   };
   const saveEdits = async () => {
     if (!draft) return;
-    const problem = deckSizeProblem(draftTotal(draft));
+    const problem = deckSizeProblem(draftTotal(draft), draftSizeRule(draft, deck.sizeRule));
     if (problem) {
       setEditError(problem);
       return;
@@ -429,6 +429,7 @@ function DeckView({ id }: { id: string }) {
         <div className="surface deck-edit-sticky">
           <DeckEditBar
             total={draftTotal(draft)}
+            rule={draftSizeRule(draft, deck.sizeRule)}
             lastChange={lastChange(draft)}
             error={editError}
             saving={saving}
