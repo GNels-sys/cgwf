@@ -254,6 +254,8 @@ export interface LogEntry {
   actor: PlayerId | typeof SYSTEM_ACTOR;
   text: string;
   ts: number;
+  /** Engine tables (2026-10-29): turn | step | round | mana | event, from Forge's log entry type. Absent on classic tables and older lines. */
+  kind?: "turn" | "step" | "round" | "mana" | "event";
 }
 
 export interface GameState {

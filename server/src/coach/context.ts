@@ -1,3 +1,4 @@
+import { classifyLogLine, kindFromEngineLogType } from "@cgwf/shared";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import type { DbHandle } from "../db/index.js";
 import { gameResultSeats, gameResults, libraryDecks, roomEvents, rooms, users } from "../db/schema.js";
@@ -26,7 +27,11 @@ export interface CoachGame {
   text: string;
 }
 
-const isStepLine = (t: string) => /^Turn \d+/.test(t) || /^.+'s .*(step|phase)/i.test(t);
+/** Step and turn announcements add nothing to the review; the shared classifier knows Forge's wording. */
+const isStepLine = (t: string, logType?: string) => {
+  const k = logType ? kindFromEngineLogType(logType) : classifyLogLine(t);
+  return k === "step" || k === "turn";
+};
 
 function cardLine(c: { n: string; t?: 1; s?: 1; pt?: string; c?: Record<string, number>; d?: number; cmd?: 1; token?: 1; on?: string }): string {
   const bits: string[] = [];
@@ -138,8 +143,8 @@ export function buildCoachGame(handle: DbHandle, decisions: DecisionRecorder | n
   const log: string[] = [];
   const answers: string[] = [];
   for (const r of logRows) {
-    const p = JSON.parse(r.payload) as { text?: string; seat?: number; prompt?: string; answer?: unknown };
-    if (r.type === "EngineLog" && p.text && !isStepLine(p.text)) log.push(p.text);
+    const p = JSON.parse(r.payload) as { text?: string; logType?: string; seat?: number; prompt?: string; answer?: unknown };
+    if (r.type === "EngineLog" && p.text && !isStepLine(p.text, p.logType)) log.push(p.text);
     if (r.type === "EngineAnswer" && p.seat === mine.seat) answers.push(`${p.prompt}: ${JSON.stringify(p.answer)}`);
   }
   let logText = log.join("\n");

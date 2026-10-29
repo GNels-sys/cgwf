@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { CardPrinting } from "@cgwf/shared";
-import { LinkedText, isStepLine, nameMatcher, printingAsCard } from "./Overlays";
+import { GameLog, LinkedText, isStepLine, nameMatcher, printingAsCard } from "./Overlays";
 
 function printing(id: string, name: string): CardPrinting {
   return { id, name } as unknown as CardPrinting;
@@ -44,10 +44,33 @@ describe("game log card names", () => {
     expect(isStepLine("Blair's End step")).toBe(true);
     expect(isStepLine("Georgie's Main phase, precombat")).toBe(true);
     expect(isStepLine("Blair's Declare Attackers Step")).toBe(true);
+    expect(isStepLine("Chris' Upkeep step")).toBe(true); // Forge's possessive for a name ending in s
     expect(isStepLine("Turn 3 (Blair)")).toBe(true);
     expect(isStepLine("Blair played Mountain")).toBe(false);
     expect(isStepLine("Blair cast Krenko, Mob Boss")).toBe(false);
+    expect(isStepLine("Blair's Sol Ring phased out")).toBe(false);
     expect(isStepLine("Life: Georgie 40 > 37")).toBe(false);
+  });
+
+  it("the Game Log hides step announcements and mana taps by default and keeps turns and events (owner, 2026-10-29)", () => {
+    const log = [
+      { seq: 1, actor: "system", text: "Turn 3 (Blair)", ts: 0, kind: "turn" as const },
+      { seq: 2, actor: "system", text: "Blair's Untap step", ts: 0, kind: "step" as const },
+      { seq: 3, actor: "system", text: "Blair's Upkeep step", ts: 0, kind: "step" as const },
+      { seq: 4, actor: "system", text: "Blair played Mountain", ts: 0, kind: "event" as const },
+      { seq: 5, actor: "system", text: "Kuan's Draw step", ts: 0 }, // an older line without a kind: by wording
+      { seq: 6, actor: "system", text: "Plains - {T}: Add {W}.", ts: 0, kind: "mana" as const },
+      { seq: 7, actor: "system", text: "Giada bot cast Giada, Font of Hope", ts: 0, kind: "event" as const },
+    ];
+    const html = renderToStaticMarkup(<GameLog log={log} members={[]} printings={{}} onCard={() => {}} onMinimize={() => {}} />);
+    expect(html).toContain("Turn 3 (Blair)");
+    expect(html).toContain("Blair played Mountain");
+    expect(html).not.toContain("Untap step");
+    expect(html).not.toContain("Upkeep step");
+    expect(html).not.toContain("Draw step");
+    expect(html).not.toContain("Add {W}");
+    expect(html).toContain("Giada bot cast Giada, Font of Hope");
+    expect(html).toContain("Show all");
   });
 
   it("turns a printing into a public card the zoom can show", () => {
