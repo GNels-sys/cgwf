@@ -604,6 +604,7 @@ describe("engine tables (relay to the rules engine)", () => {
     turnLine(20, 7, "Alex");
     engine.send({ type: "log", gameId, seat: -1, seq: 950, turn: 20, round: 7, logType: "LAND", text: "Alex played Forest (11)" });
     engine.send({ type: "log", gameId, seat: -1, seq: 951, turn: 20, round: 7, logType: "PHASE", text: "Alex's Upkeep step" });
+    engine.send({ type: "log", gameId, seat: -1, seq: 952, turn: 20, round: 7, logType: "MANA", text: "Forest - {T}: Add {G}." });
     turnLine(21, 7, "Blair");
     turnLine(22, 8, "Alex");
     engine.send({ type: "state", gameId, seat: 0, viewer: A, turn: 22, round: 8, phase: "MAIN1", activePlayer: A, priorityPlayer: A, gameOver: false, stack: [], combat: null, log: [], players: [player(A, 0, "Alex", A), player(B, 1, "Blair", A)] });
@@ -614,6 +615,7 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(kindOf("Round 7 begins")).toBe("round");
     expect(kindOf("Turn 20 (Alex)")).toBe("turn");
     expect(kindOf("Alex's Upkeep step")).toBe("step");
+    expect(kindOf("Forest - {T}: Add {G}.")).toBe("mana");
     expect(kindOf("Alex played Forest")).toBe("event");
     const texts = v.log.map((l) => l.text);
     const at = (t: string) => texts.lastIndexOf(t);

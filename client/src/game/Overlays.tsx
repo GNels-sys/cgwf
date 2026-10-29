@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AVATAR_COLORS, STEP_LABELS, isEventEntry, logKind, type CardPrinting, type LogEntry, type PlayerView, type RoomMember, type ViewCard, type ViewPlayer } from "@cgwf/shared";
+import { AVATAR_COLORS, STEP_LABELS, isEventEntry, isQuietEntry, logKind, type CardPrinting, type LogEntry, type PlayerView, type RoomMember, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
 import { Battlefield } from "./Battlefield";
 import type { SleeveStyle } from "./look";
@@ -181,10 +181,10 @@ export function ActiveBoard({ view, printings, members, me, sleeveOf, onTap, onH
 export function GameLog({ log, members, printings, onCard, onMinimize }: { log: LogEntry[]; members: RoomMember[]; printings: Printings; onCard: (p: CardPrinting) => void; onMinimize: () => void }) {
   const end = useRef<HTMLDivElement>(null);
   const matcher = useMemo(() => nameMatcher(printings), [printings]);
-  // Step announcements ("Blair's Upkeep step") are hidden by default (owner, 2026-10-29): the log reads as what
-  // happened, turn by turn. "Show steps" brings them back for this sitting.
-  const [showSteps, setShowSteps] = useState(false);
-  const lines = useMemo(() => (showSteps ? log : log.filter((l) => logKind(l) !== "step")), [log, showSteps]);
+  // Step announcements ("Blair's Upkeep step") and mana taps ("Plains - {T}: Add {W}.") are hidden by default
+  // (owner, 2026-10-29): the log reads as what happened, turn by turn. "Show all" brings them back for this sitting.
+  const [showAll, setShowAll] = useState(false);
+  const lines = useMemo(() => (showAll ? log : log.filter((l) => !isQuietEntry(l))), [log, showAll]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
   }, [lines.length]);
@@ -197,8 +197,8 @@ export function GameLog({ log, members, printings, onCard, onMinimize }: { log: 
       <header className="game-log-head">
         <strong>Game log</strong>
         <span className="muted small">tap a card name to read it</span>
-        <button type="button" className={`game-log-steps${showSteps ? " is-on" : ""}`} onClick={() => setShowSteps((v) => !v)} aria-pressed={showSteps} title={showSteps ? "Hide the untap, upkeep and draw announcements" : "Also list every step of each turn"}>
-          {showSteps ? "Hide steps" : "Show steps"}
+        <button type="button" className={`game-log-steps${showAll ? " is-on" : ""}`} onClick={() => setShowAll((v) => !v)} aria-pressed={showAll} title={showAll ? "Back to what happened: hide step announcements and mana taps" : "Also list every step of each turn and every mana tap"}>
+          {showAll ? "Events only" : "Show all"}
         </button>
         <button className="sheet-close" onClick={onMinimize} aria-label="Minimise the game log">
           &times;

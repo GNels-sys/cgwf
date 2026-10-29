@@ -1508,12 +1508,13 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   panel (`LogToasts`: at most three, ~5 s each, `aria-live`). **Only what happened (owner, 2026-10-29):**
   the relay tags every engine log line with `LogEntry.kind` from Forge's log entry type
   (`kindFromEngineLogType` in `shared/src/game/logLines.ts`: TURN -> turn, PHASE -> step, the relay's ROUND
-  -> round, anything else -> event); toasts and the Active Board's "Latest:" show `event` lines only
-  (`isEventEntry`), and the Game Log hides `step` lines ("Blair's Upkeep step") by default behind a "Show
-  steps" chip in its header, keeping turn and round lines as separators. Lines without a kind (classic
-  tables, lines persisted before this) are classified by wording (`classifyLogLine`), which also knows
-  Forge's bare possessive for names ending in s ("Chris' Draw step") and leaves "phased out" an event. The
-  coach's log uses the same classifier. Tests: `shared/src/game/logLines.test.ts`, `overlays.test.tsx`,
+  -> round, MANA -> mana ("Plains - {T}: Add {W}.", one per mana tap), anything else -> event); toasts and
+  the Active Board's "Latest:" show `event` lines only (`isEventEntry`), and the Game Log hides `step` and
+  `mana` lines by default (`isQuietEntry`) behind a "Show all" / "Events only" chip in its header, keeping
+  turn and round lines as separators. Lines without a kind (classic tables, lines persisted before this) are
+  classified by wording (`classifyLogLine`), which also knows Forge's bare possessive for names ending in s
+  ("Chris' Draw step") and leaves "phased out" and a resolved spell's description ("Giada, Font of Hope -
+  Creature 2 / 2", STACK_RESOLVE) as events. The coach's log uses the same classifier. Tests: `shared/src/game/logLines.test.ts`, `overlays.test.tsx`,
   relay "announces each round" (kinds on the wire). Layout:
   at phone landscape the two are never open together (opening one closes the other; when the
   board closes it hands the log back if it took its place); portrait stacks them (board top
