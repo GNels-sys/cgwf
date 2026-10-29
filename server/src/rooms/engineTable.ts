@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import {
+import { kindFromEngineLogType,
   D20_SIDES,
   DEFAULT_ENGINE_STOPS,
   ENGINE_PHASES,
@@ -155,7 +155,7 @@ export class EngineTable {
     }
     for (const ev of this.room.loadedEvents()) {
       if (ev.type !== "EngineLog") continue;
-      this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text: cleanEngineText(ev.payload.text), ts: ev.ts });
+      this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text: cleanEngineText(ev.payload.text), ts: ev.ts, kind: kindFromEngineLogType(ev.payload.logType) });
       const round = ROUND_LINE.exec(ev.payload.text);
       if (round) this.roundLogged = Math.max(this.roundLogged, Number(round[1]));
     }
@@ -461,11 +461,13 @@ export class EngineTable {
           this.roundLogged = round;
           const rt = `Round ${round} begins`;
           const rev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineLog", payload: { engineSeq: 0, turn: Number(frame.turn ?? 0), logType: "ROUND", text: rt } });
-          this.log.push({ seq: rev.seq, actor: SYSTEM_ACTOR, text: rt, ts: rev.ts });
+          this.log.push({ seq: rev.seq, actor: SYSTEM_ACTOR, text: rt, ts: rev.ts, kind: "round" });
           this.seq = rev.seq;
         }
-        const ev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineLog", payload: { engineSeq: Number(frame.seq ?? 0), turn: Number(frame.turn ?? 0), logType: String(frame.logType ?? ""), text } });
-        this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text, ts: ev.ts });
+        const logType = String(frame.logType ?? "");
+        const ev = this.room.appendEngine(SYSTEM_ACTOR, { type: "EngineLog", payload: { engineSeq: Number(frame.seq ?? 0), turn: Number(frame.turn ?? 0), logType, text } });
+        // kind (turn | step | round | event) lets the table show only what happened (owner, 2026-10-29)
+        this.log.push({ seq: ev.seq, actor: SYSTEM_ACTOR, text, ts: ev.ts, kind: kindFromEngineLogType(logType) });
         this.seq = ev.seq;
         break;
       }

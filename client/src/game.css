@@ -2413,6 +2413,8 @@ button.engine-row { cursor: pointer; width: 100%; }
 .active-board-field { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 6px; }
 .active-board-field .bf { --tile-base: 52px; }
 .game-log-head strong { font: 500 1rem var(--font-display); }
+.game-log-steps { margin-left: auto; margin-right: 36px; min-height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px; background: transparent; color: var(--fg-muted); font-size: 0.72rem; white-space: nowrap; }
+.game-log-steps.is-on { color: var(--fg); border-color: var(--accent); }
 .game-log-list { list-style: none; margin: 0; padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); overflow: auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 4px; }
 .game-log-line { display: flex; align-items: flex-start; gap: 6px; font-size: 0.8rem; line-height: 1.25; }
 .game-log-line .log-dot { margin-top: 5px; }

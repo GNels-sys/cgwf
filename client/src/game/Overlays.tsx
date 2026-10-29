@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AVATAR_COLORS, STEP_LABELS, type CardPrinting, type LogEntry, type PlayerView, type RoomMember, type ViewCard, type ViewPlayer } from "@cgwf/shared";
+import { AVATAR_COLORS, STEP_LABELS, isEventEntry, logKind, type CardPrinting, type LogEntry, type PlayerView, type RoomMember, type ViewCard, type ViewPlayer } from "@cgwf/shared";
 import { Avatar } from "../components/Avatar";
 import { Battlefield } from "./Battlefield";
 import type { SleeveStyle } from "./look";
@@ -14,10 +14,7 @@ import { battlefieldCards, deriveFor, type Printings } from "./model";
  * (top-right, at most three, about five seconds each, below the Stack panel when that shows).
  */
 
-/** Engine log lines that only announce a step or a turn ("Blair's End step", "Turn 3 (Blair)"). */
-export function isStepLine(text: string): boolean {
-  return /^Turn \d+/.test(text) || /^.+'s .*(step|phase)/i.test(text);
-}
+export { isStepLine } from "@cgwf/shared";
 
 // ---------------------------------------------------------------- card names in text
 
@@ -118,7 +115,7 @@ function colorOf(members: RoomMember[], id: string): string {
 /** The active player's most recent log line, and the cards it names (to light them up on their board). */
 function latestAction(view: PlayerView, player: ViewPlayer, printings: Printings): { text: string | null; iids: Set<string> } {
   // engine log lines are system lines that start with the player's name; classic lines carry the actor
-  const line = [...view.log].reverse().find((l) => !isStepLine(l.text) && (l.actor === player.id || l.text.startsWith(`${player.name} `)));
+  const line = [...view.log].reverse().find((l) => isEventEntry(l) && (l.actor === player.id || l.text.startsWith(`${player.name} `)));
   const iids = new Set<string>();
   if (!line) return { text: null, iids };
   const lower = line.text.toLowerCase();
@@ -184,9 +181,13 @@ export function ActiveBoard({ view, printings, members, me, sleeveOf, onTap, onH
 export function GameLog({ log, members, printings, onCard, onMinimize }: { log: LogEntry[]; members: RoomMember[]; printings: Printings; onCard: (p: CardPrinting) => void; onMinimize: () => void }) {
   const end = useRef<HTMLDivElement>(null);
   const matcher = useMemo(() => nameMatcher(printings), [printings]);
+  // Step announcements ("Blair's Upkeep step") are hidden by default (owner, 2026-10-29): the log reads as what
+  // happened, turn by turn. "Show steps" brings them back for this sitting.
+  const [showSteps, setShowSteps] = useState(false);
+  const lines = useMemo(() => (showSteps ? log : log.filter((l) => logKind(l) !== "step")), [log, showSteps]);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
-  }, [log.length]);
+  }, [lines.length]);
   const colorOfActor = (actor: string): string | null => {
     const m = members.find((x) => x.userId === actor);
     return m ? AVATAR_COLORS[m.color] : null;
@@ -196,15 +197,19 @@ export function GameLog({ log, members, printings, onCard, onMinimize }: { log: 
       <header className="game-log-head">
         <strong>Game log</strong>
         <span className="muted small">tap a card name to read it</span>
+        <button type="button" className={`game-log-steps${showSteps ? " is-on" : ""}`} onClick={() => setShowSteps((v) => !v)} aria-pressed={showSteps} title={showSteps ? "Hide the untap, upkeep and draw announcements" : "Also list every step of each turn"}>
+          {showSteps ? "Hide steps" : "Show steps"}
+        </button>
         <button className="sheet-close" onClick={onMinimize} aria-label="Minimise the game log">
           &times;
         </button>
       </header>
       <ol className="game-log-list">
-        {log.length === 0 && <li className="muted small">Nothing has happened yet.</li>}
-        {log.map((l, i) => {
-          const turn = /^Turn \d+/.test(l.text);
-          const round = /^Round \d+ begins$/.test(l.text);
+        {lines.length === 0 && <li className="muted small">Nothing has happened yet.</li>}
+        {lines.map((l, i) => {
+          const kind = logKind(l);
+          const turn = kind === "turn";
+          const round = kind === "round";
           const color = colorOfActor(l.actor);
           return (
             <li key={`${l.seq}-${i}`} className={`game-log-line${turn ? " is-turn" : ""}${round ? " is-round" : ""}`}>
@@ -235,7 +240,7 @@ export function LogToasts({ log, active, printings, onCard }: { log: LogEntry[];
       setShown([]);
       return;
     }
-    const fresh = log.filter((l) => l.seq > seen.current && !isStepLine(l.text));
+    const fresh = log.filter((l) => l.seq > seen.current && isEventEntry(l)); // never a step, turn or round announcement
     if (fresh.length === 0) return;
     seen.current = log.at(-1)?.seq ?? seen.current;
     const now = Date.now();
