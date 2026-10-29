@@ -435,7 +435,7 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
             targets: Boolean(o.targets),
           }))
         : [];
-      return { kind: "priority", promptId, title, options: opts, phase: (raw.phase as EnginePhase) ?? null, myTurn: Boolean(raw.myTurn), stackEmpty: Boolean(raw.stackEmpty), stackTopMine: Boolean(raw.stackTopMine), holding: Boolean(raw.holding) };
+      return { kind: "priority", promptId, title, options: opts, phase: (raw.phase as EnginePhase) ?? null, myTurn: Boolean(raw.myTurn), stackEmpty: Boolean(raw.stackEmpty), stackTopMine: Boolean(raw.stackTopMine), holding: Boolean(raw.holding), threat: typeof raw.threat === "string" && raw.threat ? raw.threat : null };
     }
     case "targets":
       return { kind: "targets", promptId, title, ability: String(raw.ability ?? ""), source: str(raw.source), min: Number(raw.min ?? 1), max: Number(raw.max ?? 1), options: options(raw.options, ctx), cancelLabel: str(raw.cancelLabel) };

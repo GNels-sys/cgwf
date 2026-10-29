@@ -155,7 +155,7 @@ export function InteractionStack({ stack, view, printings, members, onZoom, prom
         <footer className="interaction-foot">
           {priority ? (
             <>
-              <span className="muted small">{priority.stackTopMine ? "Your spell is on top." : "You have priority: respond, or let it resolve."}</span>
+              <span className="muted small">{priority.stackTopMine ? "Your spell is on top." : priority.threat ? `${priority.threat}. Respond, or let it resolve.` : "You have priority: respond, or let it resolve."}</span>
               <div className="actions">
                 <button className="btn" onClick={onMinimize} title="Back to the board to tap a card">
                   Respond

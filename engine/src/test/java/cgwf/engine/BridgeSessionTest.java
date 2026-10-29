@@ -29,9 +29,36 @@ class BridgeSessionTest {
         assertFalse(s.stopsAt("UPKEEP", true, false, 3));
         assertTrue(s.stopsAt("END_OF_TURN", false, false, 3));
         assertFalse(s.stopsAt("MAIN1", false, false, 3));
-        assertTrue(s.stopsAt("UPKEEP", false, true, 3), "someone else's spell on the stack always stops");
+        assertFalse(s.stopsAt("UPKEEP", false, true, false, 3), "someone else's harmless spell on the stack passes by default");
+        assertTrue(s.stopsAt("UPKEEP", false, true, true, 3), "someone else's spell that threatens the seat stops by default");
         assertTrue(s.autoPassesEmpty(3));
         assertTrue(s.stops().toJson().get("autoPassEmpty").getAsBoolean());
+        assertEquals("threats", s.stops().toJson().get("respondTo").getAsString());
+    }
+
+    @Test
+    void respondToModes() {
+        BridgeSession s = new BridgeSession(0, 1000);
+        JsonObject always = stops(true, true, "MAIN1");
+        always.addProperty("respondTo", "always");
+        s.setStops(always);
+        assertTrue(s.stopsAt("UPKEEP", false, true, false, 3), "always: every opponent's stack item stops");
+        JsonObject never = stops(true, true, "MAIN1");
+        never.addProperty("respondTo", "never");
+        s.setStops(never);
+        assertFalse(s.stopsAt("UPKEEP", false, true, true, 3), "never: not even a threat (Hold still does)");
+        assertTrue(s.stopsAt("MAIN1", true, true, false, 3), "phase stops still apply");
+        s.setHold(3);
+        assertTrue(s.stopsAt("UPKEEP", false, true, false, 3), "hold stops everywhere");
+        // an older relay sends only the boolean: true means the new default, false means never
+        s.setHold(0);
+        s.setStops(stops(true, true));
+        assertEquals("threats", s.stops().toJson().get("respondTo").getAsString());
+        assertFalse(s.stopsAt("UPKEEP", false, true, false, 4));
+        assertTrue(s.stopsAt("UPKEEP", false, true, true, 4));
+        s.setStops(stops(false, true));
+        assertEquals("never", s.stops().toJson().get("respondTo").getAsString());
+        assertFalse(s.stopsAt("UPKEEP", false, true, true, 4));
     }
 
     @Test

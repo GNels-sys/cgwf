@@ -2366,6 +2366,9 @@ button.engine-row { cursor: pointer; width: 100%; }
 .phase-step.has-stop:not(.is-current) { color: var(--fg); }
 .phase-hold.is-on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .stops-row { margin-bottom: 10px; }
+.stops-respond { margin: 4px 0 10px; padding: 0; border: 0; }
+.stops-respond legend { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; padding: 0; }
+.stops-respond .check-row { margin: 0 0 6px; }
 .stops-row-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
 .stops-row-head strong { font: 500 1rem var(--font-display); }
 .stops-chips { display: flex; flex-wrap: wrap; gap: 6px; }

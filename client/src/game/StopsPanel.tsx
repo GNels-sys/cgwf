@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DEFAULT_ENGINE_STOPS, STOPPABLE_PHASES, type EnginePhase, type EngineStops } from "@cgwf/shared";
+import { DEFAULT_ENGINE_STOPS, STOPPABLE_PHASES, respondModeOf, type EnginePhase, type EngineStops, type RespondTo } from "@cgwf/shared";
 import { Panel } from "./Panels";
 
 /**
@@ -24,6 +24,13 @@ export const STOP_LABELS: Record<EnginePhase, string> = {
   END_OF_TURN: "End step",
   CLEANUP: "Cleanup",
 };
+
+/** The three answers to "an opponent put something on the stack: ask me?" (owner, 2026-10-29). */
+export const RESPOND_OPTIONS: Array<{ mode: RespondTo; label: string; hint: string }> = [
+  { mode: "threats", label: "Only when it hits me or my board", hint: "Removal or damage aimed at you or your permanents, a counter on your spell, board wipes and anything that hits every player. Their creatures, ramp and card draw pass by, so your instants stay held for what matters. The prompt says why it stopped." },
+  { mode: "always", label: "Always ask", hint: "Every spell and ability an opponent puts on the stack stops for you." },
+  { mode: "never", label: "Never ask", hint: "Your step stops and Hold still work; nothing else interrupts you." },
+];
 
 /** Toggle one step in one of the two lists (pure). */
 export function toggleStop(stops: EngineStops, phase: EnginePhase, mine: boolean): EngineStops {
@@ -63,13 +70,21 @@ export function StopsPanel({ stops, onSave, onClose }: { stops: EngineStops; onS
     <Panel title="Stops" subtitle="Where the engine pauses and asks you; everything else passes on its own" onClose={onClose}>
       <StopRow label="My turn" hint="Tap a step to stop there" picked={draft.myTurn} onToggle={(p) => setDraft(toggleStop(draft, p, true))} />
       <StopRow label="Opponents' turns" hint="Attacks and blocks always ask you" picked={draft.theirTurn} onToggle={(p) => setDraft(toggleStop(draft, p, false))} />
-      <label className="check-row">
-        <input type="checkbox" checked={draft.respond} onChange={(e) => setDraft({ ...draft, respond: e.target.checked })} />
-        <span>
-          <strong>Always stop when someone else puts something on the stack</strong>
-          <span className="muted small">So you can respond before it resolves.</span>
-        </span>
-      </label>
+      <fieldset className="stops-respond">
+        <legend>
+          <strong>When an opponent casts or activates something</strong>
+          <span className="muted small">The engine stops so you can respond with an instant, or passes for you.</span>
+        </legend>
+        {RESPOND_OPTIONS.map((o) => (
+          <label key={o.mode} className="check-row">
+            <input type="radio" name="respondTo" checked={respondModeOf(draft) === o.mode} onChange={() => setDraft({ ...draft, respondTo: o.mode, respond: o.mode !== "never" })} />
+            <span>
+              <strong>{o.label}</strong>
+              <span className="muted small">{o.hint}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
       <label className="check-row">
         <input type="checkbox" checked={draft.autoPassEmpty} onChange={(e) => setDraft({ ...draft, autoPassEmpty: e.target.checked })} />
         <span>

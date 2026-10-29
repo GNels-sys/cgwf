@@ -1,5 +1,5 @@
 import { normaliseInvite } from "./discord.js";
-import { DEFAULT_ENGINE_STOPS, ENGINE_PHASES, type EnginePhase, type EngineStops } from "./engine.js";
+import { respondModeOf, DEFAULT_ENGINE_STOPS, ENGINE_PHASES, type EnginePhase, type EngineStops } from "./engine.js";
 /**
  * Per-user personalization. Saved on the server (user_settings) and applied
  * client-side: the server never renders anything, it only stores and validates.
@@ -126,13 +126,14 @@ export function sanitizeSettings(raw: unknown, base: UserSettings = DEFAULT_SETT
 
 function sanitizeStops(v: unknown, base: EngineStops): EngineStops {
   if (!v || typeof v !== "object") return base;
-  const s = v as { myTurn?: unknown; theirTurn?: unknown; respond?: unknown; autoPassEmpty?: unknown };
+  const s = v as { myTurn?: unknown; theirTurn?: unknown; respond?: unknown; respondTo?: unknown; autoPassEmpty?: unknown };
   const phases = (arr: unknown, fallback: EnginePhase[]): EnginePhase[] =>
     Array.isArray(arr) ? [...new Set(arr.filter((p): p is EnginePhase => typeof p === "string" && (ENGINE_PHASES as readonly string[]).includes(p)))] : fallback;
   return {
     myTurn: phases(s.myTurn, base.myTurn),
     theirTurn: phases(s.theirTurn, base.theirTurn),
-    respond: typeof s.respond === "boolean" ? s.respond : base.respond,
+    respond: respondModeOf(s.respond === undefined && s.respondTo === undefined ? base : s) !== "never",
+    respondTo: s.respond === undefined && s.respondTo === undefined ? respondModeOf(base) : respondModeOf(s),
     autoPassEmpty: typeof s.autoPassEmpty === "boolean" ? s.autoPassEmpty : base.autoPassEmpty,
   };
 }

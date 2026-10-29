@@ -132,8 +132,10 @@ public final class BridgeController extends PlayerControllerAi {
             SpellAbilityStackInstance top = stack.peek();
             stackTopNotMine = top == null || top.getActivatingPlayer() != player;
         }
-        boolean stop = session.stopsAt(phase == null ? "" : phase.name(), ph.isPlayerTurn(player), stackTopNotMine, ph.getTurn());
-        if (DEBUG_PRIORITY) System.err.println("[priority] seat=" + session.seat() + " turn=" + ph.getTurn() + " phase=" + phase + " myTurn=" + ph.isPlayerTurn(player) + " stackTopNotMine=" + stackTopNotMine + " stop=" + stop + " stops=" + session.stops().toJson());
+        // Does an opponent's stack item aim at this seat, their cards or their spells, or hit everyone? (2026-10-29)
+        String threat = stackTopNotMine ? StackThreats.describe(stack, player) : null;
+        boolean stop = session.stopsAt(phase == null ? "" : phase.name(), ph.isPlayerTurn(player), stackTopNotMine, threat != null, ph.getTurn());
+        if (DEBUG_PRIORITY) System.err.println("[priority] seat=" + session.seat() + " turn=" + ph.getTurn() + " phase=" + phase + " myTurn=" + ph.isPlayerTurn(player) + " stackTopNotMine=" + stackTopNotMine + " threat=" + threat + " stop=" + stop + " stops=" + session.stops().toJson());
         if (!stop) return null; // auto-pass
 
         List<SpellAbility> legal = legalAbilities();
@@ -149,6 +151,7 @@ public final class BridgeController extends PlayerControllerAi {
         p.addProperty("stackEmpty", stack.isEmpty());
         p.addProperty("stackTopMine", !stack.isEmpty() && !stackTopNotMine);
         p.addProperty("holding", session.holding(ph.getTurn()));
+        if (threat != null) p.addProperty("threat", threat); // why the engine stopped: "Blair's Swords to Plowshares targets your Krenko, Mob Boss"
 
         JsonObject a = session.ask(p);
         if (a == null) return super.chooseSpellAbilityToPlay();

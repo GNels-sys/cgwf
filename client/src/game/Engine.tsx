@@ -130,7 +130,7 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
       return (
         <div className="engine-bar" role="region" aria-label="Your priority">
           <div className="engine-bar-head">
-            <strong>{prompt.stackEmpty ? (prompt.myTurn ? "Your move" : "You may respond") : prompt.stackTopMine ? "Your spell or ability is on the stack" : "Something is on the stack: respond?"}</strong>
+            <strong>{prompt.stackEmpty ? (prompt.myTurn ? "Your move" : "You may respond") : prompt.stackTopMine ? "Your spell or ability is on the stack" : prompt.threat ? `${prompt.threat}: respond?` : "Something is on the stack: respond?"}</strong>
             <span className="muted small">{prompt.options.length === 0 ? "Nothing to play right now." : `Tap a glowing card to play it (${parts.join(", ")}${offZone.length ? `; ${offZone.length} from elsewhere below` : ""}). Mana is paid for you; hold a card to choose what to tap.`}</span>
           </div>
           {offZone.length > 0 && onPlayCard && (

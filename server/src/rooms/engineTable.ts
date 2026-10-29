@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import { kindFromEngineLogType,
+import { respondModeOf, kindFromEngineLogType,
   D20_SIDES,
   DEFAULT_ENGINE_STOPS,
   ENGINE_PHASES,
@@ -608,7 +608,8 @@ export class EngineTable {
     const clean: EngineStops = {
       myTurn: (Array.isArray(stops.myTurn) ? stops.myTurn : []).filter((p): p is EnginePhase => (ENGINE_PHASES as readonly string[]).includes(p)),
       theirTurn: (Array.isArray(stops.theirTurn) ? stops.theirTurn : []).filter((p): p is EnginePhase => (ENGINE_PHASES as readonly string[]).includes(p)),
-      respond: stops.respond !== false,
+      respond: respondModeOf(stops) !== "never",
+      respondTo: respondModeOf(stops),
       autoPassEmpty: stops.autoPassEmpty !== false,
     };
     this.stops.set(seat, clean);
