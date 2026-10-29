@@ -30,8 +30,15 @@ public final class BridgeSession {
     public static final class Stops {
         final Set<String> myTurn = new HashSet<>();
         final Set<String> theirTurn = new HashSet<>();
-        /** Stop whenever the top of the stack was put there by someone else. */
+        /** Stop whenever the top of the stack was put there by someone else (kept for relays before respondTo). */
         boolean respond = true;
+        /**
+         * When the top of the stack is someone else's: "always" ask, "threats" ask only when an opponent's item
+         * targets this seat / their cards / their spells or hits everyone (StackThreats), "never" ask (phase
+         * stops and Hold still apply). Owner, 2026-10-29: default "threats", so instants held to protect the
+         * board are offered when the board is in danger, not for every creature an opponent casts.
+         */
+        String respondTo = "threats";
         /** Pass automatically when priority comes with nothing to play (Arena-style). */
         boolean autoPassEmpty = true;
 
@@ -52,6 +59,9 @@ public final class BridgeSession {
             fill(s.theirTurn, j.get("theirTurn"));
             s.respond = !j.has("respond") || j.get("respond").isJsonNull() || j.get("respond").getAsBoolean();
             s.autoPassEmpty = !j.has("autoPassEmpty") || j.get("autoPassEmpty").isJsonNull() || j.get("autoPassEmpty").getAsBoolean();
+            String mode = j.has("respondTo") && j.get("respondTo").isJsonPrimitive() ? j.get("respondTo").getAsString() : null;
+            if ("always".equals(mode) || "threats".equals(mode) || "never".equals(mode)) s.respondTo = mode;
+            else s.respondTo = s.respond ? "threats" : "never"; // an older relay: its boolean, with the new default
             return s;
         }
 
@@ -69,6 +79,7 @@ public final class BridgeSession {
             j.add("myTurn", a);
             j.add("theirTurn", b);
             j.addProperty("respond", respond);
+            j.addProperty("respondTo", respondTo);
             j.addProperty("autoPassEmpty", autoPassEmpty);
             return j;
         }
@@ -223,17 +234,26 @@ public final class BridgeSession {
 
     /**
      * Should this seat be offered priority now, or pass automatically?
-     * Always stops when the stack holds something the seat did not put there (if `respond`),
-     * and at every priority while the seat holds this turn.
+     * Stops at every priority while the seat holds this turn; when the stack holds something the seat did not
+     * put there, by `respondTo` ("always"; "threats" only when `threatened`, see StackThreats; "never");
+     * otherwise at the seat's phase stops.
      */
-    public boolean stopsAt(String phase, boolean myTurn, boolean stackTopNotMine, int turn) {
+    public boolean stopsAt(String phase, boolean myTurn, boolean stackTopNotMine, boolean threatened, int turn) {
         if (holding(turn)) return true;
         if (holdTurn > 0 && turn > holdTurn) holdTurn = 0; // the held turn is over
         if (passUntilTurn > 0 && turn <= passUntilTurn) return false;
         if (passUntilTurn > 0) passUntilTurn = 0;
         Stops s = stops;
-        if (stackTopNotMine && s.respond) return true;
+        if (stackTopNotMine) {
+            if ("always".equals(s.respondTo)) return true;
+            if ("threats".equals(s.respondTo) && threatened) return true;
+        }
         return (myTurn ? s.myTurn : s.theirTurn).contains(phase);
+    }
+
+    /** The older shape: no threat known (treated as none). */
+    public boolean stopsAt(String phase, boolean myTurn, boolean stackTopNotMine, int turn) {
+        return stopsAt(phase, myTurn, stackTopNotMine, false, turn);
     }
 
     /** With nothing to play, pass without asking (unless the seat holds this turn or opted out). */

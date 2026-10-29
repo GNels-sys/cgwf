@@ -3,6 +3,8 @@ package cgwf.engine;
 import cgwf.engine.bridge.BridgeController;
 import cgwf.engine.bridge.BridgeLobbyPlayer;
 import cgwf.engine.bridge.BridgeSession;
+import cgwf.engine.bridge.StackThreats;
+import forge.game.spellability.SpellAbilityStackInstance;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import forge.StaticData;
@@ -959,5 +961,115 @@ class PromptRoundTripTest {
         for (JsonObject p : prompts) assertTrue(p.get("promptId").getAsInt() > 0);
         // each view was audited against the game as it stood when the prompt went out (tests move cards between zones)
         assertEquals(List.of(), viewLeaks, "prompt view leak");
+    }
+
+    // ------------------------------------------------------------------ hold instants for threats (owner, 2026-10-29)
+
+    private static Card oppCard(String name, ZoneType zone) {
+        Card c = Card.fromPaperCard(StaticData.instance().getCommonCards().getCard(name), opp);
+        opp.getZone(zone).add(c);
+        return c;
+    }
+
+    private static SpellAbility aimed(Card card, Player by, forge.game.GameObject target) {
+        SpellAbility sa = card.getFirstSpellAbility();
+        sa.setActivatingPlayer(by);
+        sa.resetTargets();
+        if (target != null) sa.getTargets().add(target);
+        return sa;
+    }
+
+    @Test
+    void stackThreatsNameWhatAimsAtMeAndIgnoreTheRest() {
+        Card bolt = oppCard("Lightning Bolt", ZoneType.Hand);
+        Card wrath = oppCard("Wrath of God", ZoneType.Hand);
+        Card edict = oppCard("Blasphemous Edict", ZoneType.Hand);
+        Card bear = oppCard("Grizzly Bears", ZoneType.Battlefield);
+        Card growth = oppCard("Rampant Growth", ZoneType.Hand);
+        Card myBolt = fresh("Lightning Bolt", ZoneType.Hand);
+        Card mine = me.getCardsIn(ZoneType.Battlefield).get(0);
+        try {
+            // their Bolt at my creature
+            String why = StackThreats.describe(List.of(new SpellAbilityStackInstance(aimed(bolt, opp, mine))), me);
+            assertEquals(opp.getName() + "'s Lightning Bolt targets your " + mine.getName(), why);
+            // at my face
+            assertEquals(opp.getName() + "'s Lightning Bolt targets you", StackThreats.describe(List.of(new SpellAbilityStackInstance(aimed(bolt, opp, me))), me));
+            // at their own creature: not my business
+            assertNull(StackThreats.describe(List.of(new SpellAbilityStackInstance(aimed(bolt, opp, bear))), me));
+            // a creature or a ramp spell: nothing to protect against
+            assertNull(StackThreats.describe(List.of(new SpellAbilityStackInstance(aimed(growth, opp, null))), me));
+            // a board wipe hits everyone
+            String wipe = StackThreats.describe(List.of(new SpellAbilityStackInstance(aimed(wrath, opp, null))), me);
+            assertNotNull(wipe);
+            assertTrue(wipe.startsWith(opp.getName() + "'s Wrath of God affects every"), wipe);
+            // "each player sacrifices": everyone too
+            String each = StackThreats.describe(List.of(new SpellAbilityStackInstance(aimed(edict, opp, null))), me);
+            assertNotNull(each);
+            assertTrue(each.contains("Blasphemous Edict affects every"), each);
+            // my own spell is never a threat to me, even aimed at me
+            assertNull(StackThreats.describe(List.of(new SpellAbilityStackInstance(aimed(myBolt, me, me))), me));
+            // a counterspell on my spell is a threat (protect the spell)
+            Card counter = oppCard("Counterspell", ZoneType.Hand);
+            try {
+                SpellAbility mySpell = aimed(myBolt, me, opp);
+                String countered = StackThreats.describe(List.of(new SpellAbilityStackInstance(aimed(counter, opp, mySpell))), me);
+                assertEquals(opp.getName() + "'s Counterspell targets your Lightning Bolt", countered);
+            } finally {
+                drop(counter);
+            }
+        } finally {
+            drop(bolt, wrath, edict, bear, growth, myBolt);
+        }
+    }
+
+    @Test
+    void priorityPassesHarmlessOpponentSpellsAndStopsForThreatsWithTheReason() {
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, opp, 5);
+        Card bear = oppCard("Grizzly Bears", ZoneType.Hand);
+        Card bolt = oppCard("Lightning Bolt", ZoneType.Hand);
+        Card mine = me.getCardsIn(ZoneType.Battlefield).get(0);
+        JsonObject stops = new JsonObject();
+        stops.add("myTurn", ints());
+        stops.add("theirTurn", ints());
+        stops.addProperty("autoPassEmpty", false);
+        try {
+            // default: "threats". A creature spell on the stack: no question, the seat passes.
+            stops.addProperty("respondTo", "threats");
+            ctl.session().setStops(stops);
+            game.getStack().add(aimed(bear, opp, null));
+            int before = prompts.size();
+            assertNull(ctl.chooseSpellAbilityToPlay(), "passes without asking");
+            assertEquals(before, prompts.size(), "no prompt for a harmless spell");
+            game.getStack().reset();
+            // their Bolt at my creature: asked, and told why
+            game.getStack().add(aimed(bolt, opp, mine));
+            script.add(p -> new JsonObject()); // pass
+            assertNull(ctl.chooseSpellAbilityToPlay());
+            assertEquals(before + 1, prompts.size(), "a threat stops");
+            JsonObject p = lastPrompt();
+            assertEquals("priority", p.get("prompt").getAsString());
+            assertEquals(opp.getName() + "'s Lightning Bolt targets your " + mine.getName(), p.get("threat").getAsString());
+            game.getStack().reset();
+            // "always": the creature spell asks too
+            stops.addProperty("respondTo", "always");
+            ctl.session().setStops(stops);
+            game.getStack().add(aimed(bear, opp, null));
+            script.add(q -> new JsonObject());
+            ctl.chooseSpellAbilityToPlay();
+            assertEquals(before + 2, prompts.size());
+            assertFalse(lastPrompt().has("threat"));
+            game.getStack().reset();
+            // "never": not even the Bolt
+            stops.addProperty("respondTo", "never");
+            ctl.session().setStops(stops);
+            game.getStack().add(aimed(bolt, opp, mine));
+            assertNull(ctl.chooseSpellAbilityToPlay());
+            assertEquals(before + 2, prompts.size(), "never: no prompt");
+            game.getStack().reset();
+        } finally {
+            game.getStack().reset();
+            ctl.session().setStops(null);
+            drop(bear, bolt);
+        }
     }
 }

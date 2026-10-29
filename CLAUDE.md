@@ -1464,8 +1464,8 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   prompts (choose / chooseMany / targets) open the list sheet automatically when no option is on
   the table to tap (tutors, text options, spells on the stack); lists over 12 entries get a filter.
 - **Auto-pass.** The engine only offers priority at a seat's stops (`EngineStops`: my turn
-  MAIN1, declare attackers, MAIN2, end; opponents' end step; always when the top of the stack is
-  someone else's). Stops live in `UserSettings.engineStops` (sanitised in `shared/settings.ts`),
+  MAIN1, declare attackers, MAIN2, end; opponents' end step; and, when the top of the stack is
+  someone else's, by `respondTo`: see "Hold instants for threats" below). Stops live in `UserSettings.engineStops` (sanitised in `shared/settings.ts`),
   are sent to the engine for every seat right after `createGame`, and the table's Menu -> Stops
   panel changes them for the game AND saves them (`{t:"stops"}` -> `saveEngineStops`). "End turn"
   answers with `passUntilTurn` so the rest of the turn passes without prompts.
@@ -1480,6 +1480,27 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   "Hold" in the strip (`{t:"hold", turn}`, engine frame `hold`) holds priority for one turn:
   every priority stops and nothing auto-passes (it also cancels an "End turn"); the engine drops
   it when the turn is over and the relay mirrors it in `EngineInfo.holdTurn`.
+- **Hold instants for threats (owner, 2026-10-29).** "I'm getting a lot of stops to see if I want to counter an
+  opponent's play, but I want to hold those cards to protect my board." The old "always stop when someone else
+  puts something on the stack" boolean is now a three-way `EngineStops.respondTo` (`shared/src/engine.ts`,
+  `RespondTo`): **`threats` (default)** stops only when an opponent's stack item threatens the seat, `always`
+  stops for every one, `never` for none (phase stops and Hold still apply). The engine decides per priority in
+  `StackThreats.describe(stack, me)` (`engine/.../bridge/StackThreats.java`): walking each opponent item and its
+  sub-abilities, it is a threat when it targets the seat, a card the seat controls or owns, or a spell the seat
+  has on the stack (a counterspell on their spell); uses one of Forge's "...All" effects (DestroyAll, DamageAll,
+  ChangeZoneAll, SacrificeAll, PumpAll, TapAll ...: wipes, mass bounce, team pumps); or is defined over every
+  player / every opponent (Forge `Defined$ Player` / `Player.Opponent`: "each opponent discards"). Creatures,
+  ramp, draw and removal aimed at someone else pass without a prompt. The reason rides on the priority prompt
+  (`threat`: "Blair's Swords to Plowshares targets your Krenko, Mob Boss", "Alex's Wrath of God affects every
+  permanent it names") and the bar / Interaction Stack show it ("...: respond?"). `BridgeSession.Stops.respondTo`
+  parses the mode and, from an older relay's boolean alone, maps true -> threats and false -> never; the relay
+  keeps `respond` = `respondTo !== "never"` for an older engine (`respondModeOf` in shared is the one reader of
+  either shape; `sanitizeStops` derives the mode from saved settings the same way). Menu -> Stops shows the three
+  as radios ("Only when it hits me or my board" / "Always ask" / "Never ask"). Tests: engine `BridgeSessionTest`
+  (modes, the boolean fallback), `PromptRoundTripTest.stackThreats*` / `priorityPasses*` (Bolt at my creature /
+  my face / their creature / a third party, Wrath, Blasphemous Edict, my own spell, a Counterspell on my spell;
+  the real priority path passing a creature spell and prompting with the reason for a Bolt, under all three
+  modes), relay `engine.test.ts` (the mode on the wire and saved), `shared/src/settings.test.ts`.
 - **Mana: automatic, with "Pay with" (Stage 2 M5, owner's option 1).** Mana is still paid by
   Forge's AI payer, but a long-press on a glowing spell or ability opens the **Pay with** sheet
   (`PayWithSheet` in `EnginePrompts.tsx`): the card, the cost pips, and every untapped permanent
