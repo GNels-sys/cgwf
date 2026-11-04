@@ -343,6 +343,17 @@ describe("engine tables (relay to the rules engine)", () => {
     alex.send({ t: "engine", answer: { promptId: 70, option: 1, paySources: ["13", "x", "11"] } });
     const paid = await engine.waitFor((f) => f.type === "answer" && f.promptId === 70);
     expect(paid).toMatchObject({ seat: 0, option: 1, paySources: [13, 11] });
+    // "Repeat this cast N times" (2026-11-04): the engine's offer reaches the seat, and the count travels back
+    engine.send({
+      type: "prompt", gameId, seat: 0, promptId: 71, prompt: "priority", title: "You have priority", phase: "MAIN1", myTurn: true, stackEmpty: true, stackTopMine: false,
+      repeat: { option: 1, cardName: "Atraxa, Grand Unifier", last: 0, max: 500 },
+      options: [{ index: 0, cardId: 12, cardName: "Forest", zone: "Hand", kind: "land", description: "Play Forest", cost: null, targets: false }, { index: 1, cardId: 14, cardName: "Atraxa, Grand Unifier", zone: "Command", kind: "spell", description: "Cast Atraxa", cost: "{G}{W}{U}{B}", targets: false }],
+    });
+    const offered = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 71, ma)).view;
+    expect(offered.engine?.prompt).toMatchObject({ kind: "priority", repeat: { option: 1, cardName: "Atraxa, Grand Unifier", last: 0, max: 500 } });
+    alex.send({ t: "engine", answer: { promptId: 71, option: 1, repeat: 40 } });
+    const repeated = await engine.waitFor((f) => f.type === "answer" && f.promptId === 71);
+    expect(repeated).toMatchObject({ seat: 0, option: 1, repeat: 40 });
     // and the answer is on the room's event log
     const events = ctx.roomsManager.get(code)!.currentState() === null ? "engine" : "classic";
     expect(events).toBe("engine");
@@ -451,15 +462,15 @@ describe("engine tables (relay to the rules engine)", () => {
     const m3 = alex.mark();
     alex.send({ t: "stops", stops: { myTurn: ["MAIN1"], theirTurn: [], respond: false } });
     const setStops = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { respond: boolean }).respond === false);
-    expect(setStops.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: false, respondTo: "never", autoPassEmpty: true });
+    expect(setStops.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: false, respondTo: "never", convoke: "needed", autoPassEmpty: true });
     const withStops = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.stops.respond === false, m3)).view;
     expect(withStops.engine?.stops.myTurn).toEqual(["MAIN1"]);
     const saved = (await ctx.app.inject({ method: "GET", url: "/api/me/settings", headers: auth(alex.token) })).json() as { settings: { engineStops: { respond: boolean } } };
     expect(saved.settings.engineStops.respond).toBe(false);
     // the three-way mode (owner, 2026-10-29): "threats" is the default, and an explicit mode rides to the engine with the boolean kept in step
-    alex.send({ t: "stops", stops: { myTurn: ["MAIN1"], theirTurn: [], respond: true, respondTo: "always" } });
+    alex.send({ t: "stops", stops: { myTurn: ["MAIN1"], theirTurn: [], respond: true, respondTo: "always", convoke: "ask" } });
     const always = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { respondTo?: string }).respondTo === "always");
-    expect(always.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: true, respondTo: "always", autoPassEmpty: true });
+    expect(always.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: true, respondTo: "always", convoke: "ask", autoPassEmpty: true });
     alex.send({ t: "stops", stops: { myTurn: ["DRAW", "MAIN1"], theirTurn: [], respond: true } }); // no respondTo: an older client
     const threats = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { myTurn: string[] }).myTurn.includes("DRAW"));
     expect(threats.stops).toMatchObject({ respond: true, respondTo: "threats" });
@@ -661,7 +672,7 @@ describe("engine tables (relay to the rules engine)", () => {
     const m3 = alex.mark();
     alex.send({ t: "stops", stops: { myTurn: ["MAIN1", "MAIN2"], theirTurn: ["END_OF_TURN"], respond: true, autoPassEmpty: false } });
     const sent = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { autoPassEmpty: boolean }).autoPassEmpty === false);
-    expect(sent.stops).toEqual({ myTurn: ["MAIN1", "MAIN2"], theirTurn: ["END_OF_TURN"], respond: true, respondTo: "threats", autoPassEmpty: false });
+    expect(sent.stops).toEqual({ myTurn: ["MAIN1", "MAIN2"], theirTurn: ["END_OF_TURN"], respond: true, respondTo: "threats", convoke: "needed", autoPassEmpty: false });
     expect((await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.stops.autoPassEmpty === false, m3)).view.engine?.stops.myTurn).toEqual(["MAIN1", "MAIN2"]);
     const saved = (await ctx.app.inject({ method: "GET", url: "/api/me/settings", headers: auth(alex.token) })).json() as { settings: { engineStops: { autoPassEmpty: boolean } } };
     expect(saved.settings.engineStops.autoPassEmpty).toBe(false);

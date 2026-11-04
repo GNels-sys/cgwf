@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { RepeatControl } from "./RepeatControl";
 import { AVATAR_COLORS, type EngineAnswer, type EngineEntityRef, type EngineOption, type EnginePrompt, type PlayerView, type RoomMember, type ViewCard } from "@cgwf/shared";
 import { CardImage } from "../components/CardImage";
 import { CardTile } from "./CardTile";
@@ -147,6 +148,7 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
               ))}
             </div>
           )}
+          {prompt.repeat && <RepeatControl offer={prompt.repeat} onGo={(times) => answer({ promptId: id, option: prompt.repeat!.option, repeat: times })} />}
           <div className="engine-bar-actions">
             <button className={`btn btn-small${prompt.options.length === 0 ? " btn-primary" : ""}`} onClick={() => answer({ promptId: id, option: null })}>
               {prompt.stackEmpty ? "Pass" : "Let it resolve"}

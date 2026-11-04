@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DEFAULT_ENGINE_STOPS, STOPPABLE_PHASES, respondModeOf, type EnginePhase, type EngineStops, type RespondTo } from "@cgwf/shared";
+import { DEFAULT_ENGINE_STOPS, STOPPABLE_PHASES, convokeModeOf, respondModeOf, type ConvokeMode, type EnginePhase, type EngineStops, type RespondTo } from "@cgwf/shared";
 import { Panel } from "./Panels";
 
 /**
@@ -30,6 +30,13 @@ export const RESPOND_OPTIONS: Array<{ mode: RespondTo; label: string; hint: stri
   { mode: "threats", label: "Only when it hits me or my board", hint: "Removal or damage aimed at you or your permanents, a counter on your spell, board wipes and anything that hits every player. Their creatures, ramp and card draw pass by, so your instants stay held for what matters. The prompt says why it stopped." },
   { mode: "always", label: "Always ask", hint: "Every spell and ability an opponent puts on the stack stops for you." },
   { mode: "never", label: "Never ask", hint: "Your step stops and Hold still work; nothing else interrupts you." },
+];
+
+/** Convoke / improvise while casting (owner, 2026-11-04: the question came up far too often). */
+export const CONVOKE_OPTIONS: Array<{ mode: ConvokeMode; label: string; hint: string }> = [
+  { mode: "needed", label: "Only when my mana can't cover it", hint: "Lands and rocks pay when they can; you are asked which creatures to tap only when they fall short." },
+  { mode: "ask", label: "Ask every time", hint: "Every convoke or improvise spell asks which creatures or artifacts to tap." },
+  { mode: "never", label: "Never: pay with mana only", hint: "Creatures are never tapped for a cost. A spell your mana cannot pay stays in hand." },
 ];
 
 /** Toggle one step in one of the two lists (pure). */
@@ -78,6 +85,21 @@ export function StopsPanel({ stops, onSave, onClose }: { stops: EngineStops; onS
         {RESPOND_OPTIONS.map((o) => (
           <label key={o.mode} className="check-row">
             <input type="radio" name="respondTo" checked={respondModeOf(draft) === o.mode} onChange={() => setDraft({ ...draft, respondTo: o.mode, respond: o.mode !== "never" })} />
+            <span>
+              <strong>{o.label}</strong>
+              <span className="muted small">{o.hint}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <fieldset className="stops-respond">
+        <legend>
+          <strong>Convoke and improvise</strong>
+          <span className="muted small">Tapping creatures or artifacts toward a spell's cost.</span>
+        </legend>
+        {CONVOKE_OPTIONS.map((o) => (
+          <label key={o.mode} className="check-row">
+            <input type="radio" name="convoke" checked={convokeModeOf(draft) === o.mode} onChange={() => setDraft({ ...draft, convoke: o.mode })} />
             <span>
               <strong>{o.label}</strong>
               <span className="muted small">{o.hint}</span>

@@ -102,6 +102,23 @@ public final class BridgeController extends PlayerControllerAi {
     /** CGWF_DEBUG_PRIORITY=1 prints every priority decision (stops, legal plays) to stderr: for chasing "it never asked me". */
     private static final boolean DEBUG_PRIORITY = "1".equals(System.getenv("CGWF_DEBUG_PRIORITY"));
 
+    /**
+     * True while the bridge only asks Forge "could the seat pay this?" (the priority list, X caps, assist).
+     * Forge's cost adjustment runs the convoke chooser inside such probes too; the seat must never be asked
+     * then (owner, 2026-11-04: the convoke question came up at every priority with Sprout Swarm in hand).
+     */
+    private boolean probing;
+
+    private <T> T probe(java.util.function.Supplier<T> s) {
+        boolean was = probing;
+        probing = true;
+        try {
+            return s.get();
+        } finally {
+            probing = was;
+        }
+    }
+
     private JsonObject prompt(String kind, String title) {
         JsonObject p = new JsonObject();
         p.addProperty("prompt", kind);
@@ -127,6 +144,27 @@ public final class BridgeController extends PlayerControllerAi {
         PhaseHandler ph = game.getPhaseHandler();
         PhaseType phase = ph.getPhase();
         MagicStack stack = game.getStack();
+        // "Repeat this cast N times": cast again while the recording holds, letting each copy resolve in between
+        CastReplay replay = session.replay();
+        if (replay != null) {
+            if (replay.active()) {
+                if (!stack.isEmpty()) {
+                    SpellAbilityStackInstance top = stack.peek();
+                    if (top != null && top.getActivatingPlayer() == player) return null; // my copy resolves first
+                    replay.stop("an opponent responded");
+                } else {
+                    SpellAbility again = repeatable(legalAbilities(), replay.recording());
+                    if (again != null) {
+                        again.setActivatingPlayer(player);
+                        List<SpellAbility> chosen = new ArrayList<>(1);
+                        chosen.add(again);
+                        return chosen;
+                    }
+                    replay.stop("it could not be cast again");
+                }
+            }
+            if (!replay.active()) endReplay(replay);
+        }
         boolean stackTopNotMine = false;
         if (!stack.isEmpty()) {
             SpellAbilityStackInstance top = stack.peek();
@@ -152,6 +190,18 @@ public final class BridgeController extends PlayerControllerAi {
         p.addProperty("stackTopMine", !stack.isEmpty() && !stackTopNotMine);
         p.addProperty("holding", session.holding(ph.getTurn()));
         if (threat != null) p.addProperty("threat", threat); // why the engine stopped: "Blair's Swords to Plowshares targets your Krenko, Mob Boss"
+        // the last spell this seat cast is castable again from the same zone: offer to repeat it N times
+        CastReplay.Recording last = session.lastCast();
+        SpellAbility againSa = stack.isEmpty() ? repeatable(legal, last) : null;
+        int repeatIndex = againSa == null ? -1 : legal.indexOf(againSa);
+        if (repeatIndex >= 0) {
+            JsonObject rep = new JsonObject();
+            rep.addProperty("option", repeatIndex);
+            rep.addProperty("cardName", last.cardName());
+            rep.addProperty("last", session.lastRepeat());
+            rep.addProperty("max", CastReplay.MAX_TIMES);
+            p.add("repeat", rep);
+        }
 
         JsonObject a = session.ask(p);
         if (a == null) return super.chooseSpellAbilityToPlay();
@@ -171,6 +221,11 @@ public final class BridgeController extends PlayerControllerAi {
         }
         SpellAbility sa = legal.get(idx);
         sa.setActivatingPlayer(player);
+        if (idx == repeatIndex && a.has("repeat") && !a.get("repeat").isJsonNull()) {
+            int times = 1;
+            try { times = a.get("repeat").getAsInt(); } catch (RuntimeException e) { times = 1; }
+            if (times > 1) session.startReplay(times); // this cast is the first of them; its prompts replay too
+        }
         // Stage 2 M5: "Pay with": the seat may name the mana sources to tap first (the rest is automatic).
         List<Integer> sources = indices(a, "paySources");
         setPaySources(sa.getHostCard(), sources.isEmpty() ? null : sources);
@@ -195,7 +250,7 @@ public final class BridgeController extends PlayerControllerAi {
             try {
                 sa.setActivatingPlayer(player);
                 boolean canPlay = sa.canPlay();
-                boolean canPay = canPlay && ComputerUtilCost.canPayCost(sa, player, false);
+                boolean canPay = canPlay && probe(() -> ComputerUtilCost.canPayCost(sa, player, false));
                 boolean hasTargets = canPay && (!sa.usesTargeting() || sa.getMinTargets() == 0 || !targetCandidates(sa).isEmpty());
                 ok = canPlay && canPay && hasTargets;
                 if (DEBUG_PRIORITY && host.isInZone(ZoneType.Hand)) System.err.println("[priority]   " + host.getName() + ": canPlay=" + canPlay + " canPay=" + canPay + " targets=" + hasTargets);
@@ -274,7 +329,7 @@ public final class BridgeController extends PlayerControllerAi {
                 AbilityManaPart mp = ma.getManaPart();
                 if (mp == null) continue;
                 boolean playable;
-                try { playable = ma.canPlay() && ComputerUtilCost.canPayCost(ma, player, false); } catch (RuntimeException e) { playable = false; }
+                try { playable = ma.canPlay() && probe(() -> ComputerUtilCost.canPayCost(ma, player, false)); } catch (RuntimeException e) { playable = false; }
                 if (!playable) continue;
                 List<String> produces = producedColours(ma, mp);
                 String match = null;
@@ -326,7 +381,42 @@ public final class BridgeController extends PlayerControllerAi {
             if (sa.canPlay()) sa.resolve();
             return true;
         }
-        return PlaySpellAbility.playSpellAbility(this, player, sa);
+        Card host = sa.getHostCard();
+        boolean record = sa.isSpell() && host != null;
+        if (record) session.startRecording(host.getName(), host.getZone() == null ? "" : host.getZone().getZoneType().name());
+        boolean ok;
+        try {
+            ok = PlaySpellAbility.playSpellAbility(this, player, sa);
+        } catch (RuntimeException e) {
+            if (record) session.finishRecording(false);
+            throw e;
+        }
+        if (record) session.finishRecording(ok);
+        return ok;
+    }
+
+    /** The legal spell that repeats `rec` (same card name, cast from the same zone), or null. */
+    private static SpellAbility repeatable(List<SpellAbility> legal, CastReplay.Recording rec) {
+        if (rec == null) return null;
+        for (SpellAbility sa : legal) {
+            Card host = sa.getHostCard();
+            if (!sa.isSpell() || host == null || !rec.cardName().equals(host.getName())) continue;
+            String zone = host.getZone() == null ? "" : host.getZone().getZoneType().name();
+            if (zone.equals(rec.zone())) return sa;
+        }
+        return null;
+    }
+
+    /** A repeat ended (all done, or stopped early): tell the seat and the log, forget the replay. */
+    private void endReplay(CastReplay r) {
+        String text = r.finished()
+            ? "Repeated " + r.cardName() + " " + r.done() + (r.done() == 1 ? " time." : " times.")
+            : "Repeated " + r.cardName() + " " + r.done() + " of " + r.wanted() + " times; stopped: " + r.stopReason() + ".";
+        game.getGameLog().add(GameLogEntryType.INFORMATION, player.getName() + " repeated " + r.cardName() + " " + r.done() + (r.done() == 1 ? " time." : " times."));
+        JsonObject n = notice("info", "Repeat");
+        n.addProperty("text", text);
+        session.send(n);
+        session.clearReplay();
     }
 
     @Override
@@ -677,7 +767,7 @@ public final class BridgeController extends PlayerControllerAi {
         List<CostPart> parts = cost.getCostParts();
         boolean trivial = parts.isEmpty() || (parts.size() < 2 && "0".equals(parts.get(0).getAmount()));
         if (!trivial) {
-            if (!ComputerUtilCost.canPayCost(cost, sa, player, true)) return false;
+            if (!probe(() -> ComputerUtilCost.canPayCost(cost, sa, player, true))) return false;
             String what = cost.toSimpleString();
             String pay = what.regionMatches(true, 0, "pay ", 0, 4) ? what : "Pay " + what; // "Pay 2 life" already says pay
             String title = (prompt == null || prompt.isBlank() ? pay : prompt + ": " + pay.substring(0, 1).toLowerCase(Locale.ROOT) + pay.substring(1)) + "?";
@@ -727,10 +817,10 @@ public final class BridgeController extends PlayerControllerAi {
         Card host = ability.getHostCard();
         Cost cost = ability.getPayCosts();
         if ("X".equals(announce) && cost != null) {
-            Integer costX = cost.getMaxForNonManaX(ability, player, false);
+            Integer costX = probe(() -> cost.getMaxForNonManaX(ability, player, false));
             if (costX != null) max = Math.min(max, costX);
             if (cost.getCostMana() != null && cost.getCostMana().getAmountOfX() > 0) {
-                int affordable = ComputerUtilMana.determineLeftoverMana(ability, player, false);
+                int affordable = probe(() -> ComputerUtilMana.determineLeftoverMana(ability, player, false));
                 max = Math.min(max, affordable);
             }
         }
@@ -1422,15 +1512,21 @@ public final class BridgeController extends PlayerControllerAi {
     /** Convoke, improvise, waterbend: which untapped creatures / artifacts to tap toward the cost. */
     @Override
     public Map<Card, ManaCostShard> chooseCardsForConvokeOrImprovise(SpellAbility sa, ManaCost manaCost, CardCollectionView untappedCards, boolean artifacts, boolean creatures, Integer maxReduction) {
-        if (autopilot() || untappedCards == null || untappedCards.isEmpty() || manaCost == null || manaCost.getCMC() <= 0)
+        if (autopilot() || probing || untappedCards == null || untappedCards.isEmpty() || manaCost == null || manaCost.getCMC() <= 0)
             return super.chooseCardsForConvokeOrImprovise(sa, manaCost, untappedCards, artifacts, creatures, maxReduction);
+        // the seat's preference (Menu -> Stops): ask every time, only when the mana sources fall short, or never
+        String mode = session.stops().convoke;
+        if ("never".equals(mode)) return new java.util.HashMap<>();
+        boolean short_ = !probe(() -> ComputerUtilMana.canPayManaCost(new forge.game.mana.ManaCostBeingPaid(manaCost), sa, player, false));
+        if ("needed".equals(mode) && !short_) return new java.util.HashMap<>();
         String what = artifacts && creatures ? "Waterbend" : creatures ? "Convoke" : "Improvise";
         String kind = artifacts && creatures ? "artifacts and creatures" : creatures ? "creatures" : "artifacts";
         List<Card> cards = new ArrayList<>(untappedCards);
         int max = Math.min(manaCost.getCMC(), cards.size());
         if (maxReduction != null) max = Math.min(max, maxReduction);
+        String note = short_ ? " (your mana cannot cover it alone)" : " (none = pay with mana)";
         for (int attempt = 0; attempt < ATTEMPTS; attempt++) {
-            List<Card> chosen = chooseCards(what + ": tap " + kind + " to help pay " + manaCost + " (none = pay with mana)", sourceOf(sa), cards, 0, max, "convoke");
+            List<Card> chosen = chooseCards(what + ": tap " + kind + " to help pay " + manaCost + note, sourceOf(sa), cards, 0, max, "convoke");
             if (chosen == null) return super.chooseCardsForConvokeOrImprovise(sa, manaCost, untappedCards, artifacts, creatures, maxReduction);
             Map<Card, ManaCostShard> out = convokeShards(chosen, manaCost, artifacts);
             if (out != null) return out;
@@ -1554,7 +1650,7 @@ public final class BridgeController extends PlayerControllerAi {
         int willPay = n == null ? 0 : n; // nobody answered: help with nothing (spending a human's mana is never automatic)
         if (willPay <= 0) return true;
         ManaCostBeingPaid assist = new ManaCostBeingPaid(ManaCost.get(willPay));
-        if (!ComputerUtilMana.canPayManaCost(assist, sa, player, false)) {
+        if (!probe(() -> ComputerUtilMana.canPayManaCost(assist, sa, player, false))) {
             session.sendError("you cannot pay " + willPay + " right now");
             return true;
         }

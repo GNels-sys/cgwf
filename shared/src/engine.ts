@@ -79,6 +79,17 @@ export type EngineOption = EngineOptionCard | EngineOptionPlayer | EngineOptionT
 export type EngineEntityRef = { kind: "player"; player: PlayerId; name?: string; life?: number } | { kind: "card"; iid: string; name?: string | null; controller?: PlayerId | null };
 
 /** One playable ability in a priority prompt. */
+/**
+ * "Repeat this cast N times" (owner, 2026-11-04): the last spell this seat cast is castable again from the same
+ * zone (`option` = its index in the priority options). `last` = how many times the previous repeat ran.
+ */
+export interface EngineRepeatOffer {
+  option: number;
+  cardName: string;
+  last: number;
+  max: number;
+}
+
 export interface EnginePlayable {
   index: number;
   iid: string;
@@ -91,7 +102,7 @@ export interface EnginePlayable {
 }
 
 export type EnginePrompt =
-  | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean; holding: boolean; threat?: string | null }
+  | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean; holding: boolean; threat?: string | null; repeat?: EngineRepeatOffer | null }
   /** `cancelLabel`: what Cancel means here ("Keep current targets" when a copy or redirect may choose new targets); default "Cancel". */
   | { kind: "targets"; promptId: number; title: string; ability: string; source: string | null; min: number; max: number; options: EngineOption[]; cancelLabel?: string | null }
   | { kind: "attackers"; promptId: number; title: string; candidates: EngineOptionCard[]; defenders: EngineEntityRef[] }
@@ -131,7 +142,7 @@ export type EnginePromptKind = EnginePrompt["kind"];
 
 /** Answers, mirrored from the engine protocol; `promptId` must echo the prompt. */
 export type EngineAnswer =
-  | { promptId: number; option: number | null; passUntilTurn?: number; concede?: boolean; /** "Pay with": iids of the mana sources to tap first (Stage 2 M5). */ paySources?: string[] }
+  | { promptId: number; option: number | null; passUntilTurn?: number; concede?: boolean; /** "Pay with": iids of the mana sources to tap first (Stage 2 M5). */ paySources?: string[]; /** Cast this option that many times with the recorded choices (2026-11-04). */ repeat?: number }
   | { promptId: number; options: number[]; cancel?: boolean }
   | { promptId: number; attacks: Array<{ iid: string; defender: EngineEntityRef }> }
   | { promptId: number; blocks: Array<{ blockerIid: string; attackerIid: string }> }
@@ -156,6 +167,18 @@ export type EngineAnswer =
 export type RespondTo = "always" | "threats" | "never";
 export const RESPOND_MODES: readonly RespondTo[] = ["threats", "always", "never"];
 
+/**
+ * Convoke / improvise when casting (owner, 2026-11-04: "the convoke pop up came up each time"): "needed"
+ * (default) asks only when the mana sources cannot pay the whole cost, "ask" every time, "never" pays with
+ * mana only. Affordability probes never ask in any mode.
+ */
+export type ConvokeMode = "needed" | "ask" | "never";
+export const CONVOKE_MODES: readonly ConvokeMode[] = ["needed", "ask", "never"];
+
+export function convokeModeOf(s: { convoke?: unknown }): ConvokeMode {
+  return typeof s.convoke === "string" && (CONVOKE_MODES as readonly string[]).includes(s.convoke) ? (s.convoke as ConvokeMode) : "needed";
+}
+
 export interface EngineStops {
   myTurn: EnginePhase[];
   theirTurn: EnginePhase[];
@@ -163,6 +186,8 @@ export interface EngineStops {
   respond: boolean;
   /** Absent on settings saved before 2026-10-29: then respond false = "never", else "threats". */
   respondTo?: RespondTo;
+  /** Absent on settings saved before 2026-11-04: "needed". */
+  convoke?: ConvokeMode;
   /**
    * Pass automatically whenever priority comes with nothing to play or activate (no land to play
    * at sorcery speed, no castable spell, no activatable ability with the mana available). Saves a
@@ -177,6 +202,7 @@ export const DEFAULT_ENGINE_STOPS: EngineStops = {
   theirTurn: ["END_OF_TURN"],
   respond: true,
   respondTo: "threats",
+  convoke: "needed",
   autoPassEmpty: true,
 };
 

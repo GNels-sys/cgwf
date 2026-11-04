@@ -39,6 +39,12 @@ public final class BridgeSession {
          * board are offered when the board is in danger, not for every creature an opponent casts.
          */
         String respondTo = "threats";
+        /**
+         * Convoke / improvise / waterbend when casting: "ask" every time, "needed" (default) only when the mana
+         * sources cannot pay the whole cost, "never" (pay with mana only). Owner, 2026-11-04: the question came
+         * up far too often. Affordability probes never ask in any mode.
+         */
+        String convoke = "needed";
         /** Pass automatically when priority comes with nothing to play (Arena-style). */
         boolean autoPassEmpty = true;
 
@@ -62,6 +68,8 @@ public final class BridgeSession {
             String mode = j.has("respondTo") && j.get("respondTo").isJsonPrimitive() ? j.get("respondTo").getAsString() : null;
             if ("always".equals(mode) || "threats".equals(mode) || "never".equals(mode)) s.respondTo = mode;
             else s.respondTo = s.respond ? "threats" : "never"; // an older relay: its boolean, with the new default
+            String conv = j.has("convoke") && j.get("convoke").isJsonPrimitive() ? j.get("convoke").getAsString() : null;
+            if ("ask".equals(conv) || "needed".equals(conv) || "never".equals(conv)) s.convoke = conv;
             return s;
         }
 
@@ -80,6 +88,7 @@ public final class BridgeSession {
             j.add("theirTurn", b);
             j.addProperty("respond", respond);
             j.addProperty("respondTo", respondTo);
+            j.addProperty("convoke", convoke);
             j.addProperty("autoPassEmpty", autoPassEmpty);
             return j;
         }
@@ -139,9 +148,62 @@ public final class BridgeSession {
 
     public void sendError(String text) { sendError(text, -1); }
 
+    // ------------------------------------------------------------------ repeat a cast (CastReplay)
+
+    private CastReplay.Recording recording;
+    private CastReplay.Recording lastCast;
+    private CastReplay replay;
+    private int lastRepeat;
+
+    /** A spell is being cast: remember every prompt and answer until it is on the stack. */
+    public void startRecording(String cardName, String zone) { recording = new CastReplay.Recording(cardName, zone); }
+
+    /** The cast ended (on the stack, or not): keep a successful one as the cast that can be repeated. */
+    public void finishRecording(boolean ok) {
+        if (recording != null) {
+            if (ok) lastCast = recording;
+            recording = null;
+        }
+        CastReplay r = replay;
+        if (r != null) {
+            if (ok) r.castDone();
+            else r.stop("the cast did not go through");
+        }
+    }
+
+    public CastReplay.Recording lastCast() { return lastCast; }
+    public CastReplay replay() { return replay; }
+    public int lastRepeat() { return lastRepeat; }
+
+    /** Repeat the last cast `times` times (clamped to CastReplay.MAX_TIMES). */
+    public void startReplay(int times) {
+        if (lastCast != null) replay = new CastReplay(lastCast, times);
+    }
+
+    public void clearReplay() {
+        CastReplay r = replay;
+        if (r != null) lastRepeat = r.done();
+        replay = null;
+    }
+
     /** Sends a prompt and waits for the answer. Null = nobody answered (fall back to AI). */
     public JsonObject ask(JsonObject prompt) {
         if (absent) return null;
+        CastReplay r = replay;
+        if (r != null && r.active()) {
+            JsonObject auto = r.answerFor(prompt);
+            if (auto != null) {
+                if (recording != null) recording.add(prompt, auto);
+                return auto;
+            }
+            r.stop("could not repeat the answer to \"" + CastReplay.str(prompt, "title") + "\"");
+        }
+        JsonObject answered = askSeat(prompt);
+        if (answered != null && recording != null) recording.add(prompt, answered);
+        return answered;
+    }
+
+    private JsonObject askSeat(JsonObject prompt) {
         Runnable pre = beforeAsk;
         if (pre != null) pre.run();
         CompletableFuture<JsonObject> f = new CompletableFuture<>();

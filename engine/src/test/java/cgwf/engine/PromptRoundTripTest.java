@@ -1072,4 +1072,199 @@ class PromptRoundTripTest {
             drop(bear, bolt);
         }
     }
+
+    // ------------------------------------------------------------------ convoke only when needed; repeat a cast (owner, 2026-11-04)
+
+    private static JsonObject stopsWith(String convoke) {
+        JsonObject s = new JsonObject();
+        JsonArray mine = new JsonArray();
+        mine.add("MAIN1"); // the harness sits in the human's first main phase: stop there, so priority is asked
+        s.add("myTurn", mine);
+        s.add("theirTurn", new JsonArray());
+        s.addProperty("autoPassEmpty", false);
+        s.addProperty("convoke", convoke);
+        return s;
+    }
+
+    private static int optionIndexOfCardName(JsonObject p, String name) {
+        for (var e : p.getAsJsonArray("options")) {
+            JsonObject o = e.getAsJsonObject();
+            if (o.has("cardName") && name.equals(o.get("cardName").getAsString())) return o.get("index").getAsInt();
+        }
+        return -1;
+    }
+
+    private static long promptsSince(int from, String kind, String titleStart) {
+        return prompts.subList(from, prompts.size()).stream()
+            .filter(q -> kind.equals(q.get("prompt").getAsString()) && q.get("title").getAsString().startsWith(titleStart)).count();
+    }
+
+    private static void untapMine() {
+        for (Card c : me.getCardsIn(ZoneType.Battlefield)) c.setTapped(false);
+    }
+
+    private static long saprolings() {
+        return me.getCardsIn(ZoneType.Battlefield).stream().filter(c -> c.isToken() && c.getName().startsWith("Saproling")).count();
+    }
+
+    @Test
+    void convokeIsNeverAskedWhileTheBridgeOnlyProbesAffordability() {
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, me, 5);
+        Card swarm = fresh("Sprout Swarm", ZoneType.Hand);
+        List<Card> forests = freshOn(me, "Forest", 6, ZoneType.Battlefield);
+        try {
+            untapMine();
+            ctl.session().setStops(stopsWith("ask"));
+            int before = prompts.size();
+            script.add(q -> new JsonObject()); // pass
+            assertNull(ctl.chooseSpellAbilityToPlay());
+            assertEquals(before + 1, prompts.size(), "the priority prompt alone: the probe asked nothing");
+            JsonObject p = lastPrompt();
+            assertEquals("priority", p.get("prompt").getAsString());
+            assertTrue(optionIndexOfCardName(p, "Sprout Swarm") >= 0, "the convoke spell is offered");
+            assertEquals(0, promptsSince(before, "chooseMany", "Convoke"));
+        } finally {
+            ctl.session().setStops(null);
+            script.clear();
+            game.getStack().reset();
+            drop(swarm);
+            drop(forests.toArray(new Card[0]));
+        }
+    }
+
+    @Test
+    void convokeAsksByThePreferenceWhenReallyCasting() {
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, me, 5);
+        List<Card> forests = freshOn(me, "Forest", 6, ZoneType.Battlefield);
+        try {
+            // "ask": the question comes every time
+            Card swarm = fresh("Sprout Swarm", ZoneType.Hand);
+            untapMine();
+            ctl.session().setStops(stopsWith("ask"));
+            int before = prompts.size();
+            script.add(q -> answer("options", ints()));   // optional costs: no buyback
+            script.add(q -> answer("options", ints()));   // convoke: none, pay with mana
+            SpellAbility sa = swarm.getFirstSpellAbility();
+            sa.setActivatingPlayer(me);
+            assertTrue(ctl.playChosenSpellAbility(sa));
+            assertEquals(1, promptsSince(before, "chooseMany", "Convoke"), "ask: asked once");
+            game.getStack().reset();
+            drop(swarm);
+            // "needed" with the mana to pay: not asked
+            swarm = fresh("Sprout Swarm", ZoneType.Hand);
+            untapMine();
+            ctl.session().setStops(stopsWith("needed"));
+            before = prompts.size();
+            script.add(q -> answer("options", ints()));
+            sa = swarm.getFirstSpellAbility();
+            sa.setActivatingPlayer(me);
+            assertTrue(ctl.playChosenSpellAbility(sa));
+            assertEquals(0, promptsSince(before, "chooseMany", "Convoke"), "needed, affordable: not asked");
+            game.getStack().reset();
+            drop(swarm);
+            // "needed" with the lands short: asked, and the title says why
+            swarm = fresh("Sprout Swarm", ZoneType.Hand);
+            untapMine();
+            for (Card f : forests) f.setTapped(true);
+            before = prompts.size();
+            script.add(q -> answer("options", ints()));
+            script.add(q -> answer("options", ints(0, 1)));
+            sa = swarm.getFirstSpellAbility();
+            sa.setActivatingPlayer(me);
+            ctl.playChosenSpellAbility(sa);
+            assertEquals(1, promptsSince(before, "chooseMany", "Convoke"), "needed, short on mana: asked");
+            assertTrue(prompts.get(prompts.size() - 1).get("title").getAsString().contains("your mana cannot cover it alone"));
+            game.getStack().reset();
+            drop(swarm);
+            // "never": pay with mana only
+            swarm = fresh("Sprout Swarm", ZoneType.Hand);
+            untapMine();
+            ctl.session().setStops(stopsWith("never"));
+            before = prompts.size();
+            script.add(q -> answer("options", ints()));
+            sa = swarm.getFirstSpellAbility();
+            sa.setActivatingPlayer(me);
+            assertTrue(ctl.playChosenSpellAbility(sa));
+            assertEquals(0, promptsSince(before, "chooseMany", "Convoke"), "never: not asked");
+            game.getStack().reset();
+            drop(swarm);
+        } finally {
+            ctl.session().setStops(null);
+            script.clear();
+            game.getStack().reset();
+            drop(forests.toArray(new Card[0]));
+            untapMine();
+        }
+    }
+
+    @Test
+    void repeatCastsTheSameSpellAgainWithTheRecordedAnswers() {
+        game.getPhaseHandler().devModeSet(PhaseType.MAIN1, me, 5);
+        Card swarm = fresh("Sprout Swarm", ZoneType.Hand);
+        List<Card> forests = freshOn(me, "Forest", 8, ZoneType.Battlefield);
+        ctl.session().setStops(stopsWith("never"));
+        try {
+            untapMine();
+            long start = saprolings();
+            int noticesBefore = notices.size();
+            // the first cast by hand: Sprout Swarm with buyback (recorded)
+            int before = prompts.size();
+            script.add(q -> answer("option", optionIndexOfCardName(q, "Sprout Swarm")));
+            script.add(q -> answer("options", ints(0))); // optional costs: Buyback {3}
+            List<SpellAbility> chosen = ctl.chooseSpellAbilityToPlay();
+            assertNotNull(chosen);
+            assertEquals("Sprout Swarm", chosen.get(0).getHostCard().getName());
+            assertTrue(ctl.playChosenSpellAbility(chosen.get(0)));
+            assertEquals(before + 2, prompts.size(), "priority + optional costs");
+            game.getStack().resolveStack();
+            untapMine();
+            assertEquals(start + 1, saprolings(), "stack=" + game.getStack().size() + " battlefield=" + me.getCardsIn(ZoneType.Battlefield).stream().map(Card::getName).toList());
+            assertTrue(me.getCardsIn(ZoneType.Hand).stream().anyMatch(c -> "Sprout Swarm".equals(c.getName())), "buyback returned it to hand");
+            // it is castable again: the priority prompt offers a repeat; ask for two more
+            script.add(q -> {
+                assertTrue(q.has("repeat"), "the repeat offer");
+                JsonObject rep = q.getAsJsonObject("repeat");
+                assertEquals("Sprout Swarm", rep.get("cardName").getAsString());
+                assertEquals(optionIndexOfCardName(q, "Sprout Swarm"), rep.get("option").getAsInt());
+                JsonObject a = answer("option", rep.get("option").getAsInt());
+                a.addProperty("repeat", 2);
+                return a;
+            });
+            List<SpellAbility> second = ctl.chooseSpellAbilityToPlay();
+            assertNotNull(second);
+            assertTrue(ctl.playChosenSpellAbility(second.get(0)));
+            assertEquals(before + 3, prompts.size(), "the second cast asked nothing but the priority: buyback came from the recording");
+            game.getStack().resolveStack();
+            untapMine();
+            assertEquals(start + 2, saprolings());
+            // the third cast: no prompt at all
+            List<SpellAbility> third = ctl.chooseSpellAbilityToPlay();
+            assertNotNull(third, "cast 3 chosen by the replay");
+            assertEquals("Sprout Swarm", third.get(0).getHostCard().getName());
+            assertTrue(ctl.playChosenSpellAbility(third.get(0)));
+            assertEquals(before + 3, prompts.size(), "no prompt while repeating");
+            game.getStack().resolveStack();
+            untapMine();
+            assertEquals(start + 3, saprolings());
+            assertTrue(me.getCardsIn(ZoneType.Hand).stream().anyMatch(c -> "Sprout Swarm".equals(c.getName())), "buyback again");
+            // done: the seat is asked again as usual, told what happened, and offered another repeat
+            script.add(q -> new JsonObject());
+            assertNull(ctl.chooseSpellAbilityToPlay());
+            JsonObject p = lastPrompt();
+            assertEquals("priority", p.get("prompt").getAsString());
+            assertTrue(p.has("repeat"), "the repeat offer again");
+            assertEquals(2, p.getAsJsonObject("repeat").get("last").getAsInt());
+            assertTrue(notices.subList(noticesBefore, notices.size()).stream().anyMatch(n -> n.has("text") && n.get("text").getAsString().equals("Repeated Sprout Swarm 2 times.")), "the notice");
+            assertTrue(logHas(me.getName() + " repeated Sprout Swarm 2 times."));
+            assertNull(ctl.session().replay());
+        } finally {
+            ctl.session().setStops(null);
+            script.clear();
+            game.getStack().reset();
+            for (Card c : new ArrayList<>(me.getCardsIn(ZoneType.Battlefield))) if (c.isToken() && c.getName().startsWith("Saproling")) drop(c);
+            for (Card c : new ArrayList<>(me.getCardsIn(ZoneType.Hand))) if ("Sprout Swarm".equals(c.getName())) drop(c);
+            drop(forests.toArray(new Card[0]));
+            untapMine();
+        }
+    }
 }
