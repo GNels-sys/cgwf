@@ -1,4 +1,4 @@
-import {
+import { type EngineRepeatOffer,
   EMPTY_MANA,
   defaultSection,
   type CardPrinting,
@@ -435,7 +435,7 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
             targets: Boolean(o.targets),
           }))
         : [];
-      return { kind: "priority", promptId, title, options: opts, phase: (raw.phase as EnginePhase) ?? null, myTurn: Boolean(raw.myTurn), stackEmpty: Boolean(raw.stackEmpty), stackTopMine: Boolean(raw.stackTopMine), holding: Boolean(raw.holding), threat: typeof raw.threat === "string" && raw.threat ? raw.threat : null };
+      return { kind: "priority", promptId, title, options: opts, phase: (raw.phase as EnginePhase) ?? null, myTurn: Boolean(raw.myTurn), stackEmpty: Boolean(raw.stackEmpty), stackTopMine: Boolean(raw.stackTopMine), holding: Boolean(raw.holding), threat: typeof raw.threat === "string" && raw.threat ? raw.threat : null, repeat: repeatOffer(raw.repeat) };
     }
     case "targets":
       return { kind: "targets", promptId, title, ability: String(raw.ability ?? ""), source: str(raw.source), min: Number(raw.min ?? 1), max: Number(raw.max ?? 1), options: options(raw.options, ctx), cancelLabel: str(raw.cancelLabel) };
@@ -556,8 +556,17 @@ export function toEngineAnswer(answer: EngineAnswer, ctx: ConvertContext): Recor
     if (answer.passUntilTurn !== undefined) out.passUntilTurn = Number(answer.passUntilTurn);
     if (answer.concede) out.concede = true;
     if (Array.isArray(answer.paySources) && answer.paySources.length) out.paySources = answer.paySources.map((iid) => Number(iid)).filter((n) => Number.isFinite(n)).slice(0, 40);
+    if (typeof answer.repeat === "number" && Number.isFinite(answer.repeat) && answer.repeat >= 2) out.repeat = Math.min(500, Math.floor(answer.repeat));
   }
   return out;
+}
+
+/** The engine's "cast this again N times" offer on a priority prompt (2026-11-04), or null. */
+function repeatOffer(v: unknown): EngineRepeatOffer | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  if (typeof r.option !== "number" || typeof r.cardName !== "string") return null;
+  return { option: r.option, cardName: r.cardName, last: typeof r.last === "number" ? r.last : 0, max: typeof r.max === "number" && r.max > 1 ? r.max : 500 };
 }
 
 /** Shape check for what a browser may send as an engine answer. */
@@ -576,6 +585,6 @@ export function isEngineAnswer(v: unknown): v is EngineAnswer {
   if ("amounts" in a) return Array.isArray(a.amounts) && (a.amounts as unknown[]).every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0);
   if ("modes" in a) return Array.isArray(a.modes) && (a.modes as unknown[]).every((n) => typeof n === "number");
   if ("text" in a) return typeof a.text === "string" && a.text.length <= 200;
-  if ("option" in a) return (a.option === null || typeof a.option === "number") && (a.paySources === undefined || (Array.isArray(a.paySources) && (a.paySources as unknown[]).every((x) => typeof x === "string")));
+  if ("option" in a) return (a.option === null || typeof a.option === "number") && (a.paySources === undefined || (Array.isArray(a.paySources) && (a.paySources as unknown[]).every((x) => typeof x === "string"))) && (a.repeat === undefined || (typeof a.repeat === "number" && Number.isFinite(a.repeat)));
   return false;
 }

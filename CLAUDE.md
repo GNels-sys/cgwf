@@ -1501,6 +1501,36 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   my face / their creature / a third party, Wrath, Blasphemous Edict, my own spell, a Counterspell on my spell;
   the real priority path passing a creature spell and prompting with the reason for a Bolt, under all three
   modes), relay `engine.test.ts` (the mode on the wire and saved), `shared/src/settings.test.ts`.
+- **Convoke only when needed (owner, 2026-11-04).** "The convoke cost pop up came up each time I was to cast an
+  instant." Root cause: Forge's cost adjustment runs the controller's convoke chooser inside AFFORDABILITY PROBES
+  too (`ComputerUtilCost.canPayCost` -> `calculateManaCost` -> `CostAdjustment.adjust(..., test)` ignores `test`
+  when asking), so with a convoke spell in hand the bridge asked at every priority while building the legal list.
+  Fix: `BridgeController.probing` (`probe(() -> ...)` around every canPay / X-cap / assist check) makes
+  `chooseCardsForConvokeOrImprovise` answer with Forge's AI silently during probes. A real cast follows
+  `EngineStops.convoke` (`ConvokeMode`, shared): **`needed` (default)** asks only when
+  `ComputerUtilMana.canPayManaCost` says the mana sources cannot cover the adjusted cost (title adds "your mana
+  cannot cover it alone"), `ask` every time, `never` pays with mana only (an empty map). Menu -> Stops radios
+  ("Only when my mana can't cover it" / "Ask every time" / "Never: pay with mana only").
+- **Repeat this cast N times (owner, 2026-11-04).** An infinite Sprout Swarm loop (convoke + buyback) took forty
+  separate casts with their prompts. `engine/.../bridge/CastReplay.java`: while a seat casts a spell
+  (`playChosenSpellAbility`) `BridgeSession` records every prompt and answer (`startRecording` /
+  `finishRecording`; a successful cast becomes `lastCast`). When the same card is castable again from the same
+  zone with an empty stack, the priority prompt carries `repeat {option, cardName, last, max}` and the bar shows
+  `RepeatControl` ("Repeat Sprout Swarm × [N] Go", N from 2 to `CastReplay.MAX_TIMES` = 500). The answer
+  `{option, repeat: N}` starts a `CastReplay`: `BridgeSession.ask` answers each prompt from the recording,
+  translated to the current options by NAME (`optionKeys`: card / player / label name, else id; a convoke pick
+  short of names fills from other untapped creatures, since last cast's saprolings are tapped now); numbers,
+  confirms, orders and text copy through. `chooseSpellAbilityToPlay` passes while the seat's own copy is on top
+  (it resolves), re-casts the card from `legalAbilities()` with no prompt while the replay is active, and stops
+  the replay when an opponent's item lands on the stack, the card cannot be cast again, or a recorded answer
+  cannot be matched (that prompt then goes to the seat as usual). `endReplay` logs "<seat> repeated X n times."
+  and sends a notice ("Repeated Sprout Swarm 40 times." or "... 12 of 40 times; stopped: ..."). Nothing is ever
+  decided for the seat that it did not decide in the recorded cast; bots and absent seats never replay. Tests:
+  engine `CastReplayTest` (pure: by-name translation, convoke fill, a missing target stops it, copies, clamps),
+  `PromptRoundTripTest.convokeIsNeverAsked*` / `convokeAsksByThePreference*` / `repeatCastsTheSameSpell*` (a
+  real Sprout Swarm with buyback cast three times: one set of prompts, three saprolings, the offer and the
+  notice), relay `engine.test.ts` (offer out, count back, `convoke` on the stops), `shared/src/settings.test.ts`,
+  client `repeatControl.test.tsx`.
 - **Mana: automatic, with "Pay with" (Stage 2 M5, owner's option 1).** Mana is still paid by
   Forge's AI payer, but a long-press on a glowing spell or ability opens the **Pay with** sheet
   (`PayWithSheet` in `EnginePrompts.tsx`): the card, the cost pips, and every untapped permanent
