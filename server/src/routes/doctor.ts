@@ -1,10 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { DoctorAiRun, DoctorAiStartRequest, DoctorAiState, DoctorAiUsage, DoctorApplyRequest, DoctorPrefRequest, DoctorResponse } from "@cgwf/shared";
+import type { DoctorAiRun, DoctorAiStartRequest, DoctorAiState, DoctorAiUsage, DoctorApplyRequest, DoctorPrefRequest, DoctorResponse, PlacementRequest, PlacementResponse } from "@cgwf/shared";
 import type { DoctorAi } from "../analysis/doctor/ai.js";
+import { placeCards } from "../analysis/doctor/placement.js";
 import { DeckDoctor, DoctorError } from "../analysis/doctor/service.js";
 import { rateLimitKey, requireOwner, requireUser } from "../auth.js";
 import type { DbHandle } from "../db/index.js";
+import type { NameIndex } from "../search/index.js";
 import { decks, libraryDecks } from "../db/schema.js";
 
 /**
@@ -14,9 +16,10 @@ import { decks, libraryDecks } from "../db/schema.js";
  *   POST   /api/decks/:id/doctor/apply {cutEntryId, addOracleId}   own deck only
  *   POST   /api/doctor/prefs {deckRef, oracleId, name, kind}        keep / dismiss
  *   DELETE /api/doctor/prefs {deckRef, oracleId, kind}
+ *   POST   /api/placement {text, deckIds?}   owner only (testing): which of my decks each pasted card fits best
  */
-export function registerDoctorRoutes(app: FastifyInstance, deps: { handle: DbHandle; doctor: DeckDoctor; ai: DoctorAi }): void {
-  const { handle, doctor, ai } = deps;
+export function registerDoctorRoutes(app: FastifyInstance, deps: { handle: DbHandle; index: NameIndex; doctor: DeckDoctor; ai: DoctorAi }): void {
+  const { handle, index, doctor, ai } = deps;
   const auth = requireUser(handle);
   const keyGenerator = rateLimitKey(handle);
   const limited = { preHandler: auth, config: { rateLimit: { max: 20, timeWindow: "1 minute", keyGenerator } } };
@@ -122,4 +125,18 @@ export function registerDoctorRoutes(app: FastifyInstance, deps: { handle: DbHan
     });
   }
   app.get("/api/admin/doctor-ai", { preHandler: owner }, async (): Promise<DoctorAiUsage> => ai.usage());
+
+  // Card placement: owner only while it is tested. Weighs every own deck (EDHREC is 1 request a second and
+  // cached for a week, so only a first run over many decks is slow). The page re-runs after each add, so the
+  // limit matches the Doctor's own.
+  app.post<{ Body: Partial<PlacementRequest> | null }>("/api/placement", { preHandler: owner, config: { rateLimit: { max: 20, timeWindow: "1 minute", keyGenerator } } }, async (req, reply): Promise<PlacementResponse | void> => {
+    const body = req.body ?? {};
+    if (typeof body.text !== "string") return reply.code(400).send({ error: "text is required" });
+    const deckIds = Array.isArray(body.deckIds) ? body.deckIds.filter((x): x is string => typeof x === "string").slice(0, 200) : undefined;
+    try {
+      return await placeCards({ handle, index, doctor, log: req.log }, req.user!.id, { text: body.text, deckIds });
+    } catch (err) {
+      return fail(reply, err);
+    }
+  });
 }

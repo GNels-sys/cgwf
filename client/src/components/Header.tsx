@@ -22,6 +22,7 @@ export function Header() {
         {user && <NavLink to="/stats">Stats</NavLink>}
         {user && <NavLink to="/stores">Stores</NavLink>}
         {user && <NavLink to="/settings">Personalize</NavLink>}
+        {owner && <NavLink to="/admin/placement">Placement</NavLink>}
         {owner && <NavLink to="/admin/library">Library</NavLink>}
         {owner && <NavLink to="/admin/agents">Agents</NavLink>}
         {owner && (

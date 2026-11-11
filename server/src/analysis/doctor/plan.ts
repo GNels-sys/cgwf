@@ -56,6 +56,10 @@ export interface PlanInput {
   keep: ReadonlySet<string>;
   dismissed: ReadonlySet<string>;
   limit?: number;
+  /** Adds scoring below this are dropped (default 8). Card placement passes 0: every pasted card is weighed. */
+  minAddScore?: number;
+  /** Keep swaps whose add does not beat its cut (card placement shows them as weak fits). Default false. */
+  keepNonPositive?: boolean;
 }
 
 export interface PlanResult {
@@ -116,7 +120,7 @@ export function planSwaps(input: PlanInput): PlanResult {
     const gap = r.find(short) ?? null;
     const combosBonus = 20 * Math.min(2, c.completes.length);
     const score = edhrecValue(stat(c.name)) + (gap ? 15 : 0) + combosBonus;
-    if (score < ADD_FLOOR) continue;
+    if (score < (input.minAddScore ?? ADD_FLOOR)) continue;
     scored.push({ c, roles: r, gap, score });
   }
   scored.sort((a, b) => b.score - a.score || a.c.name.localeCompare(b.c.name));
@@ -152,7 +156,7 @@ export function planSwaps(input: PlanInput): PlanResult {
     const cut = from.reduce((best, x) => (cutValue(x, a.roles) < cutValue(best, a.roles) ? x : best));
     const cutScore = cutValue(cut, a.roles);
     const gain = a.score - cutScore;
-    if (gain <= 0) continue;
+    if (gain <= 0 && !input.keepNonPositive) continue;
     cut.left--;
     const sharedRole = cut.roles.find((r) => a.roles.includes(r)) ?? null;
     const role = a.gap ?? sharedRole ?? a.roles[0] ?? null;
@@ -192,6 +196,7 @@ export function planSwaps(input: PlanInput): PlanResult {
         note: a.floorAfter > ceiling ? `Raises the bracket floor to ${a.floorAfter} (your target is ${input.target}).` : null,
       },
       score: Math.round(gain * 10) / 10,
+      addScore: Math.round(a.score * 10) / 10,
     });
   }
   swaps.sort((x, y) => y.score - x.score || x.add.name.localeCompare(y.add.name));
