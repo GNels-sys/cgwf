@@ -128,6 +128,17 @@ describe("Deck Doctor planner", () => {
     expect([...r.swaps].sort((a, b) => b.score - a.score)).toEqual(r.swaps);
   });
 
+  it("card placement weighs every candidate: no score floor, weak swaps kept, each with the add's own score", () => {
+    const unlisted = cand(vanilla("Unlisted Beast", 3));
+    const normal = planSwaps(baseInput({ candidates: [unlisted] }));
+    expect(normal.swaps).toEqual([]);
+    const placed = planSwaps(baseInput({ candidates: [unlisted], minAddScore: 0, keepNonPositive: true, allowHigher: true }));
+    const s = placed.swaps.find((x) => x.add.name === "Unlisted Beast")!;
+    expect(s).toBeDefined();
+    expect(s.addScore).toBeLessThan(8);
+    expect(s.cut.name).not.toBe("Tester, Deck Doctor");
+  });
+
   it("roles come from the Stats finders", () => {
     expect(rolesOf(ramp("X"))).toEqual(["ramp"]);
     expect(rolesOf(F.forest)).toContain("land");

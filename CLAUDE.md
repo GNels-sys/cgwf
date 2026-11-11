@@ -757,6 +757,32 @@ find the absolute best card to add and what to cut." Code: `server/src/analysis/
   sent back with each reason, the fixed answer accepted; usage and cost recorded; the cache and Run again;
   per-run cap, refusal, daily cap and the flag; fallback pricing per attempt; the context marks pinned cards.
 
+### Card placement (2026-11-11, OWNER ONLY while tested, free, no model spend)
+"I have these cards; which of my decks should each one go into?" Page `/admin/placement` (nav "Placement",
+owner only), `client/src/pages/PlacementPage.tsx`; server `analysis/doctor/placement.ts` + `DeckDoctor.placeInDeck`;
+route `POST /api/placement {text, deckIds?}` (`[requireUser, requireOwner]`, 20/min); types `shared/src/placement.ts`.
+- **Input**: pasted lines resolved like an import (`resolveDecklist`), default paper printing, one entry per Oracle
+  id ("2 Rancor" and "Rancor" collapse), caps `PLACEMENT_MAX_CARDS` 40 and `PLACEMENT_MAX_DECKS` 30. Unknown
+  names come back `unresolved`; basics, tokens and non-Commander-legal cards `not_legal`.
+- **Scoring = the Doctor's, per deck**: each own deck is prepared once (`DeckDoctor.prepare`, shared with
+  `build`) and `planSwaps` runs ONCE with every placeable card as a candidate, so two cards in the same deck get
+  different cuts. Placement passes `minAddScore: 0` (no floor, unlisted cards are still weighed),
+  `keepNonPositive: true` (trade-downs kept, shown as weak with a warning) and `allowHigher: true` (a bracket
+  raise is flagged, not hidden). Combos: the deck's cached `almostIncluded` variants whose one missing card is
+  this card. Swaps carry `addScore` (the card's own value). Fit: `placementFit` (gain <= 0 weak; add >= 45
+  strong; >= 15 good). Ranking: `rankPlacements` (no bracket raise first, then gain, then add score).
+- **Skips per deck, with the reason**: no commander marked, outside the colour identity, already in the deck,
+  dismissed ("not interested") for that deck, nothing it could replace (lands only replace lands; kept and combo
+  pieces are never cut), or the deck could not be weighed.
+- **Adding** uses the Doctor's `POST /api/decks/:id/doctor/apply`; "Cut something else" lets the owner pick any
+  main-board card instead. After an add the page re-runs placement (EDHREC is cached, so it is quick).
+- **Speed**: a first run reads EDHREC for each commander (1 request a second, cached 7 days), about two seconds a deck.
+- **Opening it to everyone later**: swap `owner` for `limited` on the route and drop `isOwner` from the nav link
+  and the page; the scoring needs nothing else.
+- **Tests**: `routes/placement.test.ts` (owner only, two decks with fixture EDHREC pages, colour and in-deck
+  skips, de-duplication, distinct cuts, apply then re-run, deck filter, bad input), `shared/src/placement.test.ts`
+  (fit and ranking), planner options in `analysis/doctor/doctor.test.ts`.
+
 ## Computer opponents (Phase 7, owner only)
 
 "Agents" are Claude-driven seats. Everything lives in `server/src/agents/`; nothing here runs unless

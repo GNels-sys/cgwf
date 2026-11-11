@@ -1936,3 +1936,34 @@ label.check input { width: 20px; height: 20px; }
   .deck-editor { padding: 10px; }
   .deck-edit-undo-what { display: none; }
 }
+
+/* Card placement (owner only while tested): pasted cards, each with its best deck first. */
+.placement-form { margin-block: 18px; padding: 18px; display: grid; gap: 12px; }
+.placement-label { font-weight: 600; }
+.placement-form textarea { width: 100%; min-height: 160px; font: inherit; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-elev-2); color: var(--fg); resize: vertical; }
+.placement-form .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.placement-decks ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; max-height: 260px; overflow: auto; }
+.placement-decks label { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; }
+.placement-summary { margin-block: 18px; padding: 16px; overflow-x: auto; }
+.placement-summary h2 { margin: 0 0 10px; font-size: 1.05rem; }
+.placement-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.placement-table th, .placement-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.placement-table th { color: var(--fg-muted); font-weight: 600; }
+.placement-cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.placement-card { padding: 16px; display: grid; gap: 10px; scroll-margin-top: 80px; }
+.placement-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.placement-card-head .doctor-card { flex: 0 1 auto; max-width: 100%; }
+.placement-option-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.placement-option.is-best { border-color: color-mix(in srgb, var(--signal) 60%, var(--border)); }
+.placement-cut { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.placement-cut .doctor-card { flex: 0 1 280px; }
+.placement-fit { border: 1px solid var(--border); white-space: nowrap; }
+.placement-fit.is-strong { border-color: var(--power-1); color: var(--power-1); }
+.placement-fit.is-good { border-color: var(--signal); color: var(--signal); }
+.placement-fit.is-weak { color: var(--fg-muted); }
+.placement-more summary { cursor: pointer; padding-block: 8px; }
+.placement-more ul { margin: 6px 0 0; padding-left: 18px; }
+.placement-more .doctor-swaps { margin-top: 8px; }
+.placement-cut-picker { margin-top: 6px; }
+.placement-cut-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.placement-cut-row select { min-height: 40px; max-width: 100%; flex: 1 1 220px; }

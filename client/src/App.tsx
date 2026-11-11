@@ -7,6 +7,7 @@ import { DecksPage } from "./pages/DecksPage";
 import { ImportPage } from "./pages/ImportPage";
 import { AdminPage } from "./pages/AdminPage";
 import { AgentsPage } from "./pages/AgentsPage";
+import { PlacementPage } from "./pages/PlacementPage";
 import { LibraryDeckPage } from "./pages/LibraryDeckPage";
 import { LibraryPage } from "./pages/LibraryPage";
 import { PlayPage } from "./pages/PlayPage";
@@ -54,6 +55,7 @@ export function App() {
             <Route path="/admin/library" element={<LibraryPage />} />
             <Route path="/admin/library/:id" element={<LibraryDeckPage />} />
             <Route path="/admin/agents" element={<AgentsPage />} />
+            <Route path="/admin/placement" element={<PlacementPage />} />
             <Route path="*" element={<Landing app={<DecksPage />} />} />
           </Routes>
           <Footer />

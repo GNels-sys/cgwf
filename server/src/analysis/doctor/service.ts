@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyBaseLogger } from "fastify";
-import { isBracket, normalizeName, type Bracket, type DeckAnalysis, type DoctorResponse } from "@cgwf/shared";
+import { isBracket, normalizeName, placementFit, type Bracket, type DeckAnalysis, type DoctorResponse, type PlacementOption } from "@cgwf/shared";
 import type { DbHandle } from "../../db/index.js";
 import { cards, deckCards, deckDoctorPrefs, decks, libraryDeckCards, libraryDecks, type CardRow } from "../../db/schema.js";
 import type { EdhrecClient } from "../../library/edhrec/client.js";
@@ -97,8 +97,8 @@ export class DeckDoctor {
     return (await this.build(t, opts)).response;
   }
 
-  /** The full picture behind a Doctor answer (the AI upgrade reuses it as its evidence). */
-  async build(t: DoctorTarget, opts: { target?: number | undefined; allowHigher?: boolean | undefined } = {}): Promise<DoctorContext> {
+  /** Everything the Doctor and card placement read about one deck: cards, analysis, combos, EDHREC, choices. */
+  private async prepare(t: DoctorTarget, opts: { target?: number | undefined }) {
     const deck = this.loadDeck(t);
     if (!deck) throw new DoctorError("deck not found", 404);
     const deckCardsList: DoctorDeckCard[] = deck.lines.map((l) => ({
@@ -112,7 +112,6 @@ export class DeckDoctor {
     const analyzed = await this.d.analyzer.analyze(deckCardsList, { combos: "cached" });
     const suggested = analyzed.analysis.suggested;
     const target: Bracket = isBracket(opts.target) ? opts.target : suggested;
-    const allowHigher = Boolean(opts.allowHigher);
     const combos = analyzed.analysis.combosStatus === "skipped" ? null : this.d.analyzer.cachedCombos(deckCardsList);
 
     const commanders = deckCardsList.filter((c) => c.board === "commander").map((c) => c.name);
@@ -126,6 +125,14 @@ export class DeckDoctor {
       slug: null,
       message: err instanceof Error ? err.message : String(err),
     }));
+    const label = commanders.map((c) => (c.split(" // ")[0] ?? c).split(",")[0]!.trim()).join(" + ") || "this deck";
+    return { deck, deckCardsList, analyzed, suggested, target, combos, commanders, identity, inDeck, prefs, dismissed, edhrec, label };
+  }
+
+  /** The full picture behind a Doctor answer (the AI upgrade reuses it as its evidence). */
+  async build(t: DoctorTarget, opts: { target?: number | undefined; allowHigher?: boolean | undefined } = {}): Promise<DoctorContext> {
+    const { deck, deckCardsList, analyzed, suggested, target, combos, commanders, identity, inDeck, prefs, dismissed, edhrec, label } = await this.prepare(t, opts);
+    const allowHigher = Boolean(opts.allowHigher);
 
     // Candidate names: EDHREC's list, then one-card-away combos when the target bracket may hold them
     // (the planner still replays each through the bracket rules).
@@ -145,7 +152,6 @@ export class DeckDoctor {
     }
 
     const candidates = this.resolveCandidates(names, { identity, inDeck, dismissed });
-    const label = commanders.map((c) => (c.split(" // ")[0] ?? c).split(",")[0]!.trim()).join(" + ") || "this deck";
     const plan = planSwaps({
       deck: deckCardsList,
       candidates,
@@ -206,6 +212,97 @@ export class DeckDoctor {
       edhrecCards: edhrec.status === "ok" ? edhrec.data.cards : null,
       commanderLabel: label,
     };
+  }
+
+  /**
+   * Card placement (2026-11-11): where would each of these cards go in this one deck? Every card the deck can
+   * legally take is scored as an add in ONE planner run (so two cards placed in the same deck get different
+   * cuts), with no score floor and weak swaps kept; the bracket check flags a raise instead of hiding it. Cards
+   * the deck cannot take come back in `skipped` with the reason.
+   */
+  async placeInDeck(userId: string, deckId: string, rows: CardRow[]): Promise<{
+    deck: { deckId: string; name: string; commanders: string[]; targetBracket: Bracket; edhrec: "ok" | "missing" | "unavailable"; message: string | null };
+    options: Map<string, PlacementOption>;
+    skipped: Map<string, string>;
+  }> {
+    const p = await this.prepare({ kind: "own", deckId, userId }, {});
+    const info = {
+      deckId,
+      name: p.deck.name,
+      commanders: p.commanders,
+      targetBracket: p.target,
+      edhrec: p.edhrec.status,
+      message: p.edhrec.status === "ok" ? null : p.edhrec.message,
+    };
+    const options = new Map<string, PlacementOption>();
+    const skipped = new Map<string, string>();
+    if (p.commanders.length === 0) {
+      for (const r of rows) if (r.oracleId) skipped.set(r.oracleId, "This deck has no commander marked.");
+      return { deck: info, options, skipped };
+    }
+    const colours = [...p.identity].join("") || "colourless";
+    const deckNames = new Set(p.deckCardsList.map((c) => c.name));
+    const candidates: DoctorCandidate[] = [];
+    for (const r of rows) {
+      if (!r.oracleId) continue;
+      if (!(r.colorIdentity as string[]).every((c) => p.identity.has(c))) {
+        skipped.set(r.oracleId, `Outside ${p.label}'s colours (${colours}).`);
+        continue;
+      }
+      if (p.inDeck.has(r.oracleId) || p.inDeck.has(normalizeName(r.name))) {
+        skipped.set(r.oracleId, "Already in this deck.");
+        continue;
+      }
+      if (p.dismissed.has(r.oracleId)) {
+        skipped.set(r.oracleId, "You marked it \"not interested\" for this deck.");
+        continue;
+      }
+      const completes = (p.combos?.almostIncluded ?? []).filter((v) => {
+        if (v.status && v.status !== "OK") return false;
+        const missing = v.uses.map((u) => u.card.name).filter((n) => !deckNames.has(n));
+        return missing.length === 1 && missing[0] === r.name;
+      });
+      candidates.push({ ...fromRow(r, 1, "main"), cardId: r.id, oracleId: r.oracleId, faceCount: faceCount(r), sources: completes.length ? ["combo"] : ["edhrec"], completes });
+    }
+    if (candidates.length === 0) return { deck: info, options, skipped };
+    const plan = planSwaps({
+      deck: p.deckCardsList,
+      candidates,
+      edhrec: p.edhrec.status === "ok" ? p.edhrec.data.cards : null,
+      commanderLabel: p.label,
+      target: p.target,
+      allowHigher: true,
+      gameChangers: loadGameChangers(),
+      combos: p.combos as SpellbookResults | null,
+      keep: new Set(p.prefs.keep.map((x) => x.oracleId)),
+      dismissed: p.dismissed,
+      limit: candidates.length,
+      minAddScore: 0,
+      keepNonPositive: true,
+    });
+    for (const s of plan.swaps) {
+      if (!s.add.oracleId) continue;
+      const addScore = s.addScore ?? 0;
+      options.set(s.add.oracleId, {
+        deckId,
+        deckName: p.deck.name,
+        commanders: p.commanders,
+        fit: placementFit(addScore, s.score),
+        score: s.score,
+        addScore,
+        synergy: s.add.synergy,
+        inclusion: s.add.inclusion,
+        role: s.role,
+        roles: s.add.roles,
+        reason: s.reason.replace(/^Fits the deck\./, `EDHREC does not list it for ${p.label}.`),
+        combos: s.combos,
+        cut: s.cut,
+        bracket: s.bracket,
+        targetBracket: p.target,
+      });
+    }
+    for (const c of candidates) if (!options.has(c.oracleId)) skipped.set(c.oracleId, "No card in this deck it could replace (lands only replace lands; kept and combo cards are never cut).");
+    return { deck: info, options, skipped };
   }
 
   /** Names -> real cards: default printing, paper, Commander-legal, inside the colour identity, not in the deck. */

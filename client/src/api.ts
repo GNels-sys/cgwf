@@ -1,4 +1,6 @@
 import type {
+  PlacementRequest,
+  PlacementResponse,
   DeckCardInput,
   PlayerDetailResponse,
   PlayersResponse,
@@ -180,6 +182,8 @@ export const api = {
     ai: (kind: "own" | "library", id: string) => request<DoctorAiState>(`/api/${kind === "own" ? "decks" : "library-decks"}/${encodeURIComponent(id)}/doctor/ai`),
     aiStart: (kind: "own" | "library", id: string, body: DoctorAiStartRequest) => request<DoctorAiState>(`/api/${kind === "own" ? "decks" : "library-decks"}/${encodeURIComponent(id)}/doctor/ai`, { json: body }),
     aiUsage: () => request<DoctorAiUsage>("/api/admin/doctor-ai"),
+    /** Owner only while tested: which of my decks each pasted card fits best. */
+    place: (body: PlacementRequest) => request<PlacementResponse>("/api/placement", { json: body }),
   },
 
   /** Owner-only deck library (Phase 6). */

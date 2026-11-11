@@ -67,6 +67,8 @@ export interface DoctorSwap {
   combos: string[];
   bracket: { floorBefore: number; floorAfter: number; raises: boolean; note: string | null };
   score: number;
+  /** The add's own value before subtracting the cut (card placement uses it for the fit label). */
+  addScore?: number;
 }
 
 export interface DoctorResponse {

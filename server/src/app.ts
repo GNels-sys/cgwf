@@ -177,7 +177,7 @@ export async function buildApp(opts: BuildOptions = {}): Promise<AppContext> {
   const doctor = new DeckDoctor({ handle, index, analyzer, edhrec: edhrecClient, singles, log: app.log });
   const doctorLlm = opts.doctorLlm !== undefined ? opts.doctorLlm : config.anthropicApiKey ? new AnthropicDoctorLlm(config.doctorModel, config.anthropicApiKey, config.anthropicWorkspaceId) : null;
   const doctorAi = new DoctorAi({ handle, index, doctor, llm: doctorLlm, enabled: opts.doctorAiEnabled, log: app.log, caps: opts.doctorCaps });
-  registerDoctorRoutes(app, { handle, doctor, ai: doctorAi });
+  registerDoctorRoutes(app, { handle, index, doctor, ai: doctorAi });
   registerLibraryRoutes(app, { handle, library, precons, edhrec, coverage: libraryCoverage });
   registerStatsRoutes(app, { handle, analyzer, library });
   registerAgentRoutes(app, { handle, agents, roomsManager });
