@@ -5,6 +5,7 @@
 //
 //   node engine/spike/client.mjs [ws://localhost:8081] [--token T] [--seed 42] [--name Georgie]
 //                                [--humans 1] [--concede-after-turn N] [--quiet] [--dump-dir DIR]
+//                                [--decks DIR]   (default engine/spike/decks; the first four .json files)
 //
 // Policy: play a land when offered; cast at most two spells per step (cheapest first, never
 // activated abilities); attack the lowest-life opponent with everything that has power; block
@@ -32,8 +33,9 @@ const quiet = args.includes("--quiet");
 const dumpDir = opt("dump-dir", null);
 const gameId = `spike-${Date.now()}`;
 
-const deckFiles = readdirSync(join(here, "decks")).filter((f) => f.endsWith(".json")).sort().slice(0, 4);
-const decks = deckFiles.map((f) => JSON.parse(readFileSync(join(here, "decks", f), "utf8")));
+const deckDir = opt("decks", join(here, "decks"));
+const deckFiles = readdirSync(deckDir).filter((f) => f.endsWith(".json")).sort().slice(0, 4);
+const decks = deckFiles.map((f) => JSON.parse(readFileSync(join(deckDir, f), "utf8")));
 
 const stats = { prompts: {}, landsPlayed: 0, spellsCast: 0, attacksDeclared: 0, blocksDeclared: 0, states: 0, logs: 0, errors: [], startedAt: Date.now(), firstPromptMs: null };
 const castPerStep = new Map();
@@ -104,6 +106,9 @@ function answer(m) {
     case "chooseMany": return { options: (m.options ?? []).slice(0, Math.max(0, m.min ?? 0)).map((o) => o.index) };
     case "confirm": return { confirm: true };
     case "mulligan": return { keep: true };
+    case "mode": return { modes: (m.modes ?? []).slice(0, Math.max(1, m.min ?? 1)).map((x) => x.index) };
+    case "number": return { value: m.min ?? 0 };
+    case "assign": { const n = (m.targets ?? []).length; return { amounts: Array.from({ length: n }, (_, i) => (i === 0 ? m.total ?? 0 : 0)) }; }
     default: return {};
   }
 }

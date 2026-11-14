@@ -1688,8 +1688,9 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   the open prompt, classic actions/events are hidden, life is read-only, concede goes through
   `{t:"concede"}`; `PhaseStrip` shows "Waiting for X" and disables step buttons.
 - **Run it locally.** Engine: see `engine/README.md` (JDK 21 + Maven portable zips in
-  `C:/Openclaw/tools`, Forge clone at `C:/Openclaw/forge`); `java -jar engine/target/cgwf-engine.jar
-  serve --assets C:/Openclaw/forge/forge-gui --port 8084` with `ENGINE_TOKEN=testtoken`. Server:
+  `C:/Openclaw/tools`, Forge 2.0.16 clone at `C:/Openclaw/forge-2.0.16`; the older `C:/Openclaw/forge` is 2.0.15);
+  `java -jar engine/target/cgwf-engine.jar serve --assets C:/Openclaw/forge-2.0.16/forge-gui --port 8084` with
+  `ENGINE_TOKEN=testtoken`. Server:
   `.env` with `ENGINE_URL=ws://localhost:8084` and `ENGINE_TOKEN=testtoken`. A second human for
   solo testing: `node scripts/engine-bot.mjs http://localhost:8093 <code> Blair 1` (registers a
   profile with a legal Krenko + 99 Mountains deck, sits down, answers every prompt). Note that
@@ -1697,8 +1698,21 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
 - **Bumping Forge.** Change the tag in `engine/pom.xml` (`forge.version`), `engine/Dockerfile`
   (`FORGE_TAG`) and `.github/workflows/ci.yml`; rebuild the four modules locally (README);
   run `mvn -Dforge.assets=... package` (the audit) and `node engine/spike/client.mjs` (four
-  precons to completion); redeploy `cgwf-engine` from `engine/` with
+  precons to completion; `--decks DIR` plays other deck files); redeploy `cgwf-engine` from `engine/` with
   `fly deploy --remote-only --ha=false`, then `fly machine start` if it comes up stopped.
+- **New sets need a Forge release (2026-11-14, Star Trek).** Owner report: Star Trek cards (TRK + TRC, released
+  2026-11-13) "aren't working as desired" in games. Forge ships a set's scripts in `res/cardsfolder/upcoming/`
+  from spoilers on, so the pinned 2.0.15 (2026-09-28) had preview-time scripts for 104 of the 105 new cards; 10
+  were corrected before release (70,000 Light-Years from Home put the land onto the battlefield instead of into
+  the hand; Cantankerous Captain could pump any creature; La'An Noonien-Singh was a 3/3 with menace instead of a
+  4/3; Seven of Nine and Salt Vampire drew / exiled wrongly; stun counters were spelled "Stun") and Borg Queen,
+  Perfection Manifest did not exist under its printed name (a deck with her cannot start an engine table). Bumped
+  to **forge-2.0.16** (2026-11-11): every Star Trek card resolves to its own set, API drift was one new
+  `IGuiBase.getUserAgent()` and six new `PlayerController` methods (Un-set stickers left to the AI, between-game
+  sideboarding and a team-play helper allow-listed; `docs/FORGE-ENGINE.md` 16.4/16.5). `StarTrekCardsTest`
+  (`engine/src/test/resources/star-trek-cards.tsv`) checks every card resolves and the corrected scripts are the
+  ones loaded. **After each new set's release**: check the set against the pinned Forge (a script in `upcoming/`
+  is a preview and may be wrong) and bump to the first Forge release dated after the set's release.
 
 ## Deck statistics: game results, test games, closing tables (2026-10-19)
 

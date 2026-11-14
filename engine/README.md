@@ -71,7 +71,7 @@ installer), so the four GUI-less modules are built from source.
 
 ```bash
 # one-time: Forge at the pinned tag (~160 MB checkout, ~3.5 min build)
-git clone --depth 1 --branch forge-2.0.15 https://github.com/Card-Forge/forge.git C:/Openclaw/forge
+git clone --depth 1 --branch forge-2.0.16 https://github.com/Card-Forge/forge.git C:/Openclaw/forge-2.0.16
 export JAVA_HOME=/c/Openclaw/tools/jdk-21.0.12.1+1
 export PATH="$JAVA_HOME/bin:/c/Openclaw/tools/apache-maven-3.9.16/bin:$PATH"
 cd /c/Openclaw/forge && mvn -B -pl forge-core,forge-game,forge-ai,forge-gui -am -DskipTests -Dcheckstyle.skip -Dmaven.javadoc.skip=true install

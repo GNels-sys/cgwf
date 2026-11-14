@@ -15,7 +15,7 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Pinned Forge release tag (forge-${forge.version}); built from source, see README. -->
-    <forge.version>2.0.15</forge.version>
+    <forge.version>2.0.16</forge.version>
     <!-- Path to forge-gui (res/cardsfolder lives under it); the hidden-information test needs it. -->
     <forge.assets>${env.FORGE_ASSETS}</forge.assets>
   </properties>

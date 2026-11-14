@@ -26,7 +26,7 @@ import java.util.Map;
  * Forge prints to System.out; everything of ours goes to stderr except the bench JSON report.
  */
 public final class Main {
-    public static final String FORGE_VERSION = "2.0.15";
+    public static final String FORGE_VERSION = "2.0.16";
 
     private Main() { }
 

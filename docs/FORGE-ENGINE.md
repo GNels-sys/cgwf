@@ -453,6 +453,8 @@ to that seat only".
 | `chooseSingleCardFace` (predicate) | only the human controller's own name picker calls it; the bridge's `chooseCardName` replaces that picker |
 | `orderBlockers`, `orderBlocker`, `orderAttackers` | damage assignment order is gone from the rules (Foundations); `GameRules.orderCombatants` is false, so Forge never calls them; damage itself is `assignCombatDamage` (routed) |
 | `sideboard` | between games of a match only; CGwF plays one game |
+| `sideboardsByItself`, `getSideboardingReport` (Forge 2.0.16) | between-game sideboarding and its log lines; CGwF plays one game |
+| `playedByTeammate` (Forge 2.0.16) | a final helper of trigger ordering for team games; tables are free-for-all |
 | `chooseCardsYouWonToAddToDeck`, `revealAnte` | ante, not played |
 | `choosePDRollToIgnore` | planar die, Planechase not enabled |
 | `chooseStartingHand` | only Backup Plan (a Conspiracy card, never in a deck) makes extra opening hands |
@@ -463,4 +465,5 @@ to that seat only".
 | --- | --- |
 | `applyManaToCost`, `chooseManaFromPool`, `specifyManaCombo` | mana payment is automatic by the owner's choice (Stage 2 M5, option 1); "Pay with" steers which sources are tapped first |
 | `chooseSector` (3 args), `chooseSprocket` (2 args), `chooseContraptionsToCrank` | Un-set Attractions and Contraptions; not Commander-legal |
+| `chooseSticker`, `chooseStickerNamePosition`, `chooseCardToKeepStickers` (Forge 2.0.16) | Un-set stickers; sticker sheets are not part of CGwF decks |
 | `isAI` | stays true. Forge branches on it only for engine-internal paths: library searches pick one card at a time (still asked of the human), the 999-actions-in-one-priority loop guard, AI-unplayable cards left out of random pools (Booster Tutor-style "random card" effects), sideboarding, Camouflage. False would send Forge down GUI-only paths with no GUI attached |

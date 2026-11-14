@@ -33,6 +33,8 @@ public final class HeadlessGui implements IGuiBase {
     @Override public boolean isRunningOnDesktop() { return true; }
     @Override public boolean isLibgdxPort() { return false; }
     @Override public String getCurrentVersion() { return "cgwf-engine"; }
+    /** Forge 2.0.16+: only its download services read it, and the engine never downloads. */
+    @Override public String getUserAgent() { return "cgwf-engine/" + Main.FORGE_VERSION; }
     @Override public void invokeInEdtNow(Runnable r) { r.run(); }
     @Override public void invokeInEdtLater(Runnable r) { r.run(); }
     @Override public void invokeInEdtAndWait(Runnable r) { r.run(); }

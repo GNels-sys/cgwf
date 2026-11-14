@@ -2,7 +2,7 @@
 # Stage 1 builds Forge (pinned tag) and this module; stage 2 is a JRE with the jar and the card data.
 # Forge is cloned at build time (shallow, one tag) instead of being vendored: the repo is ~1 GB.
 
-ARG FORGE_TAG=forge-2.0.15
+ARG FORGE_TAG=forge-2.0.16
 
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 ARG FORGE_TAG
