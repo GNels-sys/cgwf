@@ -89,6 +89,10 @@ class BridgeCoverageTest {
 
         // ---- unreachable in a CGwF game
         ALLOWED.put("sideboard(Deck, GameType, String)", c("between games of a match only; CGwF plays one game (gamesPerMatch 1)"));
+        // Forge 2.0.16 (2026-11-14 bump)
+        ALLOWED.put("sideboardsByItself()", c("between games of a match only (Match asks AI players); CGwF plays one game"));
+        ALLOWED.put("getSideboardingReport()", c("log lines about between-game sideboarding; CGwF plays one game"));
+        ALLOWED.put("playedByTeammate(SpellAbility)", c("final helper of Forge's trigger ordering for team games; CGwF tables are free-for-all"));
         ALLOWED.put("chooseCardsYouWonToAddToDeck(List)", c("ante; not played in CGwF"));
         ALLOWED.put("revealAnte(String, Multimap)", c("ante; not played in CGwF"));
         ALLOWED.put("choosePDRollToIgnore(List)", c("planar die; Planechase is not enabled"));
@@ -101,6 +105,9 @@ class BridgeCoverageTest {
         ALLOWED.put("chooseSector(Card, String, List)", d("Un-set Attractions/sectors: not Commander-legal"));
         ALLOWED.put("chooseSprocket(Card, List)", d("Un-set Contraptions: not Commander-legal"));
         ALLOWED.put("chooseContraptionsToCrank(List)", d("Un-set Contraptions: not Commander-legal"));
+        ALLOWED.put("chooseSticker(List, Card, SpellAbility, boolean)", d("Un-set stickers (Forge 2.0.16): sticker sheets are not part of CGwF decks"));
+        ALLOWED.put("chooseStickerNamePosition(Sticker, Card)", d("Un-set stickers (Forge 2.0.16): where a name sticker goes"));
+        ALLOWED.put("chooseCardToKeepStickers(CardCollectionView)", d("Un-set stickers (Forge 2.0.16): which card keeps its stickers"));
         ALLOWED.put("isAI()", d("stays true: Forge only branches on it for engine-internal paths (one-at-a-time library picks, the 999-action loop guard, AI-unplayable cards left out of random pools, sideboarding); false would take GUI-only paths with no GUI attached"));
 
     }
