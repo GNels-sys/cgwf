@@ -16,6 +16,7 @@ import forge.game.GameEntity;
 import forge.game.card.Card;
 import forge.game.card.CardCollection;
 import forge.game.card.CardCollectionView;
+import forge.game.combat.Combat;
 import forge.card.mana.ManaCost;
 import forge.card.mana.ManaCostParser;
 import forge.game.cost.Cost;
@@ -424,6 +425,114 @@ class PromptRoundTripTest {
         assertEquals("text", p.getAsJsonArray("items").get(0).getAsJsonObject().get("kind").getAsString());
         // the seat wants sas[1] to resolve first, so Forge must put it on the stack LAST
         assertEquals(List.of(sas.get(0), sas.get(1)), ordered);
+    }
+
+    // ------------------------------------------------------------------ blocks (owner report 2026-11-17)
+
+    private static Card theirs(String name) {
+        Card c = Card.fromPaperCard(StaticData.instance().getCommonCards().getCard(name), opp);
+        opp.getZone(ZoneType.Battlefield).add(c);
+        return c;
+    }
+
+    /** My standing creatures are tapped for the test, so only the ones it adds can block. */
+    private static List<Card> tapMyCreatures() {
+        List<Card> tapped = new ArrayList<>();
+        for (Card c : me.getCreaturesInPlay()) if (!c.isTapped()) { c.setTapped(true); tapped.add(c); }
+        return tapped;
+    }
+
+    @Test
+    void blockersNobodyCanBlockSaysWhyInsteadOfSilence() {
+        List<Card> tapped = tapMyCreatures();
+        Card herald = theirs("Herald of Hoofbeats");
+        Card bears = fresh("Grizzly Bears", ZoneType.Battlefield);
+        Card raider = fresh("Goblin Raider", ZoneType.Battlefield);
+        try {
+            Combat combat = new Combat(opp);
+            combat.addAttacker(herald, me);
+            int asked = prompts.size();
+            int told = notices.size();
+            ctl.declareBlockers(me, combat);
+            assertEquals(asked, prompts.size(), "no creature can block, so there is nothing to ask");
+            assertEquals(told + 1, notices.size(), "but the seat is told why");
+            JsonObject n = notices.get(notices.size() - 1);
+            assertEquals("You could not block", n.get("title").getAsString());
+            String text = n.get("text").getAsString();
+            assertTrue(text.contains("Herald of Hoofbeats has horsemanship (only creatures with horsemanship can block it), so none of your untapped creatures can block it."), text);
+            assertTrue(text.contains("Goblin Raider can't block right now"), text);
+            assertEquals("Herald of Hoofbeats", n.getAsJsonArray("source").get(0).getAsJsonObject().get("name").getAsString());
+            // with no untapped creature there is nothing to explain
+            bears.setTapped(true);
+            raider.setTapped(true);
+            ctl.declareBlockers(me, new Combat(opp) {{ addAttacker(herald, me); }});
+            assertEquals(told + 1, notices.size(), "every creature tapped: no notice");
+        } finally {
+            drop(herald, bears, raider);
+            for (Card c : tapped) c.setTapped(false);
+        }
+    }
+
+    @Test
+    void blockersPromptNamesTheAttackersNobodyCanBlock() {
+        List<Card> tapped = tapMyCreatures();
+        Card herald = theirs("Herald of Hoofbeats");
+        Card giant = theirs("Hill Giant");
+        Card bears = fresh("Grizzly Bears", ZoneType.Battlefield);
+        try {
+            Combat combat = new Combat(opp);
+            combat.addAttacker(herald, me);
+            combat.addAttacker(giant, me);
+            script.add(p -> {
+                JsonObject blk = new JsonObject();
+                blk.addProperty("blockerId", bears.getId());
+                blk.addProperty("attackerId", giant.getId());
+                JsonArray blocks = new JsonArray();
+                blocks.add(blk);
+                return answer("blocks", blocks);
+            });
+            ctl.declareBlockers(me, combat);
+            JsonObject p = next("blockers");
+            assertEquals(2, p.getAsJsonArray("attackers").size());
+            assertEquals(1, p.getAsJsonArray("blockers").size());
+            String notes = p.getAsJsonArray("notes").toString();
+            assertTrue(notes.contains("Herald of Hoofbeats has horsemanship"), notes);
+            assertFalse(notes.contains("Hill Giant"), "an attacker with a possible blocker is not listed: " + notes);
+            assertTrue(combat.getBlockers(giant).contains(bears), "the block was declared");
+        } finally {
+            drop(herald, giant, bears);
+            for (Card c : tapped) c.setTapped(false);
+        }
+    }
+
+    @Test
+    void blockersAnIllegalBlockIsAskedAgainWithTheReason() {
+        List<Card> tapped = tapMyCreatures();
+        Card brute = theirs("Boggart Brute"); // menace
+        Card bears = fresh("Grizzly Bears", ZoneType.Battlefield);
+        Card runeclaw = fresh("Runeclaw Bear", ZoneType.Battlefield);
+        try {
+            Combat combat = new Combat(opp);
+            combat.addAttacker(brute, me);
+            java.util.function.BiFunction<Card, Card, JsonObject> block = (b, a) -> {
+                JsonObject blk = new JsonObject();
+                blk.addProperty("blockerId", b.getId());
+                blk.addProperty("attackerId", a.getId());
+                return blk;
+            };
+            script.add(p -> { JsonArray blocks = new JsonArray(); blocks.add(block.apply(bears, brute)); return answer("blocks", blocks); });
+            script.add(p -> { JsonArray blocks = new JsonArray(); blocks.add(block.apply(bears, brute)); blocks.add(block.apply(runeclaw, brute)); return answer("blocks", blocks); });
+            int asked = prompts.size();
+            int errs = errors.size();
+            ctl.declareBlockers(me, combat);
+            assertEquals(asked + 2, prompts.size(), "one blocker on a creature with menace: asked again");
+            assertEquals(errs + 1, errors.size());
+            assertTrue(errors.get(errors.size() - 1).toString().contains("Declare your blocks again"), errors.get(errors.size() - 1).toString());
+            assertEquals(2, combat.getBlockers(brute).size(), "the second answer (two blockers) stands");
+        } finally {
+            drop(brute, bears, runeclaw);
+            for (Card c : tapped) c.setTapped(false);
+        }
     }
 
     // ------------------------------------------------------------------ damage

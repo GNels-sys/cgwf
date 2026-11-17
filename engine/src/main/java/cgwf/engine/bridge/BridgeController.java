@@ -583,8 +583,10 @@ public final class BridgeController extends PlayerControllerAi {
         }
         if (attackers.isEmpty()) return;
         List<Card> blockers = new ArrayList<>();
+        List<Card> untapped = new ArrayList<>();
         JsonArray bj = new JsonArray();
         for (Card b : defender.getCreaturesInPlay()) {
+            if (!b.isTapped() && !b.isPhasedOut()) untapped.add(b);
             if (!CombatUtil.canBlock(b, combat)) continue;
             JsonArray can = new JsonArray();
             for (Card att : attackers) if (CombatUtil.canBlock(att, b, combat)) can.add(att.getId());
@@ -594,8 +596,20 @@ public final class BridgeController extends PlayerControllerAi {
             bj.add(cj);
             blockers.add(b);
         }
-        if (blockers.isEmpty()) return;
-        JsonObject p = prompt("blockers", "Declare blockers");
+        // Owner report 2026-11-17 (a Knights deck with Herald of Hoofbeats: every Knight has horsemanship): the
+        // seat was never asked to block and never told why. The rules were right; the reason now travels.
+        List<String> notes = blockNotes(attackers, untapped, combat);
+        if (blockers.isEmpty()) {
+            if (!notes.isEmpty()) {
+                JsonObject n = notice("info", "You could not block");
+                n.addProperty("text", String.join(" ", notes));
+                JsonArray src = new JsonArray();
+                src.add(SeatView.card(attackers.get(0), player));
+                n.add("source", src);
+                session.send(n);
+            }
+            return;
+        }
         JsonArray aj = new JsonArray();
         for (Card att : attackers) {
             JsonObject j = SeatView.card(att, player);
@@ -603,22 +617,87 @@ public final class BridgeController extends PlayerControllerAi {
             if (d != null) j.add("attacking", SeatView.entityRef(d));
             aj.add(j);
         }
-        p.add("attackers", aj);
-        p.add("blockers", bj);
-        JsonObject a = session.ask(p);
-        if (a == null) { super.declareBlockers(defender, combat); return; }
-        if (!a.has("blocks") || !a.get("blocks").isJsonArray()) return;
-        for (JsonElement e : a.getAsJsonArray("blocks")) {
-            JsonObject blk = e.getAsJsonObject();
-            Card b = byId(blockers, blk.get("blockerId").getAsInt());
-            Card att = byId(attackers, blk.get("attackerId").getAsInt());
-            if (b != null && att != null && CombatUtil.canBlock(att, b, combat)) combat.addBlocker(att, b);
-        }
-        String problem = CombatUtil.validateBlocks(combat, defender);
-        if (problem != null) {
-            session.sendError("blocks rejected: " + problem + " (no blocks declared)");
+        JsonArray nj = new JsonArray();
+        for (String note : notes) nj.add(note);
+        // An illegal set of blocks (one blocker on a creature with menace) is asked again with the reason, like
+        // every other illegal answer; it used to end the question with no blocks at all.
+        for (int attempt = 0; attempt < MAX_BLOCK_ATTEMPTS; attempt++) {
+            JsonObject p = prompt("blockers", "Declare blockers");
+            p.add("attackers", aj);
+            p.add("blockers", bj);
+            if (!nj.isEmpty()) p.add("notes", nj);
+            JsonObject a = session.ask(p);
+            if (a == null) { super.declareBlockers(defender, combat); return; }
+            if (!a.has("blocks") || !a.get("blocks").isJsonArray()) return;
+            for (JsonElement e : a.getAsJsonArray("blocks")) {
+                JsonObject blk = e.getAsJsonObject();
+                Card b = byId(blockers, blk.get("blockerId").getAsInt());
+                Card att = byId(attackers, blk.get("attackerId").getAsInt());
+                if (b != null && att != null && CombatUtil.canBlock(att, b, combat)) combat.addBlocker(att, b);
+            }
+            String problem = CombatUtil.validateBlocks(combat, defender);
+            if (problem == null) return;
             for (Card b : CardLists.filterControlledBy(combat.getAllBlockers(), defender)) combat.removeFromCombat(b);
+            boolean last = attempt == MAX_BLOCK_ATTEMPTS - 1;
+            session.sendError("blocks rejected: " + problem + (last ? " (no blocks declared)" : " Declare your blocks again."));
         }
+    }
+
+    private static final int MAX_BLOCK_ATTEMPTS = 3;
+
+    /**
+     * Why blocks are impossible, in plain words, for the blockers prompt and the "You could not block" notice:
+     * attackers that none of the seat's untapped creatures may block (with the evasion keyword that stops
+     * them), and untapped creatures that may not block at all. Empty when the seat has no untapped creature
+     * (nothing to explain) or every attacker has a possible blocker.
+     */
+    static List<String> blockNotes(List<Card> attackers, List<Card> untapped, Combat combat) {
+        List<String> notes = new ArrayList<>();
+        if (untapped.isEmpty()) return notes;
+        List<Card> able = new ArrayList<>();
+        List<String> idle = new ArrayList<>();
+        for (Card b : untapped) {
+            if (CombatUtil.canBlock(b, combat)) able.add(b);
+            else idle.add(b.getName());
+        }
+        if (!able.isEmpty()) {
+            Map<String, List<String>> byReason = new LinkedHashMap<>();
+            for (Card att : attackers) {
+                boolean any = false;
+                for (Card b : able) if (CombatUtil.canBlock(att, b, combat)) { any = true; break; }
+                if (!any) byReason.computeIfAbsent(evasionOf(att, able), k -> new ArrayList<>()).add(att.getName());
+            }
+            for (Map.Entry<String, List<String>> e : byReason.entrySet()) {
+                boolean one = e.getValue().size() == 1;
+                String names = nameList(e.getValue());
+                if (e.getKey().isEmpty()) notes.add("None of your untapped creatures can block " + names + ".");
+                else notes.add(names + (one ? " has " : " have ") + e.getKey() + ", so none of your untapped creatures can block " + (one ? "it" : "them") + ".");
+            }
+        }
+        if (!idle.isEmpty()) notes.add(nameList(idle) + " can't block right now (" + (idle.size() == 1 ? "its" : "their") + " own text or another card's effect says so).");
+        return notes;
+    }
+
+    /** The evasion keywords of an attacker that none of these possible blockers answers, each with its rule in brackets. */
+    private static String evasionOf(Card att, List<Card> able) {
+        List<String> out = new ArrayList<>();
+        if (att.hasKeyword(Keyword.FLYING) && able.stream().noneMatch(b -> b.hasKeyword(Keyword.FLYING) || b.hasKeyword(Keyword.REACH))) out.add("flying (only creatures with flying or reach can block it)");
+        if (att.hasKeyword(Keyword.HORSEMANSHIP) && able.stream().noneMatch(b -> b.hasKeyword(Keyword.HORSEMANSHIP))) out.add("horsemanship (only creatures with horsemanship can block it)");
+        if (att.hasKeyword(Keyword.SHADOW) && able.stream().noneMatch(b -> b.hasKeyword(Keyword.SHADOW))) out.add("shadow (only creatures with shadow can block it)");
+        if (att.hasKeyword(Keyword.FEAR) && able.stream().noneMatch(b -> b.isArtifact() || b.isBlack())) out.add("fear (only artifact or black creatures can block it)");
+        if (att.hasKeyword(Keyword.INTIMIDATE)) out.add("intimidate (only artifact creatures or creatures that share a colour with it can block it)");
+        if (att.hasKeyword(Keyword.SKULK) && able.stream().noneMatch(b -> b.getNetPower() <= att.getNetPower())) out.add("skulk (creatures with greater power can't block it)");
+        return String.join(" and ", out);
+    }
+
+    /** "A", "A and B", "A, B and C"; repeated names are counted ("Warrior Token (x3)"). */
+    private static String nameList(List<String> names) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (String n : names) counts.merge(n, 1, Integer::sum);
+        List<String> parts = new ArrayList<>();
+        for (Map.Entry<String, Integer> e : counts.entrySet()) parts.add(e.getValue() > 1 ? e.getKey() + " (x" + e.getValue() + ")" : e.getKey());
+        if (parts.size() == 1) return parts.get(0);
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
     }
 
     /** Trample, several blockers: how the attacker's damage is split. */

@@ -1713,6 +1713,35 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   (`engine/src/test/resources/star-trek-cards.tsv`) checks every card resolves and the corrected scripts are the
   ones loaded. **After each new set's release**: check the set against the pinned Forge (a script in `upcoming/`
   is a preview and may be wrong) and bump to the first Forge release dated after the set's release.
+- **Prepared spells and "why can't I block" (2026-11-17).** Owner report after room U4J6SK: "unable to cast
+  any of my prepared spells" (Stensian Sanguinist, Grave Researcher) and "blocking was disabled for some of my
+  creatures, forcing me to take damage". The game log showed the rules were right both times, and the screen
+  explained neither. Grave Researcher became prepared on turn 46 and its Reanimate WAS cast (plus a casualty
+  copy); two turns later the graveyard held fewer than three creature cards. Stensian Sanguinist never attacked
+  while it lived, so it never became prepared. The unblockable attackers were Knights under Herald of Hoofbeats
+  ("Other Knights you control have horsemanship"); the seat had no legal block, so no question was asked.
+  - **How Forge does prepare**: `AlterAttribute | Attributes$ Prepared` puts a token copy of the card in its
+    `PreparedSpell` state into the owner's EXILE with a may-play effect; casting it unprepares the creature
+    (`Card.isPrepared()`, `getPreparedSpell()`). So the priority option's card is the exiled copy, and before
+    this change its only sign on screen was a button named after the spell in the off-zone plays row.
+  - **Now**: `SeatView.addPrepare` sends `prepare {name, ready, cardId}` on the creature and `preparedBy` /
+    `preparedByName` on the exiled copy (public information); the relay maps them to `ViewCard.engine.prepare`
+    {name, ready, spellIid} and `.preparedBy`. Client `client/src/game/prepared.ts`: a prepared creature glows
+    when its spell is a priority option and a tap on it casts the spell (`optionsForCard`, `preparedCasters`),
+    its tile carries a "Prepared" chip, the card view says "Prepared. You may cast X ..." or "Not prepared. X
+    can be cast only while this creature is prepared ...", and the off-zone button reads "<creature>'s prepared
+    spell" instead of "Your exile".
+  - **Blocks**: `BridgeController.blockNotes` lists, in sentences, the attackers none of the seat's untapped
+    creatures may block, with the evasion keyword that stops them (flying, horsemanship, shadow, fear,
+    intimidate, skulk; a keyword is named only when none of the possible blockers answers it), and untapped
+    creatures that cannot block at all. They ride on the blockers prompt (`notes`, shown under the bar's
+    heading) and, when nothing can block so no question is asked, go out as a "You could not block" notice
+    for that seat. Nothing is said when the seat has no untapped creature. An illegal set of blocks (one
+    blocker on a creature with menace) is now asked again with Forge's reason, up to three times; it used to
+    end the question with no blocks declared.
+  - Tests: engine `PreparedSpellTest` (real games: Blazing Firesinger offered, cast, unprepared, the view's
+    fields; Grave Researcher prepared, cast, prepared again a turn later), `PromptRoundTripTest.blockers*`;
+    relay `server/src/engine/prepared.test.ts`; client `prepared.test.ts`.
 
 ## Deck statistics: game results, test games, closing tables (2026-10-19)
 

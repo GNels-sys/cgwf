@@ -106,7 +106,15 @@ export type EnginePrompt =
   /** `cancelLabel`: what Cancel means here ("Keep current targets" when a copy or redirect may choose new targets); default "Cancel". */
   | { kind: "targets"; promptId: number; title: string; ability: string; source: string | null; min: number; max: number; options: EngineOption[]; cancelLabel?: string | null }
   | { kind: "attackers"; promptId: number; title: string; candidates: EngineOptionCard[]; defenders: EngineEntityRef[] }
-  | { kind: "blockers"; promptId: number; title: string; attackers: EngineOptionCard[]; blockers: EngineOptionCard[] }
+  | {
+      kind: "blockers";
+      promptId: number;
+      title: string;
+      attackers: EngineOptionCard[];
+      blockers: EngineOptionCard[];
+      /** Why some blocks are impossible, in sentences ("X has horsemanship ..., so none of your untapped creatures can block it."). */
+      notes?: string[];
+    }
   | { kind: "choose"; promptId: number; title: string; optional: boolean; source: string | null; options: EngineOption[] }
   | { kind: "chooseMany"; promptId: number; title: string; min: number; max: number; source: string | null; options: EngineOption[]; reason?: string }
   /** Yes/no: optional costs ("pay 2 life?"), "you may" triggers, replacement effects, coin calls. `options` are the two button labels. */

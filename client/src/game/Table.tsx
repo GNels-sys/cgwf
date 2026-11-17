@@ -20,7 +20,8 @@ import { setAmbient, stopAmbient } from "./ambient";
 import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
 import { CardZoom } from "./CardZoom";
-import { playableHand, zoomOptions, ZoomActions } from "./ZoomActions";
+import { playableHand, ZoomActions } from "./ZoomActions";
+import { optionsForCard, preparedCasters } from "./prepared";
 import { CombatBar, attackTargets, colorOf, targetKey, type AttackTarget, type CombatMode } from "./CombatBar";
 import { DamageSheet } from "./DamageSheet";
 import { PhaseStrip } from "./PhaseStrip";
@@ -232,7 +233,12 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       setChainMin(false);
     }
   }, [chain, chainTop]);
-  const engineHighlights = useMemo(() => promptHighlights(prompt), [prompt]);
+  const engineHighlights = useMemo(() => {
+    const out = promptHighlights(prompt);
+    // a prepared creature glows for its spell (the copy itself waits in exile, where nothing glows)
+    for (const iid of preparedCasters(prompt, view)) out.add(iid);
+    return out;
+  }, [prompt, view]);
   const engineSelected = useMemo(() => {
     const out = new Set<string>();
     if (!prompt) return out;
@@ -252,7 +258,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       }
       switch (prompt.kind) {
         case "priority": {
-          const options = prompt.options.filter((o) => o.iid === card.iid);
+          const options = optionsForCard(prompt, card);
           if (options.length === 1) answerEngine({ promptId: prompt.promptId, option: options[0]!.index });
           else if (options.length > 1) setSheet({ kind: "engineAbilities", card, options });
           else setZoom(card);
@@ -455,7 +461,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   function zoomActions(card: ViewCard, done: () => void) {
     const hand = Boolean(mePlayer?.hand.cards.some((entry) => entry.iid === card.iid));
     if (engineMode) {
-      const options = zoomOptions(legalPrompt, card.iid);
+      const options = optionsForCard(legalPrompt, card);
       if (!hand && !options.length && !((card.printingId && printings[card.printingId]?.typeLine.includes("Planeswalker")) && card.owner === me)) return undefined;
       return <ZoomActions options={options} hand={hand} onPick={(index) => {
         // Use only this frame's prompt and options; the server validates again.
