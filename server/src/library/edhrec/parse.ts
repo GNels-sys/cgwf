@@ -6,7 +6,7 @@ import { identityKey } from "./identity.js";
  *       {name, slug, num_decks, rank?}; partner / background pairs are one entry "A // B".
  *   commanders/<slug>.json -> bracket_counts {"1".."5": decks}, container.json_dict.card
  *       {name, names[], color_identity[], num_decks}.
- *   average-decks/<slug>/<upgraded|optimized|cedh>.json -> deck {commander[], cards {Type: [[name, qty]]}},
+ *   average-decks/<slug>/<core|upgraded|optimized|cedh>.json -> deck {commander[], cards {Type: [[name, qty]]}},
  *       plus `archidekt` [{c: "c"|"m", q, u: scryfall id}] and `header`.
  * Anything missing or malformed returns null / [] instead of throwing, so one odd page never stops
  * an import.

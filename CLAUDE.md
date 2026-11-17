@@ -599,18 +599,36 @@ unit-tested in `analysis.test.ts` with real Oracle text (`fixtures.ts`):
 
 ### EDHREC average decks (2026-10-18)
 
-175 agent-eligible library decks from EDHREC: 75 Bracket 3 (EDHREC "upgraded"), 75 Bracket 4
-("optimized"), 25 Bracket 5 ("cedh"). Code: `server/src/library/edhrec/`. Run:
-`node server/dist/cli.js import-edhrec [--dry-run] [--refresh] [--recheck-coverage]` (asks the running
-server over loopback, like `import-precons`, prints progress and the final report; without a server it
-runs in-process with no engine, so coverage stays unchecked). Owner route: `POST /api/library/import-edhrec`.
+Library decks from EDHREC's average decks. First run (2026-10-18): 75 Bracket 3 (EDHREC "upgraded"), 75
+Bracket 4 ("optimized"), 25 Bracket 5 ("cedh"). **Since 2026-11-17** (owner: "a large amount of decks ready to
+play against to differentiate the play groups"): 150 each for **Bracket 2 (EDHREC "core")**, Bracket 3 and
+Bracket 4, cEDH unchanged at 25 (`DEFAULT_TARGETS`). Code: `server/src/library/edhrec/`. Run:
+`node server/dist/cli.js import-edhrec [--dry-run] [--refresh] [--recheck-coverage] [--targets
+2=150,3=150,4=150,5=25] [--depth 40] [--max-age-days 30]` (asks the running server over loopback, like
+`import-precons`, prints progress and the final report; without a server it runs in-process with no engine,
+so coverage stays unchecked). Owner route: `POST /api/library/import-edhrec` (same options in the body).
+
+- **The 2026-11-17 changes.** `EdhrecBracket` is 2 | 3 | 4 | 5: Bracket 2 reads `average-decks/<slug>/core`
+  (same shape as the others, checked that day), is stored as bracket 2 and named `<Commander> — Core (EDHREC
+  average)`, key `edhrec:<slug>:core`. Brackets 3, 4 and 5 are still chosen first and in that order;
+  **Bracket 2 is chosen last and may reuse at most a third of the commanders already taken at Bracket 3 or
+  4**, so the brackets mostly field different opponents. `rulesFor(bracket, target)` grows the caps tuned at
+  75 in step with the target (150: 8 per colour identity, 24 per primary archetype, 6 per win condition); a
+  target of 0 leaves a bracket out. The pool reads the top **40** of each colour-identity list (was 20).
+  Cached EDHREC answers older than **30 days** are fetched again (the ranked lists after 7; `--max-age-days 0`
+  = never), so a later run sees new commanders and current averages; answers cached before `fetchedAt` was
+  recorded are dated by their file. Earlier imports the new selection drops are still kept and stay playable.
+  The site's machine stops itself when no visitor is connected, so **keep a browser tab on the site (or poll
+  `/api/features`) while a long import runs**. A full run with a cold cache is about 1,300 commander pages, 35
+  lists and several hundred average decks at one request a second: 35 to 45 minutes, then Commander Spellbook
+  and the rules-engine check.
 
 - **Source and terms.** EDHREC's public JSON at `https://json.edhrec.com/pages/` (verified 2026-10-18):
   `commanders/{week|month|year}.json` and the 32 colour-identity lists (`commanders/<slug>.json`, slugs
   in `identity.ts`: mono-white ... colorless, azorius ... simic, esper ... temur, yore-tiller, glint-eye,
   dune-brood, ink-treader, witch-maw, five-color) give the candidate pool (top 100 each; partner and
   background pairs are one entry "A // B"); `commanders/<slug>.json` carries `bracket_counts` {"1".."5"}
-  (decks per bracket) and `container.json_dict.card.color_identity`; `average-decks/<slug>/<upgraded|
+  (decks per bracket) and `container.json_dict.card.color_identity`; `average-decks/<slug>/<core|upgraded|
   optimized|cedh>.json` is the bracket's average deck (`deck.commander[]`, `deck.cards {Type: [[name,
   qty]]}`, `archidekt [{c, q, u: Scryfall id}]`). Bracket-ranked lists do not exist (403); a 403 means an
   unknown path. Reference: the owner's skill `~/.claude/skills/mtg-edhrec-fetch`.

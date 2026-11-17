@@ -178,7 +178,7 @@ export function isLibrarySource(v: unknown): v is LibrarySource {
 export interface LibraryImportInfo {
   provider: "edhrec";
   slug: string;
-  edhrecBracket: "upgraded" | "optimized" | "cedh";
+  edhrecBracket: "core" | "upgraded" | "optimized" | "cedh";
   /** Decks EDHREC averaged for this commander at this bracket when it was imported. */
   decks: number;
   /** Rank by that deck count among the import's candidates. */

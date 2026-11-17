@@ -14,6 +14,7 @@ const { EdhrecClient, EDHREC_USER_AGENT } = await import("./client.js");
 const { libraryDecks, libraryDeckCards } = await import("../../db/schema.js");
 const { averageDeck, atraxaGroups, commanderPage, fixtureFetch, listPage } = await import("./fixtures.js");
 const { IDENTITIES } = await import("./identity.js");
+const { DEFAULT_TARGETS, rulesFor, sanitizeTargets } = await import("./importer.js");
 const fixture = fileURLToPath(new URL("../../scryfall/fixtures/cards.sample.json", import.meta.url));
 
 describe("EDHREC client", () => {
@@ -124,7 +125,7 @@ describe("EDHREC import into the deck library", () => {
   });
 
   it("imports the picks with name, source, URL, bracket, tags, primer; coverage decides agent eligibility", async () => {
-    await ctx.edhrec.run({ targets: { 3: 1, 4: 1, 5: 0 } });
+    await ctx.edhrec.run({ targets: { 2: 0, 3: 1, 4: 1, 5: 0 } });
     expect(ctx.edhrec.state.error).toBeNull();
     const rows = ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.source, "edhrec")).all();
     expect(rows.map((r) => r.name).sort()).toEqual(["Atraxa, Praetors' Voice — Optimized (EDHREC average)", "Atraxa, Praetors' Voice — Upgraded (EDHREC average)"]);
@@ -157,13 +158,75 @@ describe("EDHREC import into the deck library", () => {
     const edited = ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, "edhrec:atraxa-a:upgraded")).get()!;
     ctx.library.patch(edited.id, { primer: "My own notes" });
     const callsBefore = fetcher.calls.length;
-    await ctx.edhrec.run({ targets: { 3: 1, 4: 1, 5: 0 } });
+    await ctx.edhrec.run({ targets: { 2: 0, 3: 1, 4: 1, 5: 0 } });
     expect(ctx.edhrec.state).toMatchObject({ imported: 0, updated: 2, error: null });
     expect(ctx.handle.db.select().from(libraryDecks).all()).toHaveLength(before);
     expect(fetcher.calls.length).toBe(callsBefore);
     expect(ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.id, edited.id)).get()!.primer).toBe("My own notes");
     const other = ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, "edhrec:atraxa-b:optimized")).get()!;
     expect(other.primer).toContain("## Archetype");
+  });
+
+  it("Bracket 2: imports EDHREC's \"core\" average, leaning away from commanders already taken at Brackets 3 and 4", async () => {
+    // Both Atraxa slugs have a core average; atraxa-a has more core decks, but Bracket 3 took it and the
+    // overlap cap for one Bracket 2 deck is floor(1/3) = 0, so Bracket 2 takes atraxa-c.
+    table["commanders/week"] = listPage([
+      { name: "Atraxa A", slug: "atraxa-a", numDecks: 900 },
+      { name: "Atraxa B", slug: "atraxa-b", numDecks: 800 },
+      { name: "Atraxa C", slug: "atraxa-c", numDecks: 100 },
+    ]);
+    table["commanders/atraxa-a"] = commanderPage("Atraxa, Praetors' Voice", ["W", "U", "B", "G"], [1, 300, 500, 400, 0]);
+    table["commanders/atraxa-c"] = commanderPage("Atraxa, Praetors' Voice", ["W", "U", "B", "G"], [1, 60, 10, 10, 0]);
+    table["average-decks/atraxa-a/core"] = averageDeck(["Atraxa, Praetors' Voice"], atraxaGroups());
+    table["average-decks/atraxa-c/core"] = averageDeck(["Atraxa, Praetors' Voice"], atraxaGroups());
+    await ctx.edhrec.run({ targets: { 2: 1, 3: 1, 4: 1, 5: 0 }, refresh: true });
+    expect(ctx.edhrec.state).toMatchObject({ error: null, selected: { 2: 1, 3: 1, 4: 1, 5: 0 } });
+    const core = ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, "edhrec:atraxa-c:core")).get()!;
+    expect(core.name).toBe("Atraxa, Praetors' Voice — Core (EDHREC average)");
+    expect(core.bracket).toBe(2);
+    expect(core.sourceUrl).toBe("https://edhrec.com/average-decks/atraxa-c/core");
+    expect((core.importMeta as { edhrecBracket: string }).edhrecBracket).toBe("core");
+    expect(core.agentEligible).toBe(true);
+    const report = fs.readFileSync(ctx.edhrec.state.reportPath!, "utf8");
+    expect(report).toContain('## Bracket 2 (EDHREC "core"): 1 picked');
+    expect(report).toContain("Bracket 2 commanders also picked at Bracket 3 or 4: 0.");
+    expect(report.indexOf("## Bracket 2")).toBeLessThan(report.indexOf("## Bracket 3"));
+  });
+
+  it("scales the diversity caps with a larger target and reads targets from a request safely", () => {
+    expect(rulesFor(3, 75)).toMatchObject({ target: 75, identityCap: 4, archetypeCap: 12, winConMin: 3 });
+    expect(rulesFor(3, 150)).toMatchObject({ target: 150, identityCap: 8, archetypeCap: 24, winConMin: 6, minDecks: 20 });
+    expect(rulesFor(2, 150)).toMatchObject({ bracket: 2, target: 150, identityCap: 8, coverage: "identity" });
+    expect(rulesFor(4, 10)).toMatchObject({ target: 10, identityCap: 4, archetypeCap: 12 });
+    expect(rulesFor(5, 25)).toMatchObject({ target: 25, identityCap: 3, minDecks: 50, coverage: "group" });
+    expect(DEFAULT_TARGETS).toEqual({ 2: 150, 3: 150, 4: 150, 5: 25 });
+    expect(sanitizeTargets({ "2": 150, "3": 0, "4": 9999, "5": "x", "6": 10 })).toEqual({ 2: 150, 3: 0 });
+    expect(sanitizeTargets(null)).toEqual({});
+  });
+
+  it("fetches a cached answer again once it is older than the run's maximum age", async () => {
+    const before = fetcher.calls.length;
+    await ctx.edhrec.run({ targets: { 2: 0, 3: 1, 4: 0, 5: 0 }, dryRun: true });
+    expect(fetcher.calls.length).toBe(before); // everything is fresh in the cache
+    const old = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+    const dir = path.join(tmp, "edhrec-cache");
+    const age = (d: string) => {
+      for (const f of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, f.name);
+        if (f.isDirectory()) age(p);
+        else {
+          const cached = JSON.parse(fs.readFileSync(p, "utf8")) as { fetchedAt?: string };
+          cached.fetchedAt = old.toISOString();
+          fs.writeFileSync(p, JSON.stringify(cached));
+        }
+      }
+    };
+    age(dir);
+    await ctx.edhrec.run({ targets: { 2: 0, 3: 1, 4: 0, 5: 0 }, dryRun: true });
+    expect(fetcher.calls.length).toBeGreaterThan(before);
+    const refetched = fetcher.calls.length;
+    await ctx.edhrec.run({ targets: { 2: 0, 3: 1, 4: 0, 5: 0 }, dryRun: true, maxAgeDays: 0 });
+    expect(fetcher.calls.length).toBe(refetched);
   });
 
   it("without a rules engine nothing becomes agent-eligible, and the machine routes stay closed to outsiders", async () => {

@@ -15,9 +15,10 @@ import { WIN_CONDITIONS, type WinCondition } from "./wincon.js";
  * Every pass respects the identity cap, the minimum deck count and the overlap cap with an earlier
  * bracket; A-D also respect the archetype cap.
  */
-export type EdhrecBracket = 3 | 4 | 5;
-export const EDHREC_BRACKET_NAMES: Record<EdhrecBracket, "upgraded" | "optimized" | "cedh"> = { 3: "upgraded", 4: "optimized", 5: "cedh" };
-export const EDHREC_BRACKET_LABELS: Record<EdhrecBracket, "Upgraded" | "Optimized" | "cEDH"> = { 3: "Upgraded", 4: "Optimized", 5: "cEDH" };
+export type EdhrecBracket = 2 | 3 | 4 | 5;
+export const EDHREC_BRACKETS: readonly EdhrecBracket[] = [2, 3, 4, 5];
+export const EDHREC_BRACKET_NAMES: Record<EdhrecBracket, "core" | "upgraded" | "optimized" | "cedh"> = { 2: "core", 3: "upgraded", 4: "optimized", 5: "cedh" };
+export const EDHREC_BRACKET_LABELS: Record<EdhrecBracket, "Core" | "Upgraded" | "Optimized" | "cEDH"> = { 2: "Core", 3: "Upgraded", 4: "Optimized", 5: "cEDH" };
 
 export interface Candidate {
   slug: string;

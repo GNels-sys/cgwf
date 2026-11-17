@@ -16,13 +16,15 @@ import type { EdhrecClient } from "./client.js";
 import type { CoverageChecker } from "./coverage.js";
 import { IDENTITIES, identityInfo } from "./identity.js";
 import { averageDeckText, parseAverageDeck, parseCommanderPage, parseList, totalCards, type AverageDeck } from "./parse.js";
-import { diversitySummary, EDHREC_BRACKET_LABELS, EDHREC_BRACKET_NAMES, groupLabel, selectBracket, type Candidate, type EdhrecBracket, type Evaluation, type SelectionResult, type SelectionRules } from "./select.js";
+import { diversitySummary, EDHREC_BRACKET_LABELS, EDHREC_BRACKET_NAMES, EDHREC_BRACKETS, groupLabel, selectBracket, type Candidate, type EdhrecBracket, type Evaluation, type SelectionResult, type SelectionRules } from "./select.js";
 import { classifyWinCondition, primaryArchetype, WIN_CONDITION_LABELS, type WinCondition } from "./wincon.js";
 import { inArray } from "drizzle-orm";
 
 /**
- * EDHREC average decks into the deck library: 75 Bracket 3 ("upgraded"), 75 Bracket 4
- * ("optimized"), 25 Bracket 5 ("cedh"), varied in colour identity, archetype and win condition.
+ * EDHREC average decks into the deck library: 150 each for Bracket 2 ("core"), Bracket 3 ("upgraded")
+ * and Bracket 4 ("optimized"), 25 for Bracket 5 ("cedh"), varied in colour identity, archetype and win
+ * condition. (2026-11-17, owner: "a large amount of decks ready to play against"; it was 75 / 75 / 25 with
+ * no Bracket 2, whose bot pool was the precons alone.)
  *
  *   1. Pool: EDHREC's week / month / year top 100 plus the top `listDepth` of each of the 32
  *      colour-identity lists; one commander page each for `bracket_counts`.
@@ -43,10 +45,15 @@ export interface EdhrecImportOptions {
   dryRun?: boolean;
   /** Only re-run the Forge coverage check on EDHREC decks already in the library. */
   recheckCoverage?: boolean;
-  /** Per-bracket targets (defaults 75 / 75 / 25). */
+  /** Per-bracket targets (defaults `DEFAULT_TARGETS`: 150 / 150 / 150 / 25); 0 leaves a bracket out of the run. */
   targets?: Partial<Record<EdhrecBracket, number>>;
-  /** Commanders taken from each colour-identity list (default 20). */
+  /** Commanders taken from each colour-identity list (default 40). */
   listDepth?: number;
+  /**
+   * Cached EDHREC answers older than this many days are fetched again (default 30; the ranked lists never
+   * older than 7), so a later run sees new commanders and current averages. 0 = keep the cache forever.
+   */
+  maxAgeDays?: number;
 }
 
 export interface EdhrecImportState {
@@ -81,11 +88,39 @@ interface Evaluated {
   winCondition: WinCondition;
 }
 
+export const DEFAULT_TARGETS: Record<EdhrecBracket, number> = { 2: 150, 3: 150, 4: 150, 5: 25 };
+export const MAX_TARGET = 400;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The diversity rules as first tuned, at 75 decks a bracket (25 for cEDH). `rulesFor` scales the caps with
+ * a larger target, so 150 decks may hold 8 per colour identity and 24 per primary archetype.
+ */
 export const DEFAULT_RULES: Record<EdhrecBracket, Omit<SelectionRules, "overlapWith" | "overlapCap">> = {
+  2: { bracket: 2, target: 75, identityCap: 4, archetypeCap: 12, minArchetypes: 10, minDecks: 20, coverage: "identity", winConMin: 3 },
   3: { bracket: 3, target: 75, identityCap: 4, archetypeCap: 12, minArchetypes: 10, minDecks: 20, coverage: "identity", winConMin: 3 },
   4: { bracket: 4, target: 75, identityCap: 4, archetypeCap: 12, minArchetypes: 10, minDecks: 20, coverage: "identity", winConMin: 3 },
   5: { bracket: 5, target: 25, identityCap: 3, archetypeCap: 12, minArchetypes: 10, minDecks: 50, coverage: "group", winConMin: 1 },
 };
+
+/** A bracket's rules for a target: the tuned rules, with the three caps grown in step with the target. */
+export function rulesFor(bracket: EdhrecBracket, target: number): Omit<SelectionRules, "overlapWith" | "overlapCap"> {
+  const base = DEFAULT_RULES[bracket];
+  const k = target / base.target;
+  if (k <= 1) return { ...base, target };
+  return { ...base, target, identityCap: Math.ceil(base.identityCap * k), archetypeCap: Math.ceil(base.archetypeCap * k), winConMin: Math.ceil(base.winConMin * k) };
+}
+
+/** Targets from a request body or the command line: whole numbers from 0 to `MAX_TARGET`, per bracket. */
+export function sanitizeTargets(raw: unknown): Partial<Record<EdhrecBracket, number>> {
+  const out: Partial<Record<EdhrecBracket, number>> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const b of EDHREC_BRACKETS) {
+    const v = Number((raw as Record<string, unknown>)[String(b)]);
+    if (Number.isInteger(v) && v >= 0 && v <= MAX_TARGET) out[b] = v;
+  }
+  return out;
+}
 
 export function edhrecSourceKey(slug: string, bracket: EdhrecBracket): string {
   return `edhrec:${slug}:${EDHREC_BRACKET_NAMES[bracket]}`;
@@ -110,6 +145,8 @@ export function bracketMismatch(bracket: EdhrecBracket, a: DeckAnalysis): string
 export class EdhrecImporter {
   readonly state: EdhrecImportState = this.freshState();
   private readonly evaluated = new Map<string, Evaluated>();
+  /** This run's cache rules for every EDHREC read (lists use the shorter age). */
+  private cache: { refresh: boolean; maxAgeMs?: number; listMaxAgeMs?: number } = { refresh: false };
 
   constructor(
     private readonly handle: DbHandle,
@@ -122,7 +159,7 @@ export class EdhrecImporter {
   ) {}
 
   private freshState(): EdhrecImportState {
-    return { running: false, phase: "idle", message: "", requests: 0, cacheHits: 0, selected: { 3: 0, 4: 0, 5: 0 }, imported: 0, updated: 0, agentEligible: 0, error: null, reportPath: null, startedAt: null, finishedAt: null };
+    return { running: false, phase: "idle", message: "", requests: 0, cacheHits: 0, selected: { 2: 0, 3: 0, 4: 0, 5: 0 }, imported: 0, updated: 0, agentEligible: 0, error: null, reportPath: null, startedAt: null, finishedAt: null };
   }
 
   private set(phase: EdhrecImportState["phase"], message: string): void {
@@ -137,6 +174,8 @@ export class EdhrecImporter {
     if (this.state.running) return;
     Object.assign(this.state, this.freshState(), { running: true, startedAt: new Date().toISOString() });
     this.evaluated.clear();
+    const days = opts.maxAgeDays ?? 30;
+    this.cache = days > 0 ? { refresh: Boolean(opts.refresh), maxAgeMs: days * DAY_MS, listMaxAgeMs: Math.min(days, 7) * DAY_MS } : { refresh: Boolean(opts.refresh) };
     try {
       const report = opts.recheckCoverage ? await this.recheck() : await this.fullRun(opts);
       this.state.reportPath = this.writeReport(report);
@@ -156,19 +195,20 @@ export class EdhrecImporter {
   // ------------------------------------------------------------ pool
 
   async candidatePool(opts: EdhrecImportOptions = {}): Promise<{ candidates: Candidate[]; poolSize: number; skipped: string[] }> {
-    const refresh = Boolean(opts.refresh);
-    const depth = opts.listDepth ?? 20;
+    const depth = opts.listDepth ?? 40;
+    const lists = { refresh: this.cache.refresh, ...(this.cache.listMaxAgeMs !== undefined ? { maxAgeMs: this.cache.listMaxAgeMs } : {}) };
+    const pages = this.readOpts();
     this.set("pool", "reading EDHREC's top commander lists");
     const slugs = new Map<string, string>();
-    for (const tf of ["week", "month", "year"]) for (const e of parseList(await this.client.get(`commanders/${tf}`, { refresh }))) slugs.set(e.slug, e.name);
-    for (const id of IDENTITIES) for (const e of parseList(await this.client.get(`commanders/${id.slug}`, { refresh })).slice(0, depth)) slugs.set(e.slug, e.name);
+    for (const tf of ["week", "month", "year"]) for (const e of parseList(await this.client.get(`commanders/${tf}`, lists))) slugs.set(e.slug, e.name);
+    for (const id of IDENTITIES) for (const e of parseList(await this.client.get(`commanders/${id.slug}`, lists)).slice(0, depth)) slugs.set(e.slug, e.name);
     const candidates: Candidate[] = [];
     const skipped: string[] = [];
     let n = 0;
     for (const [slug, name] of slugs) {
       n++;
       if (n % 25 === 0) this.set("pages", `commander pages ${n}/${slugs.size}`);
-      const page = parseCommanderPage(slug, await this.client.get(`commanders/${slug}`, { refresh }));
+      const page = parseCommanderPage(slug, await this.client.get(`commanders/${slug}`, pages));
       if (!page) {
         skipped.push(`${name} (${slug}): EDHREC has no commander page`);
         continue;
@@ -178,11 +218,15 @@ export class EdhrecImporter {
     return { candidates, poolSize: slugs.size, skipped };
   }
 
+  private readOpts(refresh = false): { refresh: boolean; maxAgeMs?: number } {
+    return { refresh: refresh || this.cache.refresh, ...(this.cache.maxAgeMs !== undefined ? { maxAgeMs: this.cache.maxAgeMs } : {}) };
+  }
+
   // ------------------------------------------------------------ evaluation
 
   /** Fetch, resolve, check and analyse one commander's average deck for one bracket. */
   async evaluate(c: Candidate, bracket: EdhrecBracket, refresh = false): Promise<Evaluation> {
-    const deck = parseAverageDeck(c.slug, await this.client.get(`average-decks/${c.slug}/${EDHREC_BRACKET_NAMES[bracket]}`, { refresh }));
+    const deck = parseAverageDeck(c.slug, await this.client.get(`average-decks/${c.slug}/${EDHREC_BRACKET_NAMES[bracket]}`, this.readOpts(refresh)));
     if (!deck) return { ok: false, reason: `EDHREC has no ${EDHREC_BRACKET_NAMES[bracket]} average deck` };
     const total = totalCards(deck);
     if (total > 100 || 100 - total > MAX_PADDING) return { ok: false, reason: `the average deck has ${total} cards, not 100` };
@@ -265,16 +309,24 @@ export class EdhrecImporter {
     const pool = await this.candidatePool(opts);
     const results: SelectionResult[] = [];
     const chosen = new Map<EdhrecBracket, Set<string>>();
-    for (const b of [3, 4, 5] as EdhrecBracket[]) {
-      const rules: SelectionRules = { ...DEFAULT_RULES[b], target: opts.targets?.[b] ?? DEFAULT_RULES[b].target };
-      if (b === 4) Object.assign(rules, { overlapWith: chosen.get(3) ?? new Set<string>(), overlapCap: Math.floor(rules.target / 3) });
+    const picked = (b: EdhrecBracket) => chosen.get(b) ?? new Set<string>();
+    // Brackets 3, 4 and 5 are chosen as before. Bracket 2 comes last so that it can lean away from the
+    // commanders already taken at 3 and 4: the point of more decks is different opponents at each bracket.
+    for (const b of [3, 4, 5, 2] as EdhrecBracket[]) {
+      const target = opts.targets?.[b] ?? DEFAULT_TARGETS[b];
+      if (target <= 0) continue;
+      const rules: SelectionRules = rulesFor(b, target);
+      if (b === 4) Object.assign(rules, { overlapWith: picked(3), overlapCap: Math.floor(target / 3) });
+      if (b === 2) Object.assign(rules, { overlapWith: new Set([...picked(3), ...picked(4)]), overlapCap: Math.floor(target / 3) });
       this.set("select", `choosing Bracket ${b} (${EDHREC_BRACKET_NAMES[b]})`);
       const r = await selectBracket(pool.candidates, rules, (c) => this.evaluate(c, b, Boolean(opts.refresh)));
       results.push(r);
       chosen.set(b, new Set(r.picks.map((p) => p.slug)));
       this.state.selected[b] = r.picks.length;
     }
-    const overlap = [...(chosen.get(3) ?? [])].filter((s) => chosen.get(4)?.has(s)).length;
+    results.sort((a, b) => a.bracket - b.bracket);
+    const overlap = [...picked(3)].filter((s) => picked(4).has(s)).length;
+    const overlapCore = [...picked(2)].filter((s) => picked(3).has(s) || picked(4).has(s)).length;
     const imported: ImportedDeck[] = [];
     if (!opts.dryRun) {
       this.set("import", "writing library decks");
@@ -318,13 +370,13 @@ export class EdhrecImporter {
     }
     const coverage = opts.dryRun ? [] : await this.checkCoverage(imported.map((d) => ({ id: d.id, name: d.name })));
     const stale = opts.dryRun ? [] : this.staleImports(new Set(imported.map((d) => d.key)));
-    return { kind: opts.dryRun ? "dry-run" : "import", pool, results, overlap, imported, coverage, stale, fetched: { requests: this.client.requests, cacheHits: this.client.cacheHits } };
+    return { kind: opts.dryRun ? "dry-run" : "import", pool, results, overlap, overlapCore, imported, coverage, stale, fetched: { requests: this.client.requests, cacheHits: this.client.cacheHits } };
   }
 
   private async recheck(): Promise<Report> {
     const rows = this.library.list({ source: "edhrec" });
     const coverage = await this.checkCoverage(rows.map((r) => ({ id: r.id, name: r.name })));
-    return { kind: "recheck", pool: { candidates: [], poolSize: 0, skipped: [] }, results: [], overlap: 0, imported: [], coverage, stale: [], fetched: { requests: 0, cacheHits: 0 } };
+    return { kind: "recheck", pool: { candidates: [], poolSize: 0, skipped: [] }, results: [], overlap: 0, overlapCore: 0, imported: [], coverage, stale: [], fetched: { requests: 0, cacheHits: 0 } };
   }
 
   /** Forge coverage through the engine, then agent eligibility. */
@@ -390,7 +442,10 @@ export interface Report {
   kind: "import" | "dry-run" | "recheck";
   pool: { candidates: Candidate[]; poolSize: number; skipped: string[] };
   results: SelectionResult[];
+  /** Commanders picked at both Bracket 3 and Bracket 4. */
   overlap: number;
+  /** Bracket 2 commanders that are also picked at Bracket 3 or 4. */
+  overlapCore: number;
   imported: ImportedDeck[];
   coverage: CoverageLine[];
   stale: string[];
@@ -406,7 +461,7 @@ export function renderReport(r: Report): string {
   if (r.kind !== "recheck") {
     lines.push(`Candidate pool: ${r.pool.poolSize} commanders (week/month/year top 100 + top of each colour identity), ${r.pool.candidates.length} with a commander page. Requests: ${r.fetched.requests} new, ${r.fetched.cacheHits} from cache.`);
     for (const s of r.pool.skipped) lines.push(`- skipped: ${s}`);
-    lines.push(`Bracket 3 / Bracket 4 commander overlap: ${r.overlap}.`);
+    lines.push(`Bracket 3 / Bracket 4 commander overlap: ${r.overlap}. Bracket 2 commanders also picked at Bracket 3 or 4: ${r.overlapCore}.`);
     lines.push("");
   }
   for (const s of r.results) {

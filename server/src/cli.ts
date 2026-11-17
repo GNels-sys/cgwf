@@ -3,7 +3,7 @@
  *   node server/dist/cli.js ingest [--force] [--file path/to/cards.json]
  *   node server/dist/cli.js import-precons [--force] [--no-combos]
  *   node server/dist/cli.js agent-game [--agents 2] [--bracket 2] [--rounds 3]
- *   node server/dist/cli.js import-edhrec [--dry-run] [--refresh] [--recheck-coverage]
+ *   node server/dist/cli.js import-edhrec [--dry-run] [--refresh] [--recheck-coverage] [--targets 2=150,3=150,4=150,5=25] [--depth 40] [--max-age-days 30]
  *   node server/dist/cli.js check-library-coverage [--source precon|edhrec|user] [--enable]
  *
  * `check-library-coverage` runs every library deck (or one source) through the rules engine the way an
@@ -12,8 +12,8 @@
  * changes a deck the owner switched on or off by hand. It needs the running server (which holds the
  * engine connection) and stays attached, printing progress, until the check ends.
  *
- * `import-edhrec` adds EDHREC average decks to the deck library (75 Bracket 3, 75 Bracket 4,
- * 25 cEDH; see server/src/library/edhrec). With the server running it asks the server (which holds
+ * `import-edhrec` adds EDHREC average decks to the deck library (150 each for Brackets 2, 3 and 4,
+ * 25 cEDH unless `--targets` says otherwise; 0 leaves a bracket out; see server/src/library/edhrec). With the server running it asks the server (which holds
  * the rules-engine connection used for the Forge coverage check) and prints progress and the final
  * report; without one it runs in this process (no engine, so coverage stays unchecked).
  *
@@ -31,6 +31,7 @@
 import { isOut } from "@cgwf/shared";
 import { buildApp } from "./app.js";
 import { config } from "./config.js";
+import { sanitizeTargets } from "./library/edhrec/importer.js";
 
 const [, , command, ...rest] = process.argv;
 const flags = new Set(rest.filter((a) => a.startsWith("--")));
@@ -132,7 +133,27 @@ if (command === "agent-game") {
 
 async function importEdhrec(): Promise<void> {
   const fs = await import("node:fs");
-  const body = { dryRun: flags.has("--dry-run"), refresh: flags.has("--refresh"), recheckCoverage: flags.has("--recheck-coverage") };
+  // --targets 2=150,3=150,4=150,5=25 (0 leaves a bracket out), --depth N (commanders per colour list), --max-age-days N
+  const valueOf = (flag: string) => {
+    const i = rest.indexOf(flag);
+    return i >= 0 ? rest[i + 1] : undefined;
+  };
+  const targets: Record<string, number> = {};
+  for (const part of (valueOf("--targets") ?? "").split(",")) {
+    const [b, n] = part.split("=");
+    if (b && n !== undefined && /^[2-5]$/.test(b.trim()) && /^\d+$/.test(n.trim())) targets[b.trim()] = Number(n.trim());
+  }
+  const numberOf = (flag: string) => (/^\d+$/.test(valueOf(flag) ?? "") ? Number(valueOf(flag)) : undefined);
+  const depth = numberOf("--depth");
+  const maxAgeDays = numberOf("--max-age-days");
+  const body = {
+    dryRun: flags.has("--dry-run"),
+    refresh: flags.has("--refresh"),
+    recheckCoverage: flags.has("--recheck-coverage"),
+    targets,
+    ...(depth !== undefined ? { listDepth: depth } : {}),
+    ...(maxAgeDays !== undefined ? { maxAgeDays } : {}),
+  };
   type State = { running: boolean; phase: string; message: string; requests: number; cacheHits: number; error: string | null; reportPath: string | null };
   const printReport = (s: State) => {
     if (s.reportPath && fs.existsSync(s.reportPath)) {
@@ -167,7 +188,7 @@ async function importEdhrec(): Promise<void> {
   }
   console.log("no running server answered; running the import in this process (no rules engine: coverage stays unchecked)");
   const ctx = await buildApp({ logger: "plain", edhrecCoverage: null });
-  await ctx.edhrec.run(body);
+  await ctx.edhrec.run({ ...body, targets: sanitizeTargets(body.targets) });
   printReport(ctx.edhrec.state);
   await ctx.app.close();
   if (ctx.edhrec.state.error) process.exit(1);

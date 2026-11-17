@@ -63,7 +63,7 @@ export class EdhrecClient {
   /**
    * The parsed JSON for `p` (no leading slash, no .json), or null when EDHREC has no such page.
    * `maxAgeMs`: a cached answer older than this is fetched again (the Deck Doctor uses 7 days; the import
-   * keeps answers forever). `failFast`: one attempt, no back-off waits (a player is waiting); when that
+   * 30 days, 7 for the ranked lists). `failFast`: one attempt, no back-off waits (a player is waiting); when that
    * attempt fails a stale cached answer is returned instead, and only with no cache does it throw.
    */
   async get(p: string, opts: { refresh?: boolean; maxAgeMs?: number; failFast?: boolean } = {}): Promise<unknown | null> {
@@ -71,7 +71,8 @@ export class EdhrecClient {
     let stale: { missing?: boolean; body?: unknown } | null = null;
     if (!opts.refresh && fs.existsSync(file)) {
       const cached = JSON.parse(fs.readFileSync(file, "utf8")) as { missing?: boolean; status?: number; body?: unknown; fetchedAt?: string };
-      const age = cached.fetchedAt ? Date.now() - Date.parse(cached.fetchedAt) : 0;
+      // answers cached before `fetchedAt` was recorded are dated by their file
+      const age = Date.now() - (cached.fetchedAt ? Date.parse(cached.fetchedAt) : fs.statSync(file).mtimeMs);
       if (opts.maxAgeMs === undefined || age <= opts.maxAgeMs) {
         this.cacheHits++;
         return cached.missing ? null : (cached.body ?? null);

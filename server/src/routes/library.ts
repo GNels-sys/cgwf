@@ -5,7 +5,7 @@ import { requireOwner, requireUser } from "../auth.js";
 import { config } from "../config.js";
 import type { DbHandle } from "../db/index.js";
 import { deckCards, decks } from "../db/schema.js";
-import type { EdhrecImporter } from "../library/edhrec/importer.js";
+import { sanitizeTargets, type EdhrecImporter } from "../library/edhrec/importer.js";
 import type { PreconImporter } from "../library/precons.js";
 import type { LibraryEntry, LibraryService } from "../library/service.js";
 import type { LibraryCoverage } from "../library/coverage.js";
@@ -78,10 +78,22 @@ export function registerLibraryRoutes(app: FastifyInstance, deps: Deps): void {
   /**
    * EDHREC average decks (server/src/library/edhrec): the same background import for the machine
    * (loopback / ADMIN_TOKEN, driven by `cli import-edhrec`) and for the signed-in owner.
-   * Body: {refresh?, dryRun?, recheckCoverage?}.
+   * Body: {refresh?, dryRun?, recheckCoverage?, targets? {"2".."5": n}, listDepth?, maxAgeDays?}.
    */
-  type EdhrecBody = { refresh?: boolean; dryRun?: boolean; recheckCoverage?: boolean } | null;
-  const startEdhrec = (body: EdhrecBody) => void edhrec.run({ refresh: Boolean(body?.refresh), dryRun: Boolean(body?.dryRun), recheckCoverage: Boolean(body?.recheckCoverage) });
+  type EdhrecBody = { refresh?: boolean; dryRun?: boolean; recheckCoverage?: boolean; targets?: unknown; listDepth?: unknown; maxAgeDays?: unknown } | null;
+  const wholeNumber = (v: unknown, min: number, max: number): number | undefined => (typeof v === "number" && Number.isInteger(v) && v >= min && v <= max ? v : undefined);
+  const startEdhrec = (body: EdhrecBody) => {
+    const listDepth = wholeNumber(body?.listDepth, 1, 100);
+    const maxAgeDays = wholeNumber(body?.maxAgeDays, 0, 3650);
+    void edhrec.run({
+      refresh: Boolean(body?.refresh),
+      dryRun: Boolean(body?.dryRun),
+      recheckCoverage: Boolean(body?.recheckCoverage),
+      targets: sanitizeTargets(body?.targets),
+      ...(listDepth !== undefined ? { listDepth } : {}),
+      ...(maxAgeDays !== undefined ? { maxAgeDays } : {}),
+    });
+  };
   const machine = (req: { ip: string; headers: Record<string, unknown> }) =>
     req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1" || (config.adminToken !== "" && req.headers["x-admin-token"] === config.adminToken);
   app.post<{ Body: EdhrecBody }>("/api/admin/import-edhrec", async (req, reply) => {
