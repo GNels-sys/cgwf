@@ -256,6 +256,13 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
             <strong>Block</strong>
             <span className="muted small">Pick an attacker, then tap your creatures that block it. Several blockers may share one attacker.</span>
           </div>
+          {prompt.notes && prompt.notes.length > 0 && (
+            <ul className="engine-notes small" aria-label="Why some blocks are not possible">
+              {prompt.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          )}
           <div className="combat-attackers">
             {prompt.attackers.map((a) => {
               const c = findCard(view, a.iid);

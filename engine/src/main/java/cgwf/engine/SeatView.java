@@ -7,11 +7,13 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import forge.StaticData;
 import forge.card.CardEdition;
+import forge.card.CardStateName;
 import forge.card.MagicColor;
 import forge.game.Game;
 import forge.game.GameEntity;
 import forge.game.GameLogEntry;
 import forge.game.card.Card;
+import forge.game.card.CardState;
 import forge.game.card.CounterType;
 import forge.game.combat.Combat;
 import forge.game.mana.ManaPool;
@@ -166,8 +168,36 @@ public final class SeatView {
             for (Multiset.Entry<CounterType> e : counters.entrySet()) cj.addProperty(e.getElement().getName(), e.getCount());
             j.add("counters", cj);
         }
-        if (identityVisible(c, viewer)) addIdentity(j, c);
+        if (identityVisible(c, viewer)) {
+            addIdentity(j, c);
+            addPrepare(j, c);
+        }
         return j;
+    }
+
+    /**
+     * Prepared spells (Secrets of Strixhaven; owner report 2026-11-17: nothing on screen said whether a creature
+     * was prepared or where its spell was cast from). A creature with a spell half carries `prepare` {name,
+     * ready, cardId of the copy waiting in exile}; that copy carries `preparedBy` (its creature's id
+     * and name). Public information: the creature is face up on the battlefield and the copy face up in exile.
+     */
+    private static void addPrepare(JsonObject j, Card c) {
+        if (c.isInZone(ZoneType.Battlefield) && c.hasState(CardStateName.PreparedSpell)) {
+            CardState spell = c.getState(CardStateName.PreparedSpell);
+            JsonObject pj = new JsonObject();
+            pj.addProperty("name", spell.getName());
+            pj.addProperty("ready", c.isPrepared());
+            Card copy = c.getPreparedSpell();
+            if (copy != null) pj.addProperty("cardId", copy.getId());
+            j.add("prepare", pj);
+        } else if (c.isInZone(ZoneType.Exile) && c.getCurrentStateName() == CardStateName.PreparedSpell && c.getGame() != null) {
+            for (Card host : c.getGame().getCardsIn(ZoneType.Battlefield)) {
+                if (host.getPreparedSpell() != c) continue;
+                j.addProperty("preparedBy", host.getId());
+                j.addProperty("preparedByName", host.getName());
+                break;
+            }
+        }
     }
 
     /** Name, printing and stats of a card (only call this when the viewer may see the face). */

@@ -60,6 +60,11 @@ export interface EngineCardJson {
   manaCost?: string;
   power?: number;
   toughness?: number;
+  /** Battlefield creature with a prepared spell: the spell, whether it is prepared, the exiled copy's card id. */
+  prepare?: { name?: string; ready?: boolean; cardId?: number };
+  /** The exiled copy of a prepared spell: its creature's card id and name. */
+  preparedBy?: number;
+  preparedByName?: string;
   // prompt-only extras
   index?: number;
   kind?: string;
@@ -200,7 +205,17 @@ export function toViewCard(c: EngineCardJson, ctx: ConvertContext, printings: Ma
     modifier: null,
     anthemDismissed: false,
     public: Boolean(c.name) && kind !== "hand" && kind !== "library",
-    engine: { power: c.power ?? null, toughness: c.toughness ?? null, damage: c.damage ?? 0, sick: Boolean(c.sick), ...(Array.isArray(c.mana) && c.mana.length ? { mana: c.mana.map(String) } : {}) },
+    engine: {
+      power: c.power ?? null,
+      toughness: c.toughness ?? null,
+      damage: c.damage ?? 0,
+      sick: Boolean(c.sick),
+      ...(Array.isArray(c.mana) && c.mana.length ? { mana: c.mana.map(String) } : {}),
+      ...(c.prepare && typeof c.prepare.name === "string" && c.prepare.name
+        ? { prepare: { name: c.prepare.name, ready: Boolean(c.prepare.ready), spellIid: c.prepare.ready && typeof c.prepare.cardId === "number" ? String(c.prepare.cardId) : null } }
+        : {}),
+      ...(typeof c.preparedBy === "number" ? { preparedBy: { iid: String(c.preparedBy), name: typeof c.preparedByName === "string" ? c.preparedByName : "" } } : {}),
+    },
   };
   return out;
 }
@@ -443,8 +458,12 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
       const defenders = Array.isArray(raw.defenders) ? (raw.defenders as RawEntityRef[]).map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null) : [];
       return { kind: "attackers", promptId, title, candidates: cardsOnly(raw.candidates, ctx), defenders };
     }
-    case "blockers":
-      return { kind: "blockers", promptId, title, attackers: cardsOnly(raw.attackers, ctx), blockers: cardsOnly(raw.blockers, ctx) };
+    case "blockers": {
+      const out: Extract<EnginePrompt, { kind: "blockers" }> = { kind: "blockers", promptId, title, attackers: cardsOnly(raw.attackers, ctx), blockers: cardsOnly(raw.blockers, ctx) };
+      const notes = Array.isArray(raw.notes) ? raw.notes.slice(0, 12).map((n) => cleanEngineText(String(n))).filter(Boolean) : [];
+      if (notes.length) out.notes = notes;
+      return out;
+    }
     case "choose":
       return { kind: "choose", promptId, title, optional: Boolean(raw.optional), source: raw.source == null ? null : String(raw.source), options: options(raw.options, ctx) };
     case "chooseMany": {

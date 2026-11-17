@@ -5,6 +5,7 @@ import { ManaCost, OracleText } from "../components/ManaCost";
 import { describeEffect } from "./actions";
 import type { SleeveStyle } from "./look";
 import { imageFace, nameOf, printingOf, type Printings } from "./model";
+import { prepareLine, withoutPrepareKeyword } from "./prepared";
 
 /**
  * Big view of one card from the data we already have (no API round trip):
@@ -60,6 +61,8 @@ export function CardZoom({
   const owner = view?.players[card.owner]?.name;
   const controller = view?.players[card.zone.owner]?.name;
   const where = card.iid.startsWith("printing:") ? "named in the game log" : card.iid.startsWith("stack:") ? "on the stack" : `${card.zone.kind === "battlefield" ? `battlefield (${card.zone.row ?? "other"})` : card.zone.kind}${controller ? `, ${controller}` : ""}${owner && owner !== controller ? ` (owned by ${owner})` : ""}`;
+  const prepared = prepareLine(card, view?.viewer != null && card.zone.owner === view.viewer);
+  const keywords = derived ? withoutPrepareKeyword(derived.keywords, card) : [];
   const status = [card.tapped ? "tapped" : null, card.faceDown ? "face down" : null, card.isToken ? "token" : null, card.isCommander ? "commander" : null].filter(Boolean).join(", ");
 
   return (
@@ -100,6 +103,7 @@ export function CardZoom({
             {actions}
             <button className="btn zoom-exit" onClick={onClose}>Exit view</button>
           </div>}
+          {prepared && <p className={`zoom-prepare small${card.engine?.prepare?.ready ? " is-ready" : ""}`}>{prepared}</p>}
           {derived && card.zone.kind === "battlefield" && (
             <section className="zoom-now">
               {derived.isCreature && derived.power !== null && (
@@ -115,9 +119,9 @@ export function CardZoom({
                   ) : null}
                 </p>
               )}
-              {derived.keywords.length > 0 && (
+              {keywords.length > 0 && (
                 <p className="zoom-keywords">
-                  {derived.keywords.map((k) => (
+                  {keywords.map((k) => (
                     <span key={k} className="chip is-selected">
                       {k}
                     </span>

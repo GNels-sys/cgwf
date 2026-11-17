@@ -38,7 +38,9 @@ export function offZonePlays(prompt: EnginePrompt | null, view: PlayerView, me: 
         const options = byIid.get(card.iid);
         if (!options) continue;
         byIid.delete(card.iid);
-        const where = zone === "library" ? (mine ? "Top of your library" : `Top of ${p.name}'s library`) : `${whose} ${ZONE_WORDS[zone]}`;
+        // a prepared spell's copy sits in exile; what the player knows is the creature it belongs to
+        const preparedBy = zone === "exile" ? card.engine?.preparedBy?.name : undefined;
+        const where = preparedBy ? `${preparedBy}'s prepared spell` : zone === "library" ? (mine ? "Top of your library" : `Top of ${p.name}'s library`) : `${whose} ${ZONE_WORDS[zone]}`;
         out.push({ card, options, where, zone, owner: pid });
       }
     }

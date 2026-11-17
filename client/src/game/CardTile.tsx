@@ -4,6 +4,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { cardImagePath, type DerivedCard, type ViewCard } from "@cgwf/shared";
 import type { SleeveStyle } from "./look";
 import { imageFace, nameOf, printingOf, type Printings } from "./model";
+import { withoutPrepareKeyword } from "./prepared";
 
 import { cardEnergy, ElectricArc } from "./ElectricArc";
 
@@ -109,7 +110,9 @@ export function CardTile({ card, printings, onTap, onHold, onZoom, draggable = f
   const badges = Object.entries(card.counters).filter(([k]) => !(derived?.isCreature && (k === "+1/+1" || k === "-1/-1")));
   const showPt = derived?.isCreature && derived.power !== null && derived.toughness !== null && !hidden;
   const ptChanged = derived ? derived.deltaPower !== 0 || derived.deltaToughness !== 0 : false;
-  const chevrons = derived && !hidden ? derived.keywords : [];
+  const chevrons = derived && !hidden ? withoutPrepareKeyword(derived.keywords, card) : [];
+  /** The spell a prepared creature may cast right now (engine tables). */
+  const prepared = !hidden && card.zone.kind === "battlefield" && card.engine?.prepare?.ready ? card.engine.prepare.name : null;
   const label = [
     name,
     showPt && derived ? `${derived.power}/${derived.toughness}` : null,
@@ -118,6 +121,7 @@ export function CardTile({ card, printings, onTap, onHold, onZoom, draggable = f
     chevrons.length ? chevrons.join(", ") : null,
     badges.length ? badges.map(([k, v]) => `${v} ${k}`).join(", ") : null,
     mark ? mark.label : null,
+    prepared ? `prepared: ${prepared}` : null,
   ]
     .filter(Boolean)
     .join(", ");
@@ -194,6 +198,7 @@ export function CardTile({ card, printings, onTap, onHold, onZoom, draggable = f
         </span>
       )}
       {card.isCommander && <span className="tile-mark" title="Commander">C</span>}
+      {prepared && <span className="tile-prepared" title={`Prepared: may cast ${prepared}`}>Prepared</span>}
       {mark && (
         <span className="tile-combat-mark" style={mark.color ? { background: mark.color } : undefined} title={mark.label}>
           {mark.label}
