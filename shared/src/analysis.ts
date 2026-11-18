@@ -192,6 +192,11 @@ export interface LibraryImportInfo {
   /** Forge rules-engine coverage: null = not checked yet; `missing` = cards Forge cannot play. */
   coverage: { checkedAt: string; missing: string[] } | null;
   coverageError: string | null;
+  /**
+   * Why bots are not dealt this deck although the rules engine can play it: a Bracket 2 deck the bracket
+   * rules rate higher (2026-11-17). Absent or null = no hold. The owner's own switch still wins.
+   */
+  botHold?: string | null;
 }
 
 export interface LibraryDeckDetail extends LibraryDeckSummary {

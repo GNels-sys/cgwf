@@ -30,6 +30,19 @@ export interface EligibilityDecision {
   outcome: "enabled" | "disabled" | "kept-by-owner" | "unchanged";
 }
 
+/**
+ * A deck the rules engine can play may still be held back from bots (owner, 2026-11-17): an EDHREC
+ * "core" average filed under Bracket 2 whose cards the written bracket rules put higher (a two-card
+ * combo, a Game Changer, chained extra turns). After the first 150-deck Bracket 2 import 25 such decks
+ * sat in the Bracket 2 bot pool. A held deck stays in the library for people; bots are not dealt it. The
+ * owner can still switch a single deck on from the Library page (that choice is never overridden), or
+ * file it under a higher bracket, which lifts the hold at the next check.
+ */
+export function botHoldReason(d: { source: string; bracket: number; floor: number | null }): string | null {
+  if (d.source !== "edhrec" || d.bracket !== 2 || d.floor === null || d.floor <= 2) return null;
+  return `the bracket rules put it at Bracket ${d.floor} or higher, above the Bracket 2 it is filed under`;
+}
+
 export function decideEligibility(i: EligibilityInput): EligibilityDecision {
   const by: EligibleBy | null = i.eligibleBy ?? (i.current ? (i.source === "edhrec" ? "coverage" : "owner") : null);
   const same = (outcome: EligibilityDecision["outcome"] = "unchanged"): EligibilityDecision => ({ eligible: i.current, eligibleBy: by, outcome });

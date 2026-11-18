@@ -391,10 +391,11 @@ export class EdhrecImporter {
     for (const s of specs) {
       const r = results.get(s.key) ?? { missing: null, error: "no rules engine configured (ENGINE_URL)" };
       // Engine tables block decks with Commander warnings, so a deck with problems is never eligible.
-      this.library.setCoverage(s.key, r, s.problems.length === 0);
-      const eligible = Boolean(r.missing && r.missing.length === 0 && s.problems.length === 0);
+      // A Bracket 2 deck the bracket rules rate higher is held back too (eligibility.ts, botHoldReason).
+      const decision = this.library.setCoverage(s.key, r, s.problems.length === 0);
+      const eligible = decision?.eligible ?? false;
       if (eligible) this.state.agentEligible++;
-      out.push({ id: s.key, name: s.name, missing: r.missing, error: r.error ?? (s.problems.length ? s.problems.join(" ") : null), eligible });
+      out.push({ id: s.key, name: s.name, missing: r.missing, error: r.error ?? (s.problems.length ? s.problems.join(" ") : null), hold: decision?.hold ?? null, eligible });
     }
     return out;
   }
@@ -435,6 +436,8 @@ interface CoverageLine {
   name: string;
   missing: string[] | null;
   error: string | null;
+  /** Why a playable deck is still not dealt to bots (a Bracket 2 deck the bracket rules rate higher). */
+  hold: string | null;
   eligible: boolean;
 }
 
@@ -505,7 +508,9 @@ export function renderReport(r: Report): string {
     lines.push("");
     for (const c of notEligible) {
       if (c.missing && c.missing.length) lines.push(`- ${c.name}: Forge cannot play ${c.missing.join(", ")} (kept for humans, not agent-eligible)`);
-      else lines.push(`- ${c.name}: not checked (${c.error ?? "unknown"}); not agent-eligible until \`cli import-edhrec --recheck-coverage\``);
+      else if (c.missing === null) lines.push(`- ${c.name}: not checked (${c.error ?? "unknown"}); not agent-eligible until \`cli import-edhrec --recheck-coverage\``);
+      else if (c.hold) lines.push(`- ${c.name}: held back from bots, ${c.hold} (kept for humans)`);
+      else lines.push(`- ${c.name}: ${c.error ?? "switched off for bots on the Library page"} (kept for humans, not agent-eligible)`);
     }
     if (!notEligible.length) lines.push("- every imported deck is playable by the rules engine");
     lines.push("");

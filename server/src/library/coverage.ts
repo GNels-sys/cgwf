@@ -34,6 +34,8 @@ export interface CoverageReportLine {
   bracket: Bracket;
   missing: string[] | null;
   problems: string[];
+  /** Why a playable deck is still not dealt to bots (a Bracket 2 deck the bracket rules rate higher). */
+  hold: string | null;
   error: string | null;
   outcome: EligibilityDecision["outcome"];
   eligible: boolean;
@@ -101,6 +103,7 @@ export class LibraryCoverage {
             bracket: s.d.bracket,
             missing: r.missing,
             problems: s.problems,
+            hold: decision?.hold ?? null,
             error: r.error ?? null,
             outcome,
             eligible: decision?.eligible ?? s.d.agentEligible,
@@ -110,7 +113,7 @@ export class LibraryCoverage {
           if (outcome === "enabled") this.state.enabled++;
           if (outcome === "kept-by-owner") this.state.keptByOwner++;
           if (r.missing === null) this.state.unchecked++;
-          else if (r.missing.length > 0 || s.problems.length > 0) this.state.excluded++;
+          else if (r.missing.length > 0 || s.problems.length > 0 || line.hold) this.state.excluded++;
         }
         this.state.message = `checked ${this.state.checked}/${this.state.total}: ${this.state.enabled} switched on, ${this.state.excluded} excluded`;
       }
@@ -157,10 +160,10 @@ export function renderCoverageReport(r: CoverageReport): string {
   const enabled = by("enabled");
   out.push("", `## Switched on (${enabled.length})`, "");
   for (const l of enabled) out.push(`- ${l.name} (B${l.bracket}, ${l.source})`);
-  const excluded = r.lines.filter((l) => l.missing !== null && (l.missing.length > 0 || l.problems.length > 0));
-  out.push("", `## Excluded: Forge cannot play it or an engine table would refuse it (${excluded.length})`, "");
+  const excluded = r.lines.filter((l) => l.missing !== null && (l.missing.length > 0 || l.problems.length > 0 || l.hold));
+  out.push("", `## Excluded: Forge cannot play it, an engine table would refuse it, or it plays above its bracket (${excluded.length})`, "");
   for (const l of excluded) {
-    const why = [l.missing && l.missing.length ? `Forge cannot play ${l.missing.join(", ")}` : null, l.problems.length ? l.problems.join(" ") : null].filter(Boolean).join("; ");
+    const why = [l.missing && l.missing.length ? `Forge cannot play ${l.missing.join(", ")}` : null, l.problems.length ? l.problems.join(" ") : null, l.hold].filter(Boolean).join("; ");
     const state = l.outcome === "kept-by-owner" ? " (left on: the owner switched it on by hand)" : l.outcome === "disabled" ? " (switched off)" : "";
     out.push(`- ${l.name} (B${l.bracket}, ${l.source}): ${why}${state}`);
   }
