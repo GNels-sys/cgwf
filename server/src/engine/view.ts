@@ -579,6 +579,7 @@ export function toEngineAnswer(answer: EngineAnswer, ctx: ConvertContext): Recor
   } else if ("option" in answer) {
     out.option = answer.option === null ? null : Number(answer.option);
     if (answer.passUntilTurn !== undefined) out.passUntilTurn = Number(answer.passUntilTurn);
+    if (answer.passStack) out.passStack = true;
     if (answer.concede) out.concede = true;
     if (Array.isArray(answer.paySources) && answer.paySources.length) out.paySources = answer.paySources.map((iid) => Number(iid)).filter((n) => Number.isFinite(n)).slice(0, 40);
     if (typeof answer.repeat === "number" && Number.isFinite(answer.repeat) && answer.repeat >= 2) out.repeat = Math.min(500, Math.floor(answer.repeat));

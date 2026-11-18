@@ -1516,9 +1516,24 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
     seat, otherwise Forge asks which colour; leftover mana floats. "Pay with" taps a chosen source for its
     largest ability unless a colour decides. When the payer can pay without the larger ability it still may
     tap such a source for its first one: use "Pay with" to choose.
-  - Also seen in that game, not changed: Forge logs "You can't lose the game and your opponents can't win the
-    game." at every state check while Platinum Angel is saving its controller (over 1,000 lines), and a player
-    who is eliminated mid-game gets no log line until the game ends.
+  - **A stack that took an hour (same game, later).** Measured from Fly's metrics: the engine machine
+    (`shared-cpu-2x`, baseline 0.12 of a core) spent its CPU balance in the first 45 minutes of the game
+    (100,000 at 17:45Z, 1 at 18:32Z) and was throttled from then on; with three bots deciding at every
+    priority a stack item went from 2 s to 15 s. The fix for that is the machine size (`engine/fly.toml`
+    `[[vm]]`, the owner's call: it costs more), not code. Read the numbers with
+    `https://api.fly.io/prometheus/personal/api/v1/query_range` (`Authorization: FlyV1 <token>`; series
+    `fly_instance_cpu_balance`, `fly_instance_cpu_throttle`, `fly_instance_cpu_baseline`, `app="cgwf-engine"`).
+    Two code changes cut the work and the clicks:
+    - `RepeatedLogLines` (`GameSession.streamLog`): Forge logs a replacement effect every time it applies, and
+      Platinum Angel's "You can't lose the game and your opponents can't win the game." applies at every state
+      check while its controller would lose (over 1,000 lines in that game, each a frame, an event row and a
+      toast). An `EFFECT_REPLACED` line now goes out once a turn per wording.
+    - **Resolve all**: the priority bar and the Interaction Stack offer "Resolve all (N)" with two or more
+      items on the stack. The answer `{option: null, passStack: true}` sets `BridgeSession.passStack(mark)`
+      (mark = newest stack id); `chooseSpellAbilityToPlay` then passes until the stack is empty. An opponent's
+      item added after the mark that the seat's `respondTo` setting would stop for hands priority back; Hold
+      cancels it. Choices inside a trigger (targets, "you may", order) are still asked.
+  - Still open from that game: a player eliminated mid-game gets no log line until the game ends.
 - **Counts are clamped to the options (2026-10-19).** Owner report: Blasphemous Edict ("each player
   sacrifices thirteen creatures") with six creatures sent a choose-13-of-6 prompt that could never be
   answered, so the spell never resolved. Rule 701.21a: a player sacrifices as many as they can. The

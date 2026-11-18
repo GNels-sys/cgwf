@@ -156,6 +156,11 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
             <button className={`btn btn-small${prompt.options.length === 0 ? " btn-primary" : ""}`} onClick={() => answer({ promptId: id, option: null })}>
               {prompt.stackEmpty ? "Pass" : "Let it resolve"}
             </button>
+            {!prompt.stackEmpty && (view.stack?.length ?? 0) > 1 && (
+              <button className="btn btn-small" onClick={() => answer({ promptId: id, option: null, passStack: true })} title="Pass until the stack is empty. You are asked again if an opponent responds with something your stops would catch.">
+                Resolve all ({view.stack.length})
+              </button>
+            )}
             {prompt.myTurn && prompt.stackEmpty && (
               <button className="btn btn-small" onClick={() => answer({ promptId: id, option: null, passUntilTurn: view.turn })} title="Pass every remaining priority this turn">
                 End turn

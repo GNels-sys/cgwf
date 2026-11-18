@@ -178,6 +178,19 @@ public final class BridgeController extends PlayerControllerAi {
         }
         // Does an opponent's stack item aim at this seat, their cards or their spells, or hit everyone? (2026-10-29)
         String threat = stackTopNotMine ? StackThreats.describe(stack, player) : null;
+        // "Resolve all": the seat asked to let the whole stack resolve. Pass until it is empty; an opponent's item
+        // that arrived since, and that the seat's own setting would stop for, hands priority back.
+        if (session.passingStack()) {
+            if (stack.isEmpty() || session.holding(ph.getTurn())) {
+                session.clearPassStack();
+            } else {
+                SpellAbilityStackInstance top = stack.peek();
+                boolean fresh = stackTopNotMine && top != null && top.getId() > session.passStackMark();
+                String mode = session.stops().respondTo;
+                if (fresh && ("always".equals(mode) || ("threats".equals(mode) && threat != null))) session.clearPassStack();
+                else return null;
+            }
+        }
         boolean stop = session.stopsAt(phase == null ? "" : phase.name(), ph.isPlayerTurn(player), stackTopNotMine, threat != null, ph.getTurn());
         if (DEBUG_PRIORITY) System.err.println("[priority] seat=" + session.seat() + " turn=" + ph.getTurn() + " phase=" + phase + " myTurn=" + ph.isPlayerTurn(player) + " stackTopNotMine=" + stackTopNotMine + " threat=" + threat + " stop=" + stop + " stops=" + session.stops().toJson());
         if (!stop) return null; // auto-pass
@@ -217,6 +230,12 @@ public final class BridgeController extends PlayerControllerAi {
         }
         if (a.has("passUntilTurn") && !a.get("passUntilTurn").isJsonNull()) {
             session.passUntilTurn(a.get("passUntilTurn").getAsInt());
+            return null;
+        }
+        if (isTrue(a, "passStack") && !stack.isEmpty()) {
+            int mark = 0;
+            for (SpellAbilityStackInstance si : stack) mark = Math.max(mark, si.getId());
+            session.passStack(mark);
             return null;
         }
         if (!a.has("option") || a.get("option").isJsonNull()) return null; // pass

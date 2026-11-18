@@ -343,6 +343,12 @@ describe("engine tables (relay to the rules engine)", () => {
     alex.send({ t: "engine", answer: { promptId: 70, option: 1, paySources: ["13", "x", "11"] } });
     const paid = await engine.waitFor((f) => f.type === "answer" && f.promptId === 70);
     expect(paid).toMatchObject({ seat: 0, option: 1, paySources: [13, 11] });
+    expect(paid).not.toHaveProperty("passStack");
+    // "Resolve all" (2026-11-18): pass until the stack is empty travels to the engine as a flag
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 170, prompt: "priority", title: "You have priority", phase: "MAIN1", myTurn: true, stackEmpty: false, stackTopMine: true, options: [] });
+    await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 170, ma);
+    alex.send({ t: "engine", answer: { promptId: 170, option: null, passStack: true } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 170)).toMatchObject({ seat: 0, option: null, passStack: true });
     // "Repeat this cast N times" (2026-11-04): the engine's offer reaches the seat, and the count travels back
     engine.send({
       type: "prompt", gameId, seat: 0, promptId: 71, prompt: "priority", title: "You have priority", phase: "MAIN1", myTurn: true, stackEmpty: true, stackTopMine: false,

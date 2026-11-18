@@ -110,6 +110,9 @@ class AttackAndCostsTest {
         /** Fill `a` for an attackers prompt. */
         default void attackers(Game game, Player me, JsonObject prompt, JsonObject a) { a.add("attacks", new JsonArray()); }
 
+        /** A priority prompt in my first main phase with something on the stack; the default lets it resolve. */
+        default void stacked(Game game, Player me, JsonObject prompt, JsonObject a) { a.add("option", null); }
+
         /** A priority prompt in my declare-attackers step (the attack has been accepted). */
         default void attacked(Game game, Player me, JsonObject prompt) { }
     }
@@ -163,6 +166,8 @@ class AttackAndCostsTest {
                                 a.addProperty("concede", true);
                             } else if (mine && "MAIN1".equals(phase)) {
                                 script.main(game, my, p, a);
+                            } else if (p.get("myTurn").getAsBoolean() && "MAIN1".equals(phase)) {
+                                script.stacked(game, my, p, a);
                             } else {
                                 a.add("option", null);
                             }
@@ -331,6 +336,71 @@ class AttackAndCostsTest {
         assertTrue(prompts.get(1).has("refused"), "the refusal is explained" + why);
         assertTrue(prompts.get(1).get("refused").getAsString().contains("No more than one creature can attack"), prompts.get(1).get("refused").getAsString());
         assertEquals(List.of("Hill Giant"), declared, "the second answer replaced the first" + why);
+    }
+
+    // ------------------------------------------------------------------ a long stack
+
+    /**
+     * The same game later: a stack of triggers took the better part of an hour, one "Let it resolve" at a time.
+     * "Resolve all" passes until the stack is empty: three spells on the stack, one answer, no more questions.
+     */
+    @Test
+    void resolveAllPassesUntilTheStackIsEmpty() throws Exception {
+        int[] cast = {0};
+        int[] askedAfter = {0};
+        boolean[] asked = {false};
+        int[] shocksInGraveyard = {-1};
+        List<String> trace = play(1, new Script() {
+            @Override public void setUp(Game game, Player me) {
+                for (int i = 0; i < 3; i++) put(game, me, "Mountain");
+                for (int i = 0; i < 3; i++) toHand(me, "Shock");
+            }
+
+            private boolean castOne(JsonObject p, JsonObject a) {
+                List<JsonObject> shock = options(p, "Shock");
+                if (cast[0] >= 3 || shock.isEmpty()) return false;
+                cast[0]++;
+                a.addProperty("option", shock.get(0).get("index").getAsInt());
+                return true;
+            }
+
+            @Override public void main(Game game, Player me, JsonObject p, JsonObject a) {
+                if (!asked[0] && castOne(p, a)) return;
+                shocksInGraveyard[0] = 0;
+                for (Card c : me.getCardsIn(ZoneType.Graveyard)) if (c.getName().equals("Shock")) shocksInGraveyard[0]++;
+                a.addProperty("concede", true);
+            }
+
+            @Override public void stacked(Game game, Player me, JsonObject p, JsonObject a) {
+                if (asked[0]) {
+                    askedAfter[0]++;
+                    a.add("option", null);
+                } else if (!castOne(p, a)) {
+                    asked[0] = true;
+                    a.add("option", null);
+                    a.addProperty("passStack", true);
+                }
+            }
+        });
+        String why = "\n" + String.join("\n", trace);
+        assertEquals(3, cast[0], "three spells were put on the stack" + why);
+        assertTrue(asked[0], "Resolve all was sent with the three on the stack" + why);
+        assertEquals(0, askedAfter[0], "no priority question while the stack emptied" + why);
+        assertEquals(3, shocksInGraveyard[0], "all three resolved before the next question" + why);
+    }
+
+    /** Platinum Angel's line (and any other replaced effect) goes out once a turn, not at every state check. */
+    @Test
+    void aReplacedEffectIsLoggedOnceATurn() {
+        cgwf.engine.bridge.RepeatedLogLines lines = new cgwf.engine.bridge.RepeatedLogLines();
+        String angel = "You can't lose the game and your opponents can't win the game.";
+        assertTrue(lines.keep("EFFECT_REPLACED", angel, 30));
+        assertFalse(lines.keep("EFFECT_REPLACED", angel, 30));
+        assertFalse(lines.keep("EFFECT_REPLACED", angel, 30));
+        assertTrue(lines.keep("EFFECT_REPLACED", "Prevent all combat damage.", 30), "a different effect in the same turn");
+        assertTrue(lines.keep("EFFECT_REPLACED", angel, 31), "again on the next turn");
+        assertTrue(lines.keep("STACK_RESOLVE", "Shock", 31));
+        assertTrue(lines.keep("STACK_RESOLVE", "Shock", 31), "other log lines are never dropped");
     }
 
     // ------------------------------------------------------------------ 2. Darksteel Monolith

@@ -55,6 +55,7 @@ public final class GameSession {
     private volatile boolean dirty;
     private long lastFlushNanos;
     private int logSent;
+    private final RepeatedLogLines repeats = new RepeatedLogLines();
     private volatile boolean over;
     private final StartingPlayer starting = new StartingPlayer();
     private final OpeningHand opening;
@@ -435,6 +436,7 @@ public final class GameSession {
         List<GameLogEntry> all = game.getGameLog().getAllEntries(); // oldest first
         for (int i = logSent; i < all.size(); i++) {
             GameLogEntry e = all.get(i);
+            if (!repeats.keep(e.type().name(), e.message(), game.getPhaseHandler().getTurn())) continue; // once a turn
             JsonObject j = new JsonObject();
             j.addProperty("type", "log");
             j.addProperty("seq", i + 1);
