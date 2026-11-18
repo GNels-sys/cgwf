@@ -275,7 +275,7 @@ public final class BridgeController extends PlayerControllerAi {
             try {
                 sa.setActivatingPlayer(player);
                 boolean canPlay = sa.canPlay();
-                boolean canPay = canPlay && (probe(() -> ComputerUtilCost.canPayCost(sa, player, false)) || canPayWithRichSources(sa));
+                boolean canPay = canPlay && (probe(() -> ComputerUtilCost.canPayCost(sa, player, false)) || canPayWithRichSources(sa) || canPayThroughFilters(sa));
                 boolean hasTargets = canPay && (!sa.usesTargeting() || sa.getMinTargets() == 0 || !targetCandidates(sa).isEmpty());
                 ok = canPlay && canPay && hasTargets;
                 if (DEBUG_PRIORITY && host.isInZone(ZoneType.Hand)) System.err.println("[priority]   " + host.getName() + ": canPlay=" + canPlay + " canPay=" + canPay + " targets=" + hasTargets);
@@ -365,7 +365,29 @@ public final class BridgeController extends PlayerControllerAi {
                 session.sendError("could not tap for the larger amount of mana: " + e.getMessage());
             }
         }
-        return super.payManaCost(toPay, costPartMana, sa, prompt, matrix, effect);
+        if (super.payManaCost(toPay, costPartMana, sa, prompt, matrix, effect)) return true;
+        if (autopilot() || sa == null || toPay == null) return false;
+        // Forge's payer could not do it. When the board has mana abilities that cost mana themselves (Signets,
+        // filter lands) the reason is usually that it cannot chain them: float the mana in a workable order
+        // (ManaFloat) and let it pay from the pool. Owner report 2026-11-18: the commander could not be cast.
+        try {
+            ManaCostBeingPaid need = new ManaCostBeingPaid(toPay);
+            Integer x = sa.getXManaCostPaid();
+            if (need.getXcounter() > 0 && x != null && x > 0) need.increaseGenericMana(x * need.getXcounter());
+            if (ManaFloat.floatFor(player, game, need, 20_000)) return super.payManaCost(toPay, costPartMana, sa, prompt, matrix, effect);
+        } catch (RuntimeException e) {
+            session.sendError("could not pay through the mana abilities: " + e.getMessage());
+        }
+        return false;
+    }
+
+    /** The legal list: could a chain of mana abilities that cost mana themselves pay for this? (ManaFloat; nothing is activated.) */
+    private boolean canPayThroughFilters(SpellAbility sa) {
+        if (sa == null || sa.getPayCosts() == null || !sa.getPayCosts().hasManaCost()) return false;
+        return probe(() -> {
+            ManaCostBeingPaid cost = ComputerUtilMana.calculateManaCost(sa.getPayCosts(), sa, player, true, 0, false);
+            return cost != null && ManaFloat.couldPay(player, cost, 3_000);
+        });
     }
 
     /**

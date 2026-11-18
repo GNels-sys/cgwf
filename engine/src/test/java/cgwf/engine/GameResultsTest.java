@@ -77,4 +77,43 @@ class GameResultsTest {
         assertEquals(1, bot.get("place").getAsInt());
         assertEquals(1, over.get("winnerSeat").getAsInt());
     }
+    /**
+     * A player knocked out while the game goes on gets a log line at that moment (Forge writes its own only when
+     * the whole game ends). Three seats: the human concedes at the first priority and the two bots play on.
+     */
+    @Test
+    void aPlayerKnockedOutMidGameIsLoggedAtOnce() throws Exception {
+        LinkedBlockingQueue<JsonObject> frames = new LinkedBlockingQueue<>();
+        GameSession session = new GameSession("knockout-test", 7L, List.of(
+                new GameSession.SeatSpec(0, true, "Alex", decks.get(0)),
+                new GameSession.SeatSpec(1, false, "Bot1", decks.get(1)),
+                new GameSession.SeatSpec(2, false, "Bot2", decks.get(0))), 30_000, frames::add);
+        session.start();
+        String line = null;
+        boolean conceded = false;
+        boolean overFirst = false;
+        long deadline = System.currentTimeMillis() + 120_000;
+        while (line == null && System.currentTimeMillis() < deadline) {
+            JsonObject f = frames.poll(1, TimeUnit.SECONDS);
+            if (f == null) continue;
+            String type = f.has("type") ? f.get("type").getAsString() : "";
+            if (type.equals("gameOver")) { overFirst = true; break; }
+            if (type.equals("log") && f.get("text").getAsString().contains("is out of the game")) { line = f.get("text").getAsString(); break; }
+            if (!type.equals("prompt") || f.get("seat").getAsInt() != 0) continue;
+            JsonObject a = new JsonObject();
+            a.add("promptId", f.get("promptId"));
+            String kind = f.get("prompt").getAsString();
+            if (kind.equals("mulligan")) a.addProperty("keep", true);
+            else if (kind.equals("priority") && !conceded) { conceded = true; session.concede(0); continue; }
+            else if (kind.equals("choose") || kind.equals("confirm")) a.addProperty("option", 0);
+            session.answer(0, a);
+        }
+        session.end();
+        assertTrue(conceded, "the human reached a priority and conceded");
+        assertFalse(overFirst, "the two bots were still playing");
+        assertEquals("Alex is out of the game: conceded.", line);
+        assertEquals("Blair is out of the game: life total reached 0.", GameSession.knockedOutLine("Blair", "LifeReachedZero"));
+        assertEquals("Blair is out of the game: 21 or more combat damage from one commander.", GameSession.knockedOutLine("Blair", "CommanderDamage"));
+        assertEquals("Blair is out of the game.", GameSession.knockedOutLine("Blair", null));
+    }
 }

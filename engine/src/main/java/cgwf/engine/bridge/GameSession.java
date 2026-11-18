@@ -274,9 +274,41 @@ public final class GameSession {
         boolean any = false;
         for (Map.Entry<Integer, Player> e : playerBySeat.entrySet()) {
             if (outOrder.containsKey(e.getKey())) continue;
-            if (e.getValue().hasLost()) { outOrder.put(e.getKey(), outCount); any = true; }
+            if (e.getValue().hasLost()) {
+                outOrder.put(e.getKey(), outCount);
+                any = true;
+                // Forge only writes "X has lost because ..." when the whole game ends, so a player knocked out
+                // of a game that goes on left no trace in the log (owner, 2026-11-18: a bot at -67 life looked
+                // alive). At the end of the game Forge's own lines say it, so nothing is added then.
+                if (!game.isGameOver()) {
+                    Player p = e.getValue();
+                    JsonObject j = new JsonObject();
+                    j.addProperty("type", "log");
+                    j.addProperty("seq", 0);
+                    j.addProperty("turn", game.getPhaseHandler().getTurn());
+                    j.addProperty("round", rounds.round());
+                    j.addProperty("logType", "ELIMINATED");
+                    j.addProperty("text", knockedOutLine(p.getName(), p.getOutcome() == null || p.getOutcome().lossState == null ? null : p.getOutcome().lossState.name()));
+                    emit(j, SPECTATOR);
+                }
+            }
         }
         if (any) outCount++;
+    }
+
+    /** The log line for a player who leaves a game that goes on, from Forge's loss reason. */
+    public static String knockedOutLine(String name, String lossReason) {
+        String why = switch (lossReason == null ? "" : lossReason) {
+            case "LifeReachedZero" -> "life total reached 0";
+            case "Poisoned" -> "ten or more poison counters";
+            case "CommanderDamage" -> "21 or more combat damage from one commander";
+            case "Milled" -> "drew from an empty library";
+            case "Conceded" -> "conceded";
+            case "SpellEffect" -> "a card's effect";
+            case "OpponentWon" -> "an opponent won the game";
+            default -> null;
+        };
+        return name + " is out of the game" + (why == null ? "." : ": " + why + ".");
     }
 
     /**

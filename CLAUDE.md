@@ -1534,7 +1534,27 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
       (mark = newest stack id); `chooseSpellAbilityToPlay` then passes until the stack is empty. An opponent's
       item added after the mark that the seat's `respondTo` setting would stop for hands priority back; Hold
       cancels it. Choices inside a trigger (targets, "you may", order) are still asked.
-  - Still open from that game: a player eliminated mid-game gets no log line until the game ends.
+  - **A knocked-out player is logged at once (owner, 2026-11-18).** Forge writes "X has lost because ..." only
+    when the whole game ends, so a bot at -67 life looked alive. `GameSession.noteEliminations` emits a `log`
+    frame (`logType: ELIMINATED`, an event line and a toast) the moment a seat has lost and the game goes on:
+    "Hazel bot is out of the game: life total reached 0." (`knockedOutLine`: life, poison, commander damage,
+    empty library, conceded, a card's effect). Test: `GameResultsTest.aPlayerKnockedOutMidGameIsLoggedAtOnce`.
+- **Paying through Signets and filter lands (owner report 2026-11-18, room WYJ9C4: "I'm not allowed to cast my
+  commander").** Jace, Multiverse Architect ({1}{W}{U}{B}{R}) with Plains, Radiant Summit, Sunken Ruins, Sol
+  Ring, Izzet Signet and Azorius Signet: black mana exists only as Sol Ring -> a Signet -> Sunken Ruins'
+  {U/B} filter. Forge's payer says the cost is payable (its test mode is optimistic) and then fails for real,
+  because `prepayFilterManaAbility` pays a mana ability's own cost only from sources that cost nothing, so it
+  cannot chain two of them. The log shows it as "Jace, Multiverse Architect - returned to Command (could not be
+  put on the stack)"; Despark failed the same way. Not new: the same test fails on the engine from before #52.
+  Fix (`engine/.../bridge/ManaFloat.java`, called from `BridgeController.payManaCost` only after Forge's payer
+  has failed, and only when the board has such an ability): a small model of the untapped permanents' plain
+  mana abilities (what each costs to use and what it can make), a breadth-first search for the fewest
+  activations after which the floating mana alone pays the cost, then one real activation at a time, reading
+  the real pool and searching again after each, until the pool pays; Forge then pays from the pool. Abilities
+  with other costs (sacrifice, life) or spend restrictions are left out. The legal list asks the same model
+  (`canPayThroughFilters`, 3,000 nodes) when Forge's check says no. Tests: `AttackAndCostsTest`
+  `aSpellPaidThroughSignetsAndAFilterLandIsCastWhenItIsOffered` (the owner's board),
+  `theCommanderIsOfferedFromTheCommandZoneAndCanBeCast`.
 - **Counts are clamped to the options (2026-10-19).** Owner report: Blasphemous Edict ("each player
   sacrifices thirteen creatures") with six creatures sent a choose-13-of-6 prompt that could never be
   answered, so the spell never resolved. Rule 701.21a: a player sacrifices as many as they can. The
