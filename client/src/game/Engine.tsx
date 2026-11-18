@@ -84,7 +84,10 @@ export function initialPick(prompt: EnginePrompt | null): EnginePick {
       return { kind: "select", picked: [] };
     case "attackers": {
       const first = prompt.defenders.find((d) => d.kind === "player") ?? prompt.defenders[0] ?? null;
-      return { kind: "attack", targets: {}, current: first };
+      // Creatures the rules make attack start out declared, each at the defender it has to attack.
+      const targets: Record<string, EngineEntityRef> = {};
+      for (const c of prompt.candidates) if (c.mustAttack?.[0]) targets[c.iid] = c.mustAttack[0];
+      return { kind: "attack", targets, current: first };
     }
     case "blockers":
       return { kind: "block", blocks: {}, current: prompt.attackers[0]?.iid ?? null };
@@ -219,6 +222,18 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
             <strong>Attack</strong>
             <span className="muted small">Pick a target, then tap the creatures that attack it. Tap again to take one back.</span>
           </div>
+          {prompt.refused && (
+            <p className="engine-refused small" role="alert">
+              {prompt.refused}
+            </p>
+          )}
+          {prompt.notes && prompt.notes.length > 0 && (
+            <ul className="engine-notes small" aria-label="What the rules require of this attack">
+              {prompt.notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          )}
           <div className="combat-chips">
             {prompt.defenders.map((d) => {
               const key = refKey(d);

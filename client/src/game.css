@@ -2754,3 +2754,4 @@ button.engine-row { cursor: pointer; width: 100%; }
 /* Why some blocks are impossible (2026-11-17), under the blockers bar's heading. */
 .engine-notes { margin: 0; padding: 0 0 0 1.1em; flex: 1 1 100%; color: var(--muted, inherit); line-height: 1.3; }
 .engine-notes li { margin: 2px 0; }
+.engine-refused { margin: 0; flex: 1 1 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--danger, #c0392b); line-height: 1.3; }

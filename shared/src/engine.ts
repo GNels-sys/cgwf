@@ -43,6 +43,8 @@ export interface EngineOptionCard {
   toughness: number | null;
   /** Attackers prompt: which defenders this creature may attack. */
   canAttack?: EngineEntityRef[];
+  /** Attackers prompt: whom the rules make this creature attack if able (an encore copy, a goaded creature). */
+  mustAttack?: EngineEntityRef[];
   /** Blockers prompt: which attackers (iids) this creature may block. */
   canBlock?: string[];
   /** Blockers prompt: who/what the attacker is attacking. */
@@ -105,7 +107,12 @@ export type EnginePrompt =
   | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean; holding: boolean; threat?: string | null; repeat?: EngineRepeatOffer | null }
   /** `cancelLabel`: what Cancel means here ("Keep current targets" when a copy or redirect may choose new targets); default "Cancel". */
   | { kind: "targets"; promptId: number; title: string; ability: string; source: string | null; min: number; max: number; options: EngineOption[]; cancelLabel?: string | null }
-  | { kind: "attackers"; promptId: number; title: string; candidates: EngineOptionCard[]; defenders: EngineEntityRef[] }
+  /**
+   * `notes`: what the rules require of this attack, in sentences ("X must attack Blair this combat if able.",
+   * "No more than one creature can attack this combat."). `refused`: why the last declaration was not legal;
+   * every ask is the whole declaration again.
+   */
+  | { kind: "attackers"; promptId: number; title: string; candidates: EngineOptionCard[]; defenders: EngineEntityRef[]; notes?: string[]; refused?: string | null }
   | {
       kind: "blockers";
       promptId: number;

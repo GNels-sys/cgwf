@@ -441,8 +441,11 @@ describe("engine tables (relay to the rules engine)", () => {
     const ma = alex.mark();
     engine.send({
       type: "prompt", gameId, seat: 0, promptId: 8, prompt: "attackers", title: "Declare attackers",
-      candidates: [card(14, "Atraxa, Grand Unifier", "Battlefield", pid[0]!, { power: 7, toughness: 7, index: 0, canAttack: [{ kind: "player", id: pid[1]!, name: "Blair" }] })],
+      candidates: [card(14, "Atraxa, Grand Unifier", "Battlefield", pid[0]!, { power: 7, toughness: 7, index: 0, canAttack: [{ kind: "player", id: pid[1]!, name: "Blair" }], mustAttack: [{ kind: "player", id: pid[1]!, name: "Blair" }] })],
       defenders: [{ kind: "player", id: pid[1]!, name: "Blair", life: 40 }],
+      // what the rules require of the attack, and why the last declaration was refused (2026-11-18)
+      notes: ["Atraxa, Grand Unifier (14) must attack this combat if able."],
+      refused: "That attack is not legal. Atraxa, Grand Unifier (14) must attack this combat if able.",
     });
     const s = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.kind === "attackers" && Object.keys(f.view.players).length === 2, ma)).view;
     const prompt = s.engine!.prompt!;
@@ -450,6 +453,9 @@ describe("engine tables (relay to the rules engine)", () => {
     if (prompt.kind !== "attackers") throw new Error("unreachable");
     const blairId = s.turnOrder[1]!;
     expect(prompt.candidates[0]!.canAttack![0]).toEqual({ kind: "player", player: blairId, name: "Blair" });
+    expect(prompt.candidates[0]!.mustAttack).toEqual([{ kind: "player", player: blairId, name: "Blair" }]);
+    expect(prompt.notes).toEqual(["Atraxa, Grand Unifier must attack this combat if able."]);
+    expect(prompt.refused).toBe("That attack is not legal. Atraxa, Grand Unifier must attack this combat if able.");
     alex.send({ t: "engine", answer: { promptId: 8, attacks: [{ iid: "14", defender: { kind: "player", player: blairId } }] } });
     const answer = await engine.waitFor((f) => f.type === "answer" && f.promptId === 8);
     expect(answer.attacks).toEqual([{ cardId: 14, defender: { kind: "player", id: pid[1] } }]);

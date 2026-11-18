@@ -69,6 +69,7 @@ export interface EngineCardJson {
   index?: number;
   kind?: string;
   canAttack?: Array<{ kind: "player" | "card"; id: number; name?: string | null }>;
+  mustAttack?: Array<{ kind: "player" | "card"; id: number; name?: string | null }>;
   canBlock?: number[];
   attacking?: { kind: "player" | "card"; id: number; name?: string | null };
 }
@@ -385,6 +386,7 @@ function toOptionCard(c: EngineCardJson, ctx: ConvertContext): EngineOptionCard 
     toughness: c.toughness ?? null,
   };
   if (c.canAttack) out.canAttack = c.canAttack.map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null);
+  if (c.mustAttack) out.mustAttack = c.mustAttack.map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null);
   if (c.canBlock) out.canBlock = c.canBlock.map(String);
   if (c.attacking) {
     const ref = toEntityRef(c.attacking, ctx);
@@ -456,7 +458,11 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
       return { kind: "targets", promptId, title, ability: String(raw.ability ?? ""), source: str(raw.source), min: Number(raw.min ?? 1), max: Number(raw.max ?? 1), options: options(raw.options, ctx), cancelLabel: str(raw.cancelLabel) };
     case "attackers": {
       const defenders = Array.isArray(raw.defenders) ? (raw.defenders as RawEntityRef[]).map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null) : [];
-      return { kind: "attackers", promptId, title, candidates: cardsOnly(raw.candidates, ctx), defenders };
+      const out: Extract<EnginePrompt, { kind: "attackers" }> = { kind: "attackers", promptId, title, candidates: cardsOnly(raw.candidates, ctx), defenders };
+      const notes = Array.isArray(raw.notes) ? raw.notes.slice(0, 12).map((n) => cleanEngineText(String(n))).filter(Boolean) : [];
+      if (notes.length) out.notes = notes;
+      if (typeof raw.refused === "string" && raw.refused) out.refused = cleanEngineText(raw.refused);
+      return out;
     }
     case "blockers": {
       const out: Extract<EnginePrompt, { kind: "blockers" }> = { kind: "blockers", promptId, title, attackers: cardsOnly(raw.attackers, ctx), blockers: cardsOnly(raw.blockers, ctx) };

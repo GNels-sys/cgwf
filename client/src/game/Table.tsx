@@ -286,7 +286,9 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           if (targets[card.iid]) delete targets[card.iid];
           else {
             const current = pick.current;
-            const allowed = current && (cand.canAttack ?? []).some((d) => refKey(d) === refKey(current)) ? current : (cand.canAttack ?? [])[0];
+            // a creature the rules send at one defender goes there, whichever target chip is lit
+            const pool = cand.mustAttack && cand.mustAttack.length > 0 ? cand.mustAttack : (cand.canAttack ?? []);
+            const allowed = current && pool.some((d) => refKey(d) === refKey(current)) ? current : pool[0];
             if (!allowed) return;
             targets[card.iid] = allowed;
           }
