@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
@@ -228,6 +228,40 @@ describe("EDHREC import into the deck library", () => {
     expect(row().agentEligible).toBe(false);
     expect((row().importMeta as { eligibleBy: string }).eligibleBy).toBe("owner");
     ctx.library.patch(row().id, { agentEligible: true });
+  });
+
+  it("Bracket 2 passes over a deck that plays higher and takes the next one, so the target counts decks bots are dealt", async () => {
+    // "Atraxa D" has the most core decks. Its average is the one list without Rancor, which this test's
+    // analyzer rates at Bracket 4 (the fixture cards hold no Game Changer or combo of their own).
+    table["commanders/week"] = listPage([
+      { name: "Atraxa A", slug: "atraxa-a", numDecks: 900 },
+      { name: "Atraxa B", slug: "atraxa-b", numDecks: 800 },
+      { name: "Atraxa C", slug: "atraxa-c", numDecks: 100 },
+      { name: "Atraxa D", slug: "atraxa-d", numDecks: 90 },
+    ]);
+    table["commanders/atraxa-d"] = commanderPage("Atraxa, Praetors' Voice", ["W", "U", "B", "G"], [1, 500, 0, 0, 0]);
+    const groups = atraxaGroups();
+    table["average-decks/atraxa-d/core"] = averageDeck(["Atraxa, Praetors' Voice"], { ...groups, Enchantment: [["Glorious Anthem", 1]], Land: [["Forest", 92]] });
+    const real = ctx.analyzer.analyze.bind(ctx.analyzer);
+    const spy = vi.spyOn(ctx.analyzer, "analyze").mockImplementation(async (cards, opts) => {
+      const r = await real(cards, opts);
+      if (cards.some((c) => c.name === "Rancor")) return r;
+      return { ...r, analysis: { ...r.analysis, floor: 4, reasons: [...r.analysis.reasons, { bracket: 4, text: "A two-card combo." }] } } as typeof r;
+    });
+    try {
+      await ctx.edhrec.run({ targets: { 2: 1, 3: 1, 4: 1, 5: 0 }, refresh: true });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(ctx.edhrec.state).toMatchObject({ error: null, selected: { 2: 1, 3: 1, 4: 1, 5: 0 } });
+    expect(ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, "edhrec:atraxa-d:core")).get()).toBeUndefined();
+    const next = ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, "edhrec:atraxa-c:core")).get()!;
+    expect(next).toMatchObject({ bracket: 2, agentEligible: true });
+    const report = fs.readFileSync(ctx.edhrec.state.reportPath!, "utf8");
+    expect(report).toContain("passed over, bots would not be dealt it: the bracket rules put it at Bracket 4 or higher (EDHREC says 2): A two-card combo.");
+    // Brackets 3 and 4 keep a deck the rules rate higher: the rule is for Bracket 2 alone.
+    const up = await ctx.edhrec.evaluate({ slug: "atraxa-a", name: "a", identity: "WUBG", bracketCounts: { 1: 0, 2: 0, 3: 500, 4: 0, 5: 0 } }, 3);
+    expect(up.ok).toBe(true);
   });
 
   it("scales the diversity caps with a larger target and reads targets from a request safely", () => {
