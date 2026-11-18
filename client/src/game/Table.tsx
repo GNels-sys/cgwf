@@ -17,6 +17,8 @@ import { Avatar } from "../components/Avatar";
 import { useSettings } from "../settings";
 import { anthemActions, cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
 import { setAmbient, stopAmbient } from "./ambient";
+import { AttackSplitSheet } from "./AttackSplit";
+import { toggleMany } from "./attackGroups";
 import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
 import { CardZoom } from "./CardZoom";
@@ -59,6 +61,7 @@ type Sheet =
   | { kind: "payWith"; card: ViewCard; options: Array<{ index: number; description: string; cost: string | null; kind: string }> }
   | { kind: "engineList" }
   | { kind: "enginePrompt" }
+  | { kind: "attackSplit" }
   | null;
 interface CardsPanel {
   title: string;
@@ -158,7 +161,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     pickFor.current = id;
     setPickState(initialPick(prompt));
     setSheet((s) => {
-      const mine = s && (s.kind === "engineList" || s.kind === "engineAbilities" || s.kind === "enginePrompt" || s.kind === "payWith");
+      const mine = s && (s.kind === "engineList" || s.kind === "engineAbilities" || s.kind === "enginePrompt" || s.kind === "payWith" || s.kind === "attackSplit");
       if (mine) s = null;
       if (!prompt || s) return s; // never stomp a sheet the player opened themself
       // Questions that need a sheet open at once; list choices open when there is nothing on the table to tap.
@@ -521,7 +524,12 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       const c = findCardIn(view, iid);
       return c ? nameOf(c, printings).split(",")[0]! : "?";
     };
-    if (mode?.kind === "attack") {
+    if (engineMode && prompt?.kind === "attackers" && pick.kind === "attack") {
+      for (const [iid, d] of Object.entries(pick.targets)) {
+        const who = d.kind === "player" ? d.player : (d.controller ?? null);
+        marks.set(iid, { label: `→ ${d.kind === "player" ? (view.players[d.player]?.name ?? d.name ?? "?") : short(d.iid)}`, color: who ? colorOf(room.members, who) : undefined });
+      }
+    } else if (mode?.kind === "attack") {
       for (const [iid, t] of Object.entries(mode.targets)) marks.set(iid, { label: `→ ${t.planeswalker ? short(t.planeswalker) : (view.players[t.player]?.name ?? "?")}`, color: colorOf(room.members, t.player) });
     } else if (mode?.kind === "block") {
       for (const [iid, attacker] of Object.entries(mode.blocks)) marks.set(iid, { label: `blocks ${short(attacker)}`, color: view.combat ? colorOf(room.members, view.combat.attacker) : undefined });
@@ -531,7 +539,18 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       for (const b of view.combat.blockers) marks.set(b.iid, { label: `blocks ${short(b.attacker)}`, color: colorOf(room.members, view.combat.attacker) });
     }
     return marks;
-  }, [mode, view, printings, room.members]);
+  }, [mode, view, printings, room.members, engineMode, prompt, pick]);
+  /** A tap on a rolled-up stack of identical tokens: while declaring attackers the whole stack goes (or comes back). */
+  const tapGroup = (cards: ViewCard[]) => {
+    const first = cards[0];
+    if (!first) return;
+    if (engineMode && prompt?.kind === "attackers" && pick.kind === "attack") {
+      const ids = new Set(cards.map((c) => c.iid));
+      const candidates = prompt.candidates.filter((c) => ids.has(c.iid));
+      if (candidates.length > 0) return void setPickState({ kind: "attack", targets: toggleMany(pick.targets, candidates, pick.current), current: pick.current });
+    }
+    tapCard(first);
+  };
   const combatSelected = useMemo(() => (engineMode ? engineSelected : new Set(mode ? Object.keys(mode.kind === "attack" ? mode.targets : mode.blocks) : [])), [mode, engineMode, engineSelected]);
   const confirmWin = (iid: string, name: string, condition: string) =>
     setDialog({
@@ -587,6 +606,8 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       sheetView = <PayWithSheet card={sheet.card} options={sheet.options} view={view} printings={printings} promptId={prompt.promptId} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     } else if (sheet.kind === "engineList" && prompt) {
       sheetView = <EngineListSheet prompt={prompt} view={view} printings={printings} pick={pick} setPick={setPick} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} members={room.members} me={me} />;
+    } else if (sheet.kind === "attackSplit" && prompt?.kind === "attackers" && pick.kind === "attack") {
+      sheetView = <AttackSplitSheet prompt={prompt} view={view} printings={printings} members={room.members} targets={pick.targets} setTargets={(targets) => setPick({ kind: "attack", targets, current: pick.current })} answer={answerEngine} onClose={closeSheet} />;
     } else if (sheet.kind === "enginePrompt" && prompt && SHEET_PROMPT_KINDS.has(prompt.kind)) {
       sheetView = <EnginePromptSheet prompt={prompt} view={view} printings={printings} answer={answerEngine} onClose={closeSheet} onZoom={holdCard} />;
     }
@@ -690,7 +711,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
           onHold={engine ? (turn) => sock.send({ t: "hold", turn }) : undefined}
         >
           {engineMode && prompt && me && mePlayer && (
-            <EngineBar prompt={prompt} view={view} printings={printings} members={room.members} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} offZone={offZone} onPlayCard={tapCard} onHoldCard={engineHold} openList={() => setSheet(SHEET_PROMPT_KINDS.has(prompt.kind) ? { kind: "enginePrompt" } : { kind: "engineList" })} />
+            <EngineBar prompt={prompt} view={view} printings={printings} members={room.members} me={me} pick={pick} setPick={setPick} answer={answerEngine} onZoom={holdCard} offZone={offZone} onPlayCard={tapCard} onHoldCard={engineHold} openList={() => setSheet(SHEET_PROMPT_KINDS.has(prompt.kind) ? { kind: "enginePrompt" } : { kind: "engineList" })} openSplit={() => setSheet({ kind: "attackSplit" })} />
           )}
           {mode && me && (
             <CombatBar
@@ -741,6 +762,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               sleeveOf={sleeveOf}
               marks={combatMarks}
               selected={combatSelected}
+              onTapGroup={tapGroup}
             />
           ) : (
             <div className="spectating">

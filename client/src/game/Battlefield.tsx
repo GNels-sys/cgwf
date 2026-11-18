@@ -3,6 +3,7 @@ import { SECTION_LABELS, describeAnthems, type DerivedBattlefield, type Section,
 import { CardTile } from "./CardTile";
 import type { SleeveStyle } from "./look";
 import { battlefieldCards, stacksOf, type Printings } from "./model";
+import { rollUp } from "./rollup";
 
 /**
  * One player's battlefield: Other on top, then Creatures | Enchantments, then
@@ -28,12 +29,15 @@ interface Props {
   /** Combat mode: selected cards (accent ring) and their marks (target / blocked attacker). */
   marks?: ReadonlyMap<string, { label: string; color?: string | undefined }> | undefined;
   selected?: ReadonlySet<string> | undefined;
+  /** Tap on a rolled-up stack of identical tokens (every card it stands for); without it the tap is on the first one. */
+  onTapGroup?: ((cards: ViewCard[]) => void) | undefined;
 }
 
-function SectionView({ section, player, printings, derived, onTap, onHold, onZoom, draggable, droppable, highlighted, onAnthems, sleeveOf, marks, selected, wide }: Props & { section: Section; wide: boolean }) {
+function SectionView({ section, player, printings, derived, onTap, onHold, onZoom, draggable, droppable, highlighted, onAnthems, sleeveOf, marks, selected, onTapGroup, wide }: Props & { section: Section; wide: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: `row:${section}`, disabled: !droppable });
   const all = battlefieldCards(player);
-  const stacks = stacksOf(player.battlefield[section], all);
+  // identical tokens share one tile with a count (rollup.ts)
+  const stacks = rollUp(stacksOf(player.battlefield[section], all), (c) => ({ derived: derived.cards.get(c.iid), mark: marks?.get(c.iid), selected: selected?.has(c.iid) ?? false, highlight: highlighted?.has(c.iid) ?? false }));
   const anthem = section === "creatures" ? describeAnthems(derived) : null;
   return (
     <div ref={setNodeRef} className={`bf-section is-${section}${wide ? " is-wide" : ""}${isOver ? " is-over" : ""}`}>
@@ -46,9 +50,9 @@ function SectionView({ section, player, printings, derived, onTap, onHold, onZoo
         )}
       </div>
       <div className="bf-cards">
-        {stacks.map(({ host, attachments }) => (
-          <div key={host.iid} className={`stack${attachments.length ? " has-attachments" : ""}`} style={{ "--n": attachments.length } as React.CSSProperties}>
-            <CardTile card={host} printings={printings} onTap={onTap} onHold={onHold} onZoom={host.printingId && printings[host.printingId]?.typeLine.includes("Planeswalker") ? onZoom : undefined} draggable={draggable} derived={derived.cards.get(host.iid)} highlight={highlighted?.has(host.iid)} sleeve={sleeveOf?.(host.owner)} mark={marks?.get(host.iid)} selected={selected?.has(host.iid) ?? false} />
+        {stacks.map(({ host, attachments, members, key }) => (
+          <div key={key} className={`stack${attachments.length ? " has-attachments" : ""}${members.length > 1 ? " is-pile" : ""}`} style={{ "--n": attachments.length } as React.CSSProperties}>
+            <CardTile card={host} printings={printings} onTap={members.length > 1 && onTapGroup ? () => onTapGroup(members) : onTap} count={members.length} onHold={onHold} onZoom={host.printingId && printings[host.printingId]?.typeLine.includes("Planeswalker") ? onZoom : undefined} draggable={draggable} derived={derived.cards.get(host.iid)} highlight={highlighted?.has(host.iid)} sleeve={sleeveOf?.(host.owner)} mark={marks?.get(host.iid)} selected={selected?.has(host.iid) ?? false} />
             {attachments.map((a, i) => (
               <div key={a.iid} className="stack-attachment" style={{ "--i": i + 1 } as React.CSSProperties}>
                 <CardTile card={a} printings={printings} onTap={onTap} onHold={onHold} draggable={draggable} attached derived={derived.cards.get(a.iid)} highlight={highlighted?.has(a.iid)} sleeve={sleeveOf?.(a.owner)} />

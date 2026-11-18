@@ -28,6 +28,8 @@ interface Props {
   sleeve?: SleeveStyle | undefined;
   /** Combat mark: who this creature attacks / which attacker it blocks (label in the defender's colour). */
   mark?: { label: string; color?: string | undefined } | undefined;
+  /** A rolled-up stack: how many identical tokens this tile stands for (rollup.ts). */
+  count?: number | undefined;
 }
 
 const HOLD_MS = 450;
@@ -41,7 +43,7 @@ const FLIP_MS = 320;
  * Light animations: fade in on arrival, a flip when a face changes; all off
  * under prefers-reduced-motion (see game.css).
  */
-export function CardTile({ card, printings, onTap, onHold, onZoom, draggable = false, selected = false, attached = false, dim = false, derived, highlight = false, sleeve, mark }: Props) {
+export function CardTile({ card, printings, onTap, onHold, onZoom, draggable = false, selected = false, attached = false, dim = false, derived, highlight = false, sleeve, mark, count = 1 }: Props) {
   const printing = printingOf(card, printings);
   const name = nameOf(card, printings);
   const hidden = card.faceDown || (!card.printingId && !card.custom);
@@ -114,7 +116,7 @@ export function CardTile({ card, printings, onTap, onHold, onZoom, draggable = f
   /** The spell a prepared creature may cast right now (engine tables). */
   const prepared = !hidden && card.zone.kind === "battlefield" && card.engine?.prepare?.ready ? card.engine.prepare.name : null;
   const label = [
-    name,
+    count > 1 ? `${count} ${name}, one stack` : name,
     showPt && derived ? `${derived.power}/${derived.toughness}` : null,
     card.tapped ? "tapped" : null,
     card.faceDown ? "face down" : null,
@@ -130,7 +132,7 @@ export function CardTile({ card, printings, onTap, onHold, onZoom, draggable = f
     <div
       ref={setNodeRef}
       data-card-id={card.iid}
-      className={`tile${card.tapped ? " is-tapped" : ""}${selected ? " is-selected" : ""}${attached ? " is-attached" : ""}${card.isToken ? " is-token" : ""}${card.isCommander ? " is-commander" : ""}${highlight ? " is-triggered" : ""}${flipping ? " is-flipping" : ""}`}
+      className={`tile${card.tapped ? " is-tapped" : ""}${selected ? " is-selected" : ""}${attached ? " is-attached" : ""}${card.isToken ? " is-token" : ""}${count > 1 ? " is-pile" : ""}${card.isCommander ? " is-commander" : ""}${highlight ? " is-triggered" : ""}${flipping ? " is-flipping" : ""}`}
       style={style}
       {...listeners}
       {...attributes}
@@ -198,6 +200,7 @@ export function CardTile({ card, printings, onTap, onHold, onZoom, draggable = f
         </span>
       )}
       {card.isCommander && <span className="tile-mark" title="Commander">C</span>}
+      {count > 1 && <span className="tile-count" title={`${count} identical tokens`}>&times;{count}</span>}
       {prepared && <span className="tile-prepared" title={`Prepared: may cast ${prepared}`}>Prepared</span>}
       {mark && (
         <span className="tile-combat-mark" style={mark.color ? { background: mark.color } : undefined} title={mark.label}>

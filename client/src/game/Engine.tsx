@@ -5,6 +5,7 @@ import { CardImage } from "../components/CardImage";
 import { CardTile } from "./CardTile";
 import { describeOption, sheetPromptSummary } from "./EnginePrompts";
 import { findCard, nameOf, type Printings } from "./model";
+import { everyoneAt, refKey } from "./attackGroups";
 import { mulliganNote } from "./openingHandText";
 import { canConfirm, choiceLabel, isOptionalChoice, noneAnswer, noneLabel, noneQuestion } from "./optionalChoice";
 import { GroupedChoiceSheet, primaryLabel } from "./ChoiceSheet";
@@ -27,9 +28,7 @@ export type EnginePick =
 
 export const NO_PICK: EnginePick = { kind: "none" };
 
-export function refKey(r: EngineEntityRef): string {
-  return r.kind === "player" ? `p:${r.player}` : `c:${r.iid}`;
-}
+export { refKey };
 
 export function colorOfMember(members: RoomMember[], userId: string): string | undefined {
   const m = members.find((x) => x.userId === userId);
@@ -120,10 +119,12 @@ export interface EngineBarProps {
   onPlayCard?: (c: ViewCard) => void;
   /** Long-press on one of those: "Pay with". */
   onHoldCard?: (c: ViewCard) => void;
+  /** Attackers: open "Send by number" (groups of identical attackers, a number per defender). */
+  openSplit?: () => void;
 }
 
 /** The bar inside the phase strip while the engine waits on me. */
-export function EngineBar({ prompt, view, printings, members, me, pick, setPick, answer, onZoom, openList, offZone = [], onPlayCard, onHoldCard }: EngineBarProps) {
+export function EngineBar({ prompt, view, printings, members, me, pick, setPick, answer, onZoom, openList, offZone = [], onPlayCard, onHoldCard, openSplit }: EngineBarProps) {
   const id = prompt.promptId;
   switch (prompt.kind) {
     case "priority": {
@@ -221,11 +222,18 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
       const targets = pick.kind === "attack" ? pick.targets : {};
       const current = pick.kind === "attack" ? pick.current : null;
       const n = Object.keys(targets).length;
+      // "All attack X" (owner request 2026-11-18): one press instead of a tap per creature.
+      const allTarget = current ?? prompt.defenders[0] ?? null;
+      const everyone = allTarget ? everyoneAt(prompt.candidates, allTarget) : {};
+      const everyoneCount = Object.keys(everyone).length;
+      const alreadyAll = everyoneCount === n && Object.entries(everyone).every(([iid, d]) => targets[iid] && refKey(targets[iid]!) === refKey(d));
+      const required = initialPick(prompt);
+      const requiredTargets = required.kind === "attack" ? required.targets : {};
       return (
         <div className="engine-bar" role="region" aria-label="Declare attackers">
           <div className="engine-bar-head">
             <strong>Attack</strong>
-            <span className="muted small">Pick a target, then tap the creatures that attack it. Tap again to take one back.</span>
+            <span className="muted small">Pick a target, then tap the creatures that attack it. Tap again to take one back. A stack of tokens goes as one.</span>
           </div>
           {prompt.refused && (
             <p className="engine-refused small" role="alert">
@@ -256,6 +264,21 @@ export function EngineBar({ prompt, view, printings, members, me, pick, setPick,
             })}
           </div>
           <div className="engine-bar-actions">
+            {allTarget && everyoneCount > 1 && (
+              <button className="btn btn-small" disabled={alreadyAll} onClick={() => setPick({ kind: "attack", targets: everyone, current })} title="Every creature that can attack this target does">
+                All attack {describeRef(allTarget, view, printings)} ({everyoneCount})
+              </button>
+            )}
+            {openSplit && prompt.candidates.length > 1 && (
+              <button className="btn btn-small" onClick={openSplit} title="Groups of identical creatures, with a number for each player">
+                Send by number...
+              </button>
+            )}
+            {n > Object.keys(requiredTargets).length && (
+              <button className="btn btn-small" onClick={() => setPick({ kind: "attack", targets: requiredTargets, current })}>
+                Clear
+              </button>
+            )}
             <button className="btn btn-small btn-primary" disabled={n === 0} onClick={() => answer({ promptId: id, attacks: Object.entries(targets).map(([iid, defender]) => ({ iid, defender })) })}>
               Declare {n === 0 ? "attack" : `${n} attacker${n === 1 ? "" : "s"}`}
             </button>
