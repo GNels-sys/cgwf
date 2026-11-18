@@ -633,6 +633,12 @@ so coverage stays unchecked). Owner route: `POST /api/library/import-edhrec` (sa
   wins (`eligibleBy: "owner"`, which a re-import now carries over instead of forgetting), and filing the deck
   under a higher bracket lifts the hold at the next check. Bracket 3 averages rated 4 and precons are not
   touched. To apply it to decks already imported: `node server/dist/cli.js import-edhrec --recheck-coverage`.
+  The picker follows the same rule (owner, 2026-11-18, "top it up"): `EdhrecImporter.evaluate` passes over a
+  Bracket 2 average rated above 2 ("passed over, bots would not be dealt it" under "Rejected while choosing"
+  in the report) and the next candidate takes its place, so the Bracket 2 target counts decks bots are
+  dealt. The copies an earlier run imported stay in the library, held back, and appear under "Earlier EDHREC
+  imports not in this selection". A deck Forge cannot play is still picked and counted, so a bracket can
+  end one or two short of its target for bots; a slightly larger `--targets` value covers that.
 
 - **Source and terms.** EDHREC's public JSON at `https://json.edhrec.com/pages/` (verified 2026-10-18):
   `commanders/{week|month|year}.json` and the 32 colour-identity lists (`commanders/<slug>.json`, slugs

@@ -10,6 +10,7 @@ import { cards } from "../../db/schema.js";
 import { resolveDecklist } from "../../decks/resolve.js";
 import { deckForEngine } from "../../engine/deck.js";
 import { deckWarnings } from "../../routes/decks.js";
+import { botHoldReason } from "../eligibility.js";
 import type { NameIndex } from "../../search/index.js";
 import type { LibraryEntry, LibraryService } from "../service.js";
 import type { EdhrecClient } from "./client.js";
@@ -31,7 +32,8 @@ import { inArray } from "drizzle-orm";
  *   2. Per bracket, `selectBracket` ranks by that bracket's deck count and applies the diversity
  *      rules; a candidate is evaluated only when it could be taken: fetch its average deck for the
  *      bracket, resolve every card through the deck resolver, check it is a legal 100-card Commander
- *      deck, analyse it (archetypes, combos, bracket floor) and classify its win condition.
+ *      deck, analyse it (archetypes, combos, bracket floor) and classify its win condition. A Bracket 2
+ *      average the bracket rules rate higher is passed over, so the target counts decks bots are dealt.
  *   3. Import (idempotent by `edhrec:<slug>:<bracket>`), primer skeleton from the engine, then ask
  *      the rules engine whether Forge knows every card; only clean decks become agent-eligible.
  *   4. Report (Markdown) under DATA_DIR/reports/.
@@ -241,6 +243,11 @@ export class EdhrecImporter {
     if (warnings.length) return { ok: false, reason: `not a legal Commander deck as averaged: ${warnings.map((w) => w.message).join(" ")}` };
     const analysisCards = this.analyzer.loadCardsByIds(resolved.entries);
     const analysis = (await this.analyzer.analyze(analysisCards, { combos: "cached" })).analysis;
+    // A bracket's target counts decks bots can be dealt. A Bracket 2 average the bracket rules rate higher
+    // would be held back from them (eligibility.ts, botHoldReason), so it is passed over and the next
+    // candidate takes its place. A copy imported by an earlier run stays in the library for people.
+    // (Owner, 2026-11-18: 25 of the first 150 Bracket 2 picks were held back, leaving bots 124.)
+    if (botHoldReason({ source: "edhrec", bracket, floor: analysis.floor })) return { ok: false, reason: `passed over, bots would not be dealt it: ${bracketMismatch(bracket, analysis)}` };
     const winCondition = classifyWinCondition(analysis, analysisCards);
     this.evaluated.set(edhrecSourceKey(c.slug, bracket), { candidate: c, bracket, deck, padded, entries: resolved.entries, analysisCards, analysis, winCondition });
     return { ok: true, primary: primaryArchetype(analysis), winCondition };
