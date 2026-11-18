@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideEligibility, type EligibilityInput } from "./eligibility.js";
+import { botHoldReason, decideEligibility, type EligibilityInput } from "./eligibility.js";
 
 const base: EligibilityInput = { current: false, eligibleBy: null, source: "precon", clean: true, enable: true };
 
@@ -21,6 +21,16 @@ describe("agent eligibility from a rules-engine check", () => {
   it("switches off a deck it switched on itself once Forge can no longer play it; EDHREC imports count as the check's", () => {
     expect(decideEligibility({ ...base, current: true, eligibleBy: "coverage", clean: false })).toEqual({ eligible: false, eligibleBy: null, outcome: "disabled" });
     expect(decideEligibility({ ...base, source: "edhrec", current: true, eligibleBy: null, clean: false })).toMatchObject({ eligible: false, outcome: "disabled" });
+  });
+
+  it("holds back an EDHREC Bracket 2 deck the bracket rules rate higher, and only that", () => {
+    expect(botHoldReason({ source: "edhrec", bracket: 2, floor: 4 })).toContain("Bracket 4 or higher");
+    expect(botHoldReason({ source: "edhrec", bracket: 2, floor: 3 })).toContain("Bracket 3 or higher");
+    expect(botHoldReason({ source: "edhrec", bracket: 2, floor: 2 })).toBeNull();
+    expect(botHoldReason({ source: "edhrec", bracket: 2, floor: null })).toBeNull();
+    // Bracket 3 averages rated 4 and precons are left alone: the owner asked about Bracket 2 only.
+    expect(botHoldReason({ source: "edhrec", bracket: 3, floor: 4 })).toBeNull();
+    expect(botHoldReason({ source: "precon", bracket: 2, floor: 4 })).toBeNull();
   });
 
   it("changes nothing when the check could not run", () => {

@@ -193,6 +193,43 @@ describe("EDHREC import into the deck library", () => {
     expect(report.indexOf("## Bracket 2")).toBeLessThan(report.indexOf("## Bracket 3"));
   });
 
+  it("a Bracket 2 deck the bracket rules rate higher is not dealt to bots, unless the owner switches it on", async () => {
+    const key = "edhrec:atraxa-c:core";
+    const row = () => ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, key)).get()!;
+    const id = row().id;
+    expect(row().agentEligible).toBe(true);
+    // The fixture cards hold no Game Changer or combo, so the floor is set by hand: a two-card combo's 4.
+    ctx.handle.db.update(libraryDecks).set({ bracketFloor: 4 }).where(eq(libraryDecks.id, id)).run();
+    await ctx.edhrec.run({ recheckCoverage: true });
+    expect(row().agentEligible).toBe(false);
+    expect((row().importMeta as { botHold: string }).botHold).toContain("Bracket 4 or higher");
+    expect(ctx.library.list({ source: "edhrec" }).find((d) => d.id === id)!.importInfo!.botHold).toContain("Bracket 4 or higher");
+    const report = fs.readFileSync(ctx.edhrec.state.reportPath!, "utf8");
+    expect(report).toContain("Atraxa, Praetors' Voice — Core (EDHREC average): held back from bots");
+    // The Bracket 3 deck with the same cards is untouched.
+    expect(ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, "edhrec:atraxa-a:upgraded")).get()!.agentEligible).toBe(true);
+    // The owner's switch wins and survives later checks.
+    ctx.library.patch(id, { agentEligible: true });
+    await ctx.edhrec.run({ recheckCoverage: true });
+    expect(row().agentEligible).toBe(true);
+    // Filed under a higher bracket (and back in the check's hands) the hold is gone.
+    ctx.handle.db.update(libraryDecks).set({ bracket: 4, agentEligible: false, importMeta: { ...(row().importMeta as object), eligibleBy: null } }).where(eq(libraryDecks.id, id)).run();
+    await ctx.edhrec.run({ recheckCoverage: true });
+    expect(row().agentEligible).toBe(true);
+    expect((row().importMeta as { botHold: string | null }).botHold).toBeNull();
+  });
+
+  it("a re-import remembers that the owner switched a deck off for bots", async () => {
+    const key = "edhrec:atraxa-a:upgraded";
+    const row = () => ctx.handle.db.select().from(libraryDecks).where(eq(libraryDecks.sourceKey, key)).get()!;
+    ctx.library.patch(row().id, { agentEligible: false });
+    await ctx.edhrec.run({ targets: { 2: 0, 3: 1, 4: 1, 5: 0 } });
+    expect(ctx.edhrec.state.error).toBeNull();
+    expect(row().agentEligible).toBe(false);
+    expect((row().importMeta as { eligibleBy: string }).eligibleBy).toBe("owner");
+    ctx.library.patch(row().id, { agentEligible: true });
+  });
+
   it("scales the diversity caps with a larger target and reads targets from a request safely", () => {
     expect(rulesFor(3, 75)).toMatchObject({ target: 75, identityCap: 4, archetypeCap: 12, winConMin: 3 });
     expect(rulesFor(3, 150)).toMatchObject({ target: 150, identityCap: 8, archetypeCap: 24, winConMin: 6, minDecks: 20 });

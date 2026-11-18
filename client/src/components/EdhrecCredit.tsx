@@ -4,10 +4,12 @@ import type { LibraryDeckSummary } from "@cgwf/shared";
  * Attribution and import notes for library decks that came from EDHREC (source "edhrec").
  * The decks are EDHREC's synthesised averages; nothing else from EDHREC is republished.
  */
-export function EdhrecCredit({ deck, compact = false }: { deck: Pick<LibraryDeckSummary, "source" | "sourceUrl" | "importInfo">; compact?: boolean }) {
+export function EdhrecCredit({ deck, compact = false }: { deck: Pick<LibraryDeckSummary, "source" | "sourceUrl" | "importInfo"> & Partial<Pick<LibraryDeckSummary, "agentEligible">>; compact?: boolean }) {
   if (deck.source !== "edhrec") return null;
   const info = deck.importInfo;
   const missing = info?.coverage?.missing ?? [];
+  // Held back from bots for playing above Bracket 2, unless the owner switched it on by hand.
+  const hold = info?.botHold && !deck.agentEligible ? info.botHold : null;
   const link = (
     <a href={deck.sourceUrl ?? "https://edhrec.com"} target="_blank" rel="noreferrer">
       Average deck data from EDHREC
@@ -20,6 +22,7 @@ export function EdhrecCredit({ deck, compact = false }: { deck: Pick<LibraryDeck
         Average deck data from EDHREC
         {info?.mismatch ? <span className="chip tag-chip small is-warn" title={info.mismatch}>bracket?</span> : null}
         {missing.length ? <span className="chip tag-chip small is-warn" title={`Forge cannot play: ${missing.join(", ")}`}>not for bots</span> : null}
+        {!missing.length && hold ? <span className="chip tag-chip small is-warn" title={`Not dealt to bots: ${hold}`}>not for bots</span> : null}
       </span>
     );
   }
@@ -31,6 +34,7 @@ export function EdhrecCredit({ deck, compact = false }: { deck: Pick<LibraryDeck
       </p>
       {info?.mismatch && <p className="small warn">Bracket check: {info.mismatch.replace(/\.\s*$/, "")}. EDHREC's bracket is kept; change it above if you disagree.</p>}
       {missing.length > 0 && <p className="small warn">The rules engine cannot play {missing.join(", ")}, so computer opponents never pick this deck. People can still play it.</p>}
+      {hold && <p className="small warn">Computer opponents are not dealt this deck: {hold}. People can still play it. Switch "bot-eligible" on above to deal it anyway.</p>}
       {!info?.coverage && info?.coverageError && <p className="small muted">Rules-engine coverage not checked yet ({info.coverageError}).</p>}
     </div>
   );

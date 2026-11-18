@@ -623,6 +623,17 @@ so coverage stays unchecked). Owner route: `POST /api/library/import-edhrec` (sa
   lists and several hundred average decks at one request a second: 35 to 45 minutes, then Commander Spellbook
   and the rules-engine check.
 
+- **Bracket 2 decks that play higher are not dealt to bots (owner, 2026-11-17).** The first 150-deck Bracket 2
+  import left 25 "core" averages in the Bracket 2 bot pool that the written bracket rules rate at 3 or 4 (an
+  incidental two-card combo, a Game Changer, extra turns). `botHoldReason` (`server/src/library/eligibility.ts`):
+  an EDHREC deck filed under Bracket 2 whose classifier floor is above 2 counts as not clean in
+  `LibraryService.recordCoverage`, so the import's check and `check-library-coverage` leave it off (or switch
+  it off if a check had switched it on) and record why in `import_meta.botHold`. The deck stays in the library
+  for people; the Library page shows "not for bots" and the deck page says why. The owner's own switch still
+  wins (`eligibleBy: "owner"`, which a re-import now carries over instead of forgetting), and filing the deck
+  under a higher bracket lifts the hold at the next check. Bracket 3 averages rated 4 and precons are not
+  touched. To apply it to decks already imported: `node server/dist/cli.js import-edhrec --recheck-coverage`.
+
 - **Source and terms.** EDHREC's public JSON at `https://json.edhrec.com/pages/` (verified 2026-10-18):
   `commanders/{week|month|year}.json` and the 32 colour-identity lists (`commanders/<slug>.json`, slugs
   in `identity.ts`: mono-white ... colorless, azorius ... simic, esper ... temur, yore-tiller, glint-eye,

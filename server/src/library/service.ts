@@ -19,7 +19,7 @@ import { primerSkeleton } from "../analysis/index.js";
 import type { DbHandle } from "../db/index.js";
 import { cards, libraryDeckCards, libraryDecks, users, type LibraryDeckRow } from "../db/schema.js";
 import { checkPrintingSwap } from "../decks/printing.js";
-import { decideEligibility, type EligibilityDecision } from "./eligibility.js";
+import { botHoldReason, decideEligibility, type EligibilityDecision } from "./eligibility.js";
 
 /**
  * The owner's deck library. Rows come from the precon importer or from "add my
@@ -248,9 +248,10 @@ export class LibraryService {
     const a = input.analysis;
     const existing = this.bySourceKey(input.sourceKey);
     const id = existing?.id ?? randomUUID();
-    const oldMeta = (existing?.importMeta as (LibraryImportInfo & { autoPrimer?: string }) | null) ?? null;
+    const oldMeta = (existing?.importMeta as (LibraryImportInfo & { autoPrimer?: string; eligibleBy?: string }) | null) ?? null;
     const keepPrimer = existing && existing.primer.trim() !== "" && existing.primer !== oldMeta?.autoPrimer;
-    const meta = { ...input.importMeta, autoPrimer: input.primer };
+    // Who switched the deck on or off for bots survives a re-import, so the owner's choice is not forgotten.
+    const meta = { ...input.importMeta, autoPrimer: input.primer, ...(oldMeta?.eligibleBy ? { eligibleBy: oldMeta.eligibleBy } : {}) };
     this.handle.sqlite.transaction(() => {
       if (existing) {
         this.handle.db
@@ -305,13 +306,14 @@ export class LibraryService {
   /**
    * Record a Forge coverage result (+ engine-table legality problems) in import_meta and update agent
    * eligibility with `decideEligibility` (eligibility.ts): the owner's own choice is never overridden.
+   * A deck held back from bots (`botHoldReason`) counts as not clean; the reason is kept in `botHold`.
    */
   recordCoverage(
     id: string,
     coverage: { missing: string[] | null; error?: string | undefined },
     problems: string[],
     opts: { enable: boolean },
-  ): EligibilityDecision | null {
+  ): (EligibilityDecision & { hold: string | null }) | null {
     const row = this.getRow(id);
     if (!row) return null;
     const meta = { ...((row.importMeta as Record<string, unknown> | null) ?? {}) };
@@ -322,17 +324,19 @@ export class LibraryService {
       meta.coverageError = coverage.error ?? "not checked";
     }
     meta.problems = problems;
-    const clean = coverage.missing ? coverage.missing.length === 0 && problems.length === 0 : null;
+    const hold = botHoldReason({ source: row.source, bracket: row.bracket, floor: row.bracketFloor ?? null });
+    meta.botHold = hold;
+    const clean = coverage.missing ? coverage.missing.length === 0 && problems.length === 0 && hold === null : null;
     const by = meta.eligibleBy === "owner" || meta.eligibleBy === "coverage" ? meta.eligibleBy : null;
     const d = decideEligibility({ current: row.agentEligible, eligibleBy: by, source: row.source, clean, enable: opts.enable });
     meta.eligibleBy = d.eligibleBy;
     this.handle.db.update(libraryDecks).set({ importMeta: meta, agentEligible: d.eligible, updatedAt: new Date().toISOString() }).where(eq(libraryDecks.id, id)).run();
-    return d;
+    return { ...d, hold };
   }
 
   /** EDHREC import's coverage step (clean decks switch on; never against the owner's choice). */
-  setCoverage(id: string, coverage: { missing: string[] | null; error?: string | undefined }, eligibleWhenClean: boolean): void {
-    this.recordCoverage(id, coverage, eligibleWhenClean ? [] : ["not legal for engine tables"], { enable: true });
+  setCoverage(id: string, coverage: { missing: string[] | null; error?: string | undefined }, eligibleWhenClean: boolean): (EligibilityDecision & { hold: string | null }) | null {
+    return this.recordCoverage(id, coverage, eligibleWhenClean ? [] : ["not legal for engine tables"], { enable: true });
   }
 
   /** Whole library per bracket: bot-eligible vs total (Library page header, bot box). */
