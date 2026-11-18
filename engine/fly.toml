@@ -20,13 +20,15 @@ primary_region = "lax"
 
 # Memory is plenty at 2 GB (a game peaks under 600 MB RSS). CPU is what Forge's AI needs: on
 # shared-cpu-2x an AI-only game ran ~7x slower than on the dev box, performance-1x within 1.6x
-# (README "Measurements"). Stage 1 plays humans only, so the cheap size stays; when bots are used:
-#   fly machine update <id> -a cgwf-engine --vm-size performance-1x --vm-memory 2048 --yes
+# (README "Measurements"). The cheap size stayed while tables were humans only. With bot seats a shared
+# machine spends its CPU balance about 45 minutes into a game and is throttled to its baseline (0.12 of a
+# core): on 2026-11-18 a stack item went from 2 s to 15 s and one stack took an hour. The owner approved
+# one dedicated vCPU that day (about $31 a month, always on). A deploy applies the size below.
 # No public service means Fly never auto-starts the machine; "always" keeps it up after crashes
 # and host maintenance. Start it by hand after the very first deploy: fly machine start <id>.
 [[restart]]
   policy = "always"
 
 [[vm]]
-  size = "shared-cpu-2x"
+  size = "performance-1x"
   memory = "2gb"

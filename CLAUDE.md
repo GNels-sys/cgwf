@@ -1519,8 +1519,9 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   - **A stack that took an hour (same game, later).** Measured from Fly's metrics: the engine machine
     (`shared-cpu-2x`, baseline 0.12 of a core) spent its CPU balance in the first 45 minutes of the game
     (100,000 at 17:45Z, 1 at 18:32Z) and was throttled from then on; with three bots deciding at every
-    priority a stack item went from 2 s to 15 s. The fix for that is the machine size (`engine/fly.toml`
-    `[[vm]]`, the owner's call: it costs more), not code. Read the numbers with
+    priority a stack item went from 2 s to 15 s. The fix for that is the machine size, not code: the owner
+    approved `performance-1x` (one dedicated vCPU, about $31 a month) the same day, set in `engine/fly.toml`
+    `[[vm]]` and applied by the next engine deploy. Read the numbers with
     `https://api.fly.io/prometheus/personal/api/v1/query_range` (`Authorization: FlyV1 <token>`; series
     `fly_instance_cpu_balance`, `fly_instance_cpu_throttle`, `fly_instance_cpu_baseline`, `app="cgwf-engine"`).
     Two code changes cut the work and the clicks:
