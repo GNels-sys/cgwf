@@ -1539,6 +1539,28 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
     frame (`logType: ELIMINATED`, an event line and a toast) the moment a seat has lost and the game goes on:
     "Hazel bot is out of the game: life total reached 0." (`knockedOutLine`: life, poison, commander damage,
     empty library, conceded, a card's effect). Test: `GameResultsTest.aPlayerKnockedOutMidGameIsLoggedAtOnce`.
+- **Token piles, "All attack", "Send by number" (owner request 2026-11-18, client only).** A board of 110 tokens
+  was attacked with one tap per token. Three things, none of which changes what the engine is sent (still one
+  defender per attacker):
+  - **Piles** (`client/src/game/rollup.ts`, `Battlefield.tsx`): identical tokens share one tile with a count
+    ("x110"). Identical = nothing the tile shows differs (`tokenSignature`: the token, tapped, counters, the
+    engine's power / toughness / damage / summoning sickness, combat mark, selection, glow); only tokens, nothing
+    attached, `ROLL_UP_MIN` = 4 or more. So a pile splits by itself when part of it is tapped or aimed at
+    someone ("x30 -> Alex", "x80"). A tap on a pile acts on its first card (tap one Treasure for mana, pick one
+    to sacrifice), except while declaring attackers, where `Table.tapGroup` sends the WHOLE pile at the lit
+    target, or takes it back (`toggleMany`). Opponents' boards and the Active Board roll up too.
+  - **All attack X** in the attack bar: every creature that may attack the lit target does (`everyoneAt`; a
+    creature the rules send elsewhere goes there). With one opponent left that is the whole attack in two
+    presses. **Clear** goes back to only the required attackers.
+  - **Send by number...** (`AttackSplit.tsx`, pure logic in `attackGroups.ts`): one row per group of attackers
+    the attack cannot tell apart (name, power / toughness, where they may or must go), and per defender a
+    typed number with - / +, "All N" / "Rest (N)", plus "Split evenly" and "None" per group. A number only
+    takes from the creatures attacking nobody, never from another player's share, and is clamped to what is
+    left. The sheet edits the same pick state as tapping the table; closing keeps it; Declare is in the sheet
+    and in the bar. The engine's attack pick now also marks each picked creature with its target ("-> Blair").
+  - Tests: `attackGroups.test.ts` (groups, 30 / 30 / rest, clamps, even split, required attackers, pile
+    signatures), `attackSplit.test.tsx` (a real render: one opponent in two presses, typed numbers, Rest,
+    Split evenly, closing declares nothing). Checked in a local preview at 812x375 and 375x812, not in a game.
 - **Paying through Signets and filter lands (owner report 2026-11-18, room WYJ9C4: "I'm not allowed to cast my
   commander").** Jace, Multiverse Architect ({1}{W}{U}{B}{R}) with Plains, Radiant Summit, Sunken Ruins, Sol
   Ring, Izzet Signet and Azorius Signet: black mana exists only as Sol Ring -> a Signet -> Sunken Ruins'
