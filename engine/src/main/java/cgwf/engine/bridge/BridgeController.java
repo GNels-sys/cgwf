@@ -19,6 +19,7 @@ import forge.card.MagicColor;
 import forge.card.mana.ManaCost;
 import forge.card.mana.ManaCostShard;
 import forge.game.Game;
+import forge.game.GameActionUtil;
 import forge.game.ability.ApiType;
 import forge.game.GameLogEntryType;
 import forge.game.GameEntity;
@@ -30,8 +31,13 @@ import forge.game.card.CardLists;
 import forge.game.card.CardState;
 import forge.game.card.CardUtil;
 import forge.game.card.CounterType;
+import forge.game.combat.AttackConstraints;
+import forge.game.combat.AttackRequirement;
+import forge.game.combat.AttackRestriction;
+import forge.game.combat.AttackRestrictionType;
 import forge.game.combat.Combat;
 import forge.game.combat.CombatUtil;
+import forge.game.combat.GlobalAttackRestrictions;
 import forge.game.cost.Cost;
 import forge.game.cost.CostDecisionMakerBase;
 import forge.game.cost.CostPart;
@@ -172,6 +178,19 @@ public final class BridgeController extends PlayerControllerAi {
         }
         // Does an opponent's stack item aim at this seat, their cards or their spells, or hit everyone? (2026-10-29)
         String threat = stackTopNotMine ? StackThreats.describe(stack, player) : null;
+        // "Resolve all": the seat asked to let the whole stack resolve. Pass until it is empty; an opponent's item
+        // that arrived since, and that the seat's own setting would stop for, hands priority back.
+        if (session.passingStack()) {
+            if (stack.isEmpty() || session.holding(ph.getTurn())) {
+                session.clearPassStack();
+            } else {
+                SpellAbilityStackInstance top = stack.peek();
+                boolean fresh = stackTopNotMine && top != null && top.getId() > session.passStackMark();
+                String mode = session.stops().respondTo;
+                if (fresh && ("always".equals(mode) || ("threats".equals(mode) && threat != null))) session.clearPassStack();
+                else return null;
+            }
+        }
         boolean stop = session.stopsAt(phase == null ? "" : phase.name(), ph.isPlayerTurn(player), stackTopNotMine, threat != null, ph.getTurn());
         if (DEBUG_PRIORITY) System.err.println("[priority] seat=" + session.seat() + " turn=" + ph.getTurn() + " phase=" + phase + " myTurn=" + ph.isPlayerTurn(player) + " stackTopNotMine=" + stackTopNotMine + " threat=" + threat + " stop=" + stop + " stops=" + session.stops().toJson());
         if (!stop) return null; // auto-pass
@@ -213,6 +232,12 @@ public final class BridgeController extends PlayerControllerAi {
             session.passUntilTurn(a.get("passUntilTurn").getAsInt());
             return null;
         }
+        if (isTrue(a, "passStack") && !stack.isEmpty()) {
+            int mark = 0;
+            for (SpellAbilityStackInstance si : stack) mark = Math.max(mark, si.getId());
+            session.passStack(mark);
+            return null;
+        }
         if (!a.has("option") || a.get("option").isJsonNull()) return null; // pass
         int idx = a.get("option").getAsInt();
         if (idx < 0 || idx >= legal.size()) {
@@ -238,7 +263,7 @@ public final class BridgeController extends PlayerControllerAi {
     private List<SpellAbility> legalAbilities() {
         CardCollection cards = ComputerUtilAbility.getAvailableCards(game, player);
         List<SpellAbility> out = new ArrayList<>();
-        for (SpellAbility sa : ComputerUtilAbility.getSpellAbilities(cards, player)) {
+        for (SpellAbility sa : withAlternativeCosts(ComputerUtilAbility.getSpellAbilities(cards, player))) {
             if (sa.isManaAbility()) continue; // paid automatically
             Card host = sa.getHostCard();
             if (host == null) continue;
@@ -250,7 +275,7 @@ public final class BridgeController extends PlayerControllerAi {
             try {
                 sa.setActivatingPlayer(player);
                 boolean canPlay = sa.canPlay();
-                boolean canPay = canPlay && probe(() -> ComputerUtilCost.canPayCost(sa, player, false));
+                boolean canPay = canPlay && (probe(() -> ComputerUtilCost.canPayCost(sa, player, false)) || canPayWithRichSources(sa));
                 boolean hasTargets = canPay && (!sa.usesTargeting() || sa.getMinTargets() == 0 || !targetCandidates(sa).isEmpty());
                 ok = canPlay && canPay && hasTargets;
                 if (DEBUG_PRIORITY && host.isInZone(ZoneType.Hand)) System.err.println("[priority]   " + host.getName() + ": canPlay=" + canPlay + " canPay=" + canPay + " targets=" + hasTargets);
@@ -259,6 +284,32 @@ public final class BridgeController extends PlayerControllerAi {
                 ok = false;
             }
             if (ok) out.add(sa);
+        }
+        return out;
+    }
+
+    /**
+     * Forge's list for its AI leaves out a spell's alternative costs whenever the card can also be cast the
+     * ordinary way, and the AI adds them back afterwards (`getOriginalAndAltCostAbilities`). The seat needs them
+     * as choices of their own: Darksteel Monolith's "pay {0} rather than pay the mana cost", Omniscience-style
+     * permissions. (Owner report 2026-11-18: the Monolith's cast was never offered.) Each one is listed once, by
+     * its card and wording; whether it may be cast now is decided by the same checks as every other entry.
+     */
+    private List<SpellAbility> withAlternativeCosts(List<SpellAbility> basic) {
+        List<SpellAbility> out = new ArrayList<>(basic);
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (SpellAbility sa : basic) if (sa.getHostCard() != null) seen.add(sa.getHostCard().getId() + "|" + sa);
+        for (SpellAbility sa : basic) {
+            Card host = sa.getHostCard();
+            if (host == null || !sa.isSpell() || sa.isManaAbility()) continue;
+            try {
+                sa.setActivatingPlayer(player);
+                for (SpellAbility alt : GameActionUtil.getAlternativeCosts(sa, player, false)) {
+                    if (alt != null && alt.getHostCard() != null && seen.add(alt.getHostCard().getId() + "|" + alt)) out.add(alt);
+                }
+            } catch (RuntimeException e) {
+                if (DEBUG_PRIORITY) System.err.println("[priority]   " + host.getName() + " alternative costs: " + e);
+            }
         }
         return out;
     }
@@ -307,7 +358,134 @@ public final class BridgeController extends PlayerControllerAi {
                 session.sendError("could not tap the chosen sources: " + e.getMessage());
             }
         }
+        if (!autopilot() && sa != null && toPay != null) {
+            try {
+                tapRichSourcesIfNeeded(toPay, sa, effect);
+            } catch (RuntimeException e) {
+                session.sendError("could not tap for the larger amount of mana: " + e.getMessage());
+            }
+        }
         return super.payManaCost(toPay, costPartMana, sa, prompt, matrix, effect);
+    }
+
+    /**
+     * A permanent with two mana abilities for the same cost where one makes more mana than the other (The
+     * Eternity Elevator at 20 charge counters: {C}{C}{C}, or X mana of any one colour). Forge's automatic payer
+     * takes the first ability of a card and never looks at the second, so it counted the Elevator as three mana.
+     * (Owner report 2026-11-18: spells the Elevator could pay for were not offered.)
+     */
+    private record RichSource(Card card, SpellAbility best, int amount, List<String> colours) { }
+
+    private List<RichSource> richSources() {
+        List<RichSource> out = new ArrayList<>();
+        for (Card c : player.getCardsIn(ZoneType.Battlefield)) {
+            if (c.isTapped() || c.getManaAbilities().size() < 2) continue;
+            SpellAbility best = null;
+            int bestAmount = 0;
+            int least = Integer.MAX_VALUE;
+            for (SpellAbility ma : c.getManaAbilities()) {
+                AbilityManaPart mp = ma.getManaPart();
+                if (mp == null || ma.getApi() != ApiType.Mana) continue;
+                Cost cost = ma.getPayCosts();
+                // only plain "{T}: Add ..." abilities whose mana may be spent on anything
+                if (cost == null || !cost.hasTapCost() || cost.hasManaCost() || cost.getCostParts().size() != 1) continue;
+                String limits = mp.getManaRestrictions();
+                if (limits != null && !limits.isEmpty()) continue;
+                int amount;
+                try {
+                    ma.setActivatingPlayer(player);
+                    if (!ma.canPlay()) continue;
+                    amount = ma.amountOfManaGenerated(true);
+                } catch (RuntimeException e) {
+                    continue;
+                }
+                least = Math.min(least, amount);
+                if (amount > bestAmount) { best = ma; bestAmount = amount; }
+            }
+            if (best != null && bestAmount > least) out.add(new RichSource(c, best, bestAmount, producedColours(best, best.getManaPart())));
+        }
+        return out;
+    }
+
+    private static ManaCostShard shardOf(String letter) {
+        return switch (letter) {
+            case "W" -> ManaCostShard.WHITE;
+            case "U" -> ManaCostShard.BLUE;
+            case "B" -> ManaCostShard.BLACK;
+            case "R" -> ManaCostShard.RED;
+            case "G" -> ManaCostShard.GREEN;
+            case "C" -> ManaCostShard.COLORLESS;
+            default -> null;
+        };
+    }
+
+    /** The colour of this source the cost needs most (null = none of its colours is asked for by name). */
+    private static String colourFor(RichSource r, ManaCostBeingPaid cost) {
+        String pick = null;
+        int most = 0;
+        List<String> colours = r.colours().contains("any") ? List.of("W", "U", "B", "R", "G") : r.colours();
+        for (String col : colours) {
+            ManaCostShard shard = shardOf(col);
+            int n = shard == null ? 0 : cost.getUnpaidShards(shard);
+            if (n > most) { most = n; pick = col; }
+        }
+        return pick;
+    }
+
+    /** Take what one rich source would pay off a cost: pips of its one colour first, then generic mana. */
+    private static void payOff(RichSource r, ManaCostBeingPaid cost) {
+        int left = r.amount();
+        String col = colourFor(r, cost);
+        if (col != null) {
+            ManaCostShard shard = shardOf(col);
+            int n = Math.min(left, cost.getUnpaidShards(shard));
+            if (n > 0) { cost.decreaseShard(shard, n); left -= n; }
+        }
+        int generic = Math.min(left, cost.getGenericManaAmount());
+        if (generic > 0) cost.decreaseGenericMana(generic);
+    }
+
+    /**
+     * Could the cost be paid if the rich sources were tapped for their larger ability and the automatic payer
+     * covered the rest from everything else? Nothing is activated: the sources are set aside (shown to the payer
+     * as tapped) only while it is asked, and put back.
+     */
+    private boolean canPayWithRichSources(SpellAbility sa) {
+        if (sa == null || sa.getPayCosts() == null || !sa.getPayCosts().hasManaCost()) return false;
+        List<RichSource> rich = richSources();
+        if (rich.isEmpty()) return false;
+        return probe(() -> {
+            ManaCostBeingPaid cost = ComputerUtilMana.calculateManaCost(sa.getPayCosts(), sa, player, true, 0, false);
+            if (cost == null) return false;
+            for (RichSource r : rich) payOff(r, cost);
+            for (RichSource r : rich) r.card().setTapped(true);
+            try {
+                return cost.isPaid() || ComputerUtilMana.canPayManaCost(cost, sa, player, false);
+            } finally {
+                for (RichSource r : rich) r.card().setTapped(false);
+            }
+        });
+    }
+
+    /**
+     * Right before the automatic payer runs: when it cannot cover the cost the way it taps (a rich source for
+     * its first ability), tap the rich sources for their larger ability first, one at a time, until it can. The
+     * mana goes to the pool, the payer draws on the pool before tapping anything else, and what is left floats.
+     * A colour the cost asks for is chosen for the seat; otherwise Forge asks the seat which colour to make.
+     */
+    private void tapRichSourcesIfNeeded(ManaCost toPay, SpellAbility sa, boolean effect) {
+        List<RichSource> rich = richSources();
+        if (rich.isEmpty()) return;
+        Cost cost = new Cost(toPay, effect);
+        for (RichSource r : rich) {
+            if (probe(() -> ComputerUtilMana.canPayManaCost(cost, sa, player, 0, effect))) return;
+            AbilityManaPart mp = r.best().getManaPart();
+            ManaCostBeingPaid need = new ManaCostBeingPaid(toPay);
+            String col = colourFor(r, need);
+            if (col != null && (mp.isAnyMana() || mp.isComboMana())) mp.setExpressChoice(col);
+            r.best().setActivatingPlayer(player);
+            ComputerUtil.playNoStack(player, r.best(), game, false);
+        }
     }
 
     /** Activates one mana ability per chosen source, steering colour choices toward what the cost still needs. */
@@ -324,6 +502,7 @@ public final class BridgeController extends PlayerControllerAi {
             if (c == null || c.getController() != player || !c.isInZone(ZoneType.Battlefield) || c.isTapped()) continue;
             SpellAbility pick = null;
             String pickColour = null;
+            int pickAmount = 0;
             for (SpellAbility ma : c.getManaAbilities()) {
                 ma.setActivatingPlayer(player);
                 AbilityManaPart mp = ma.getManaPart();
@@ -334,7 +513,10 @@ public final class BridgeController extends PlayerControllerAi {
                 List<String> produces = producedColours(ma, mp);
                 String match = null;
                 for (String col : produces) if (needColours.contains(col)) { match = col; break; }
-                if (pick == null) pick = ma;
+                int amount;
+                try { amount = ma.amountOfManaGenerated(true); } catch (RuntimeException e) { amount = 1; }
+                // no colour decides: the ability that makes the most mana (The Eternity Elevator's X, not its {C}{C}{C})
+                if (pick == null || amount > pickAmount) { pick = ma; pickAmount = amount; }
                 if (match != null) { pick = ma; pickColour = match; break; }
                 if (produces.contains("any") && !needColours.isEmpty()) { pick = ma; pickColour = needColours.get(0); break; }
             }
@@ -531,46 +713,158 @@ public final class BridgeController extends PlayerControllerAi {
 
     // ------------------------------------------------------------------ combat
 
+    /**
+     * Declare attackers. Each ask is the WHOLE declaration: the combat is emptied first, because Forge calls
+     * again after it refuses an attack (and after an unpaid attack cost) with the earlier attackers still in
+     * it. Until 2026-11-18 a refused attacker stayed there and no later answer could re-aim or remove it, so one
+     * wrong declaration could never be put right (owner report: sixteen refusals in a row).
+     *
+     * The prompt says what the rules require before anything is declared: `mustAttack` on a creature (the
+     * players or planeswalkers it has to attack if able: an encore copy, a goaded creature, "attacks each combat
+     * if able") and `notes` in words (those, plus limits such as "No more than one creature can attack"). An
+     * answer the rules refuse comes back with `refused` saying why; after three refusals only the attackers the
+     * rules require are declared.
+     */
     @Override
     public void declareAttackers(Player attacker, Combat combat) {
         if (autopilot()) { super.declareAttackers(attacker, combat); return; }
-        List<GameEntity> defenders = new ArrayList<>();
-        for (GameEntity d : combat.getDefenders()) defenders.add(d);
-        List<Card> candidates = new ArrayList<>();
-        JsonArray cands = new JsonArray();
-        for (Card c : attacker.getCreaturesInPlay()) {
-            if (!CombatUtil.canAttack(c)) continue;
-            JsonArray allowed = new JsonArray();
-            for (GameEntity d : defenders) if (CombatUtil.canAttack(c, d)) allowed.add(SeatView.entityRef(d));
-            if (allowed.isEmpty()) continue;
-            JsonObject cj = SeatView.card(c, player);
-            cj.add("canAttack", allowed);
-            cands.add(cj);
-            candidates.add(c);
-        }
-        if (candidates.isEmpty()) return;
-        JsonObject p = prompt("attackers", "Declare attackers");
-        p.add("candidates", cands);
-        JsonArray defs = new JsonArray();
-        for (GameEntity d : defenders) {
-            JsonObject dj = SeatView.entityRef(d);
-            if (d instanceof Player pl) dj.addProperty("life", pl.getLife());
-            if (d instanceof Card dc) {
-                dj.addProperty("name", dc.getName());
-                dj.addProperty("controller", dc.getController() == null ? null : dc.getController().getId());
+        String refused = null;
+        for (int tries = 0; ; tries++) {
+            if (!combat.getAttackers().isEmpty()) combat.clearAttackers();
+            List<GameEntity> defenders = new ArrayList<>();
+            for (GameEntity d : combat.getDefenders()) defenders.add(d);
+            AttackConstraints rules = combat.getAttackConstraints();
+            List<String> notes = new ArrayList<>();
+            Map<Card, String> mustText = new LinkedHashMap<>();
+            List<Card> candidates = new ArrayList<>();
+            JsonArray cands = new JsonArray();
+            for (Card c : attacker.getCreaturesInPlay()) {
+                if (!CombatUtil.canAttack(c)) continue;
+                List<GameEntity> allowedList = new ArrayList<>();
+                JsonArray allowed = new JsonArray();
+                for (GameEntity d : defenders) if (CombatUtil.canAttack(c, d)) { allowed.add(SeatView.entityRef(d)); allowedList.add(d); }
+                if (allowed.isEmpty()) continue;
+                JsonObject cj = SeatView.card(c, player);
+                cj.add("canAttack", allowed);
+                List<GameEntity> must = mustAttack(rules, c, allowedList);
+                if (!must.isEmpty()) {
+                    JsonArray mj = new JsonArray();
+                    for (GameEntity d : must) mj.add(SeatView.entityRef(d));
+                    cj.add("mustAttack", mj);
+                    String text = c.getName() + " must attack " + (must.size() < allowedList.size() ? orList(must) + " " : "") + "this combat if able.";
+                    mustText.put(c, text);
+                    if (!notes.contains(text)) notes.add(text);
+                }
+                cands.add(cj);
+                candidates.add(c);
             }
-            defs.add(dj);
+            if (candidates.isEmpty()) return;
+            List<String> limits = attackLimits(rules);
+            notes.addAll(limits);
+            JsonObject p = prompt("attackers", "Declare attackers");
+            p.add("candidates", cands);
+            JsonArray defs = new JsonArray();
+            for (GameEntity d : defenders) {
+                JsonObject dj = SeatView.entityRef(d);
+                if (d instanceof Player pl) dj.addProperty("life", pl.getLife());
+                if (d instanceof Card dc) {
+                    dj.addProperty("name", dc.getName());
+                    dj.addProperty("controller", dc.getController() == null ? null : dc.getController().getId());
+                }
+                defs.add(dj);
+            }
+            p.add("defenders", defs);
+            if (!notes.isEmpty()) {
+                JsonArray nj = new JsonArray();
+                for (String n : notes) nj.add(n);
+                p.add("notes", nj);
+            }
+            if (refused != null) p.addProperty("refused", refused);
+            JsonObject a = session.ask(p);
+            if (a == null) { super.declareAttackers(attacker, combat); return; }
+            if (a.has("attacks") && a.get("attacks").isJsonArray()) {
+                for (JsonElement e : a.getAsJsonArray("attacks")) {
+                    JsonObject att = e.getAsJsonObject();
+                    Card c = byId(candidates, att.get("cardId").getAsInt());
+                    GameEntity d = defenderOf(defenders, att.getAsJsonObject("defender"));
+                    if (c != null && d != null && CombatUtil.canAttack(c, d) && !combat.isAttacking(c)) combat.addAttacker(c, d);
+                }
+            }
+            if (CombatUtil.validateAttackers(combat)) return;
+            // refused by the rules: say why, and ask again from an empty attack
+            Map<Card, GameEntity> declared = new LinkedHashMap<>(combat.getAttackersAndDefenders());
+            List<String> problems = new ArrayList<>();
+            if (!rules.getGlobalRestrictions().isLegal(declared)) problems.addAll(limits);
+            for (Map.Entry<Card, GameEntity> e : declared.entrySet()) {
+                AttackRestriction r = rules.getRestrictions().get(e.getKey());
+                if (r == null) continue;
+                for (AttackRestrictionType t : r.getViolation(declared)) {
+                    String text = e.getKey().getName() + " " + restrictionWords(t) + ".";
+                    if (!problems.contains(text)) problems.add(text);
+                }
+            }
+            for (Map.Entry<Card, String> e : mustText.entrySet()) {
+                AttackRequirement req = rules.getRequirements().get(e.getKey());
+                if (req != null && req.countViolations(declared.get(e.getKey()), declared) > 0 && !problems.contains(e.getValue())) problems.add(e.getValue());
+            }
+            combat.clearAttackers();
+            if (tries >= 2) {
+                for (Map.Entry<Card, GameEntity> e : rules.getLegalAttackers().getLeft().entrySet()) combat.addAttacker(e.getKey(), e.getValue());
+                JsonObject n = notice("info", "Attack");
+                n.addProperty("text", "Three attacks in a row were not legal, so only the attackers the rules require were declared.");
+                session.send(n);
+                return;
+            }
+            refused = "That attack is not legal. " + (problems.isEmpty() ? "It breaks a rule about which creatures must or may attack." : String.join(" ", problems));
         }
-        p.add("defenders", defs);
-        JsonObject a = session.ask(p);
-        if (a == null) { super.declareAttackers(attacker, combat); return; }
-        if (!a.has("attacks") || !a.get("attacks").isJsonArray()) return; // no attack
-        for (JsonElement e : a.getAsJsonArray("attacks")) {
-            JsonObject att = e.getAsJsonObject();
-            Card c = byId(candidates, att.get("cardId").getAsInt());
-            GameEntity d = defenderOf(defenders, att.getAsJsonObject("defender"));
-            if (c != null && d != null && CombatUtil.canAttack(c, d) && !combat.isAttacking(c)) combat.addAttacker(c, d);
+    }
+
+    /** Whom this creature has to attack if able: the defenders its requirements weigh highest; empty = no requirement. */
+    private static List<GameEntity> mustAttack(AttackConstraints rules, Card c, List<GameEntity> allowed) {
+        List<GameEntity> out = new ArrayList<>();
+        AttackRequirement req = rules.getRequirements().get(c);
+        if (req == null || !req.hasRequirement()) return out;
+        int most = 0;
+        for (Pair<GameEntity, Integer> e : req.getSortedRequirements()) if (allowed.contains(e.getLeft())) most = Math.max(most, e.getRight());
+        if (most <= 0) return out;
+        for (Pair<GameEntity, Integer> e : req.getSortedRequirements()) if (e.getRight() == most && allowed.contains(e.getLeft())) out.add(e.getLeft());
+        return out;
+    }
+
+    private static String orList(List<GameEntity> entities) {
+        List<String> names = new ArrayList<>();
+        for (GameEntity e : entities) names.add(e.getName());
+        if (names.size() <= 1) return names.isEmpty() ? "" : names.get(0);
+        return String.join(", ", names.subList(0, names.size() - 1)) + " or " + names.get(names.size() - 1);
+    }
+
+    private static String creatureCount(int n) {
+        String[] words = {"no", "one", "two", "three", "four", "five", "six"};
+        return (n >= 0 && n < words.length ? words[n] : String.valueOf(n)) + (n == 1 ? " creature" : " creatures");
+    }
+
+    /** Limits on the whole attack, in words (Silent Arbiter, Crawlspace, Dueling Grounds). */
+    private static List<String> attackLimits(AttackConstraints rules) {
+        List<String> out = new ArrayList<>();
+        GlobalAttackRestrictions g = rules.getGlobalRestrictions();
+        if (g == null) return out;
+        if (g.getMax() != null) out.add("No more than " + creatureCount(g.getMax()) + " can attack this combat.");
+        for (Map.Entry<GameEntity, Integer> e : g.getDefenderMax().entrySet()) {
+            if (e.getValue() == null) continue;
+            out.add("No more than " + creatureCount(e.getValue()) + " can attack " + e.getKey().getName() + " this combat.");
         }
+        return out;
+    }
+
+    private static String restrictionWords(AttackRestrictionType t) {
+        return switch (t) {
+            case ONLY_ALONE -> "can only attack alone";
+            case NOT_ALONE -> "can't attack alone";
+            case NEED_TWO_OTHERS -> "can't attack unless at least two other creatures attack";
+            case NEED_GREATER_POWER -> "can't attack unless a creature with greater power also attacks";
+            case NEED_BLACK_OR_GREEN -> "can't attack unless a black or green creature also attacks";
+            default -> "can't attack";
+        };
     }
 
     @Override

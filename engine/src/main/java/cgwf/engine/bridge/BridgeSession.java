@@ -111,6 +111,8 @@ public final class BridgeSession {
     private volatile Stops stops = Stops.defaults();
     /** Pass every priority until the given turn number is over (0 = off). */
     private volatile int passUntilTurn;
+    /** "Resolve all" (-1 = off): the newest stack item's id when the seat asked to pass until the stack is empty. */
+    private volatile int passStackMark = -1;
     /** Hold priority for this turn number: every priority stops and nothing auto-passes (0 = off). */
     private volatile int holdTurn;
 
@@ -283,10 +285,22 @@ public final class BridgeSession {
         if (turn > 0) holdTurn = 0;
     }
 
+    /**
+     * "Resolve all": pass every priority until the stack is empty. `mark` is the newest stack item's id when the
+     * seat asked; an opponent's item above it is new, and may hand priority back to the seat (BridgeController).
+     */
+    public void passStack(int mark) { passStackMark = mark; }
+
+    public boolean passingStack() { return passStackMark >= 0; }
+
+    public int passStackMark() { return passStackMark; }
+
+    public void clearPassStack() { passStackMark = -1; }
+
     /** Hold priority for the given turn (0 releases). A hold also cancels an "end turn" pass. */
     public void setHold(int turn) {
         holdTurn = Math.max(0, turn);
-        if (holdTurn > 0) passUntilTurn = 0;
+        if (holdTurn > 0) { passUntilTurn = 0; passStackMark = -1; }
     }
 
     public int holdTurn() { return holdTurn; }

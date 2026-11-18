@@ -163,6 +163,11 @@ export function InteractionStack({ stack, view, printings, members, onZoom, prom
                 <button className="btn btn-primary" onClick={() => answer({ promptId: priority.promptId, option: null })}>
                   Let it resolve
                 </button>
+                {stack.length > 1 && (
+                  <button className="btn" onClick={() => answer({ promptId: priority.promptId, option: null, passStack: true })} title="Pass until the stack is empty. You are asked again if an opponent responds with something your stops would catch.">
+                    Resolve all ({stack.length})
+                  </button>
+                )}
               </div>
             </>
           ) : (

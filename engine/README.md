@@ -51,7 +51,7 @@ fake CGwF server (useful without the app): `node engine/spike/client.mjs ws://lo
 
 Deployment: `fly.toml` has no public service and `restart = always`; the machine must be
 started once by hand after a deploy that finds it stopped (`fly machine start <id>`). Stage 1
-stays on `shared-cpu-2x` (humans only); for bot seats see the measurements below.
+is `performance-1x` since 2026-11-18 (bot seats; it was `shared-cpu-2x` while tables were humans only), see the measurements below.
 
 ## Toolchain (exact versions used, 2026-10-17)
 

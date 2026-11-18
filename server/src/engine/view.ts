@@ -69,6 +69,7 @@ export interface EngineCardJson {
   index?: number;
   kind?: string;
   canAttack?: Array<{ kind: "player" | "card"; id: number; name?: string | null }>;
+  mustAttack?: Array<{ kind: "player" | "card"; id: number; name?: string | null }>;
   canBlock?: number[];
   attacking?: { kind: "player" | "card"; id: number; name?: string | null };
 }
@@ -385,6 +386,7 @@ function toOptionCard(c: EngineCardJson, ctx: ConvertContext): EngineOptionCard 
     toughness: c.toughness ?? null,
   };
   if (c.canAttack) out.canAttack = c.canAttack.map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null);
+  if (c.mustAttack) out.mustAttack = c.mustAttack.map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null);
   if (c.canBlock) out.canBlock = c.canBlock.map(String);
   if (c.attacking) {
     const ref = toEntityRef(c.attacking, ctx);
@@ -456,7 +458,11 @@ export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext
       return { kind: "targets", promptId, title, ability: String(raw.ability ?? ""), source: str(raw.source), min: Number(raw.min ?? 1), max: Number(raw.max ?? 1), options: options(raw.options, ctx), cancelLabel: str(raw.cancelLabel) };
     case "attackers": {
       const defenders = Array.isArray(raw.defenders) ? (raw.defenders as RawEntityRef[]).map((d) => toEntityRef(d, ctx)).filter((d): d is EngineEntityRef => d !== null) : [];
-      return { kind: "attackers", promptId, title, candidates: cardsOnly(raw.candidates, ctx), defenders };
+      const out: Extract<EnginePrompt, { kind: "attackers" }> = { kind: "attackers", promptId, title, candidates: cardsOnly(raw.candidates, ctx), defenders };
+      const notes = Array.isArray(raw.notes) ? raw.notes.slice(0, 12).map((n) => cleanEngineText(String(n))).filter(Boolean) : [];
+      if (notes.length) out.notes = notes;
+      if (typeof raw.refused === "string" && raw.refused) out.refused = cleanEngineText(raw.refused);
+      return out;
     }
     case "blockers": {
       const out: Extract<EnginePrompt, { kind: "blockers" }> = { kind: "blockers", promptId, title, attackers: cardsOnly(raw.attackers, ctx), blockers: cardsOnly(raw.blockers, ctx) };
@@ -573,6 +579,7 @@ export function toEngineAnswer(answer: EngineAnswer, ctx: ConvertContext): Recor
   } else if ("option" in answer) {
     out.option = answer.option === null ? null : Number(answer.option);
     if (answer.passUntilTurn !== undefined) out.passUntilTurn = Number(answer.passUntilTurn);
+    if (answer.passStack) out.passStack = true;
     if (answer.concede) out.concede = true;
     if (Array.isArray(answer.paySources) && answer.paySources.length) out.paySources = answer.paySources.map((iid) => Number(iid)).filter((n) => Number.isFinite(n)).slice(0, 40);
     if (typeof answer.repeat === "number" && Number.isFinite(answer.repeat) && answer.repeat >= 2) out.repeat = Math.min(500, Math.floor(answer.repeat));

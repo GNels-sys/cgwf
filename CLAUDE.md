@@ -1488,6 +1488,53 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   Now `end()` only sets a flag and marks the humans absent (a waiting prompt returns at once); the game
   thread sets the game over at its next event. Rule: from outside the game thread, never call a Forge method
   that fires events.
+- **Refused attacks, alternative costs, rich mana sources (owner report 2026-11-18, room Q9HPXF).** One turn, three
+  faults, all in `BridgeController`; engine `AttackAndCostsTest` replays each in a real game.
+  - **Attacks.** Phyrexian Triniform's encore made three copies that each "attacks that opponent this turn if
+    able". The prompt did not say so, the first declaration sent all three at one player, Forge refused it
+    ("Attack declaration invalid"), and the bridge kept the refused attackers in the combat and only ever
+    ADDED to them, so no answer could re-aim or remove one: sixteen refusals, then the ten-minute timeout and
+    Forge's AI attacking with the copies alone. Now every ask is the whole declaration (`combat.clearAttackers()`
+    first); candidates carry `mustAttack` (the defenders the creature's `AttackRequirement` weighs highest:
+    encore copies, goad, "attacks each combat if able"); the prompt carries `notes` (those in words, plus
+    `GlobalAttackRestrictions` limits: "No more than one creature can attack this combat."); the bridge checks
+    `CombatUtil.validateAttackers` itself and asks again with `refused` saying why; after three refusals it
+    declares only what the rules require (`getLegalAttackers`) and sends a notice. Client: the attack bar starts
+    with the required attackers declared at their defenders (`initialPick`), lists the notes, shows the refusal
+    as an alert; tapping a creature that must attack someone aims it there (`Table.tsx`).
+  - **Alternative costs.** `ComputerUtilAbility.getSpellAbilities` drops a spell's alternative costs whenever the
+    card can also be cast the ordinary way (Forge's AI adds them back later), so Darksteel Monolith's "pay {0}
+    rather than pay the mana cost" was never offered to a human. `withAlternativeCosts` adds
+    `GameActionUtil.getAlternativeCosts` for every spell in the list, once per card and wording; with both ways
+    payable the card's "Which one?" sheet lists both.
+  - **Rich mana sources.** The Eternity Elevator at 20 charge counters has `{T}: Add {C}{C}{C}` and `{T}: Add X
+    mana of any one color`. Forge's automatic payer takes a card's first mana ability, so it counted and tapped
+    the Elevator for three. `richSources()` = an untapped permanent with two plain `{T}: Add` abilities where one
+    makes more (no spend restriction). `canPayWithRichSources` (the legal list) asks whether the cost is payable
+    with those tapped for the larger amount and the payer covering the rest; `tapRichSourcesIfNeeded` (before
+    the payer runs) taps them for it when the payer alone cannot pay, a colour the cost names chosen for the
+    seat, otherwise Forge asks which colour; leftover mana floats. "Pay with" taps a chosen source for its
+    largest ability unless a colour decides. When the payer can pay without the larger ability it still may
+    tap such a source for its first one: use "Pay with" to choose.
+  - **A stack that took an hour (same game, later).** Measured from Fly's metrics: the engine machine
+    (`shared-cpu-2x`, baseline 0.12 of a core) spent its CPU balance in the first 45 minutes of the game
+    (100,000 at 17:45Z, 1 at 18:32Z) and was throttled from then on; with three bots deciding at every
+    priority a stack item went from 2 s to 15 s. The fix for that is the machine size, not code: the owner
+    approved `performance-1x` (one dedicated vCPU, about $31 a month) the same day, set in `engine/fly.toml`
+    `[[vm]]` and applied by the next engine deploy. Read the numbers with
+    `https://api.fly.io/prometheus/personal/api/v1/query_range` (`Authorization: FlyV1 <token>`; series
+    `fly_instance_cpu_balance`, `fly_instance_cpu_throttle`, `fly_instance_cpu_baseline`, `app="cgwf-engine"`).
+    Two code changes cut the work and the clicks:
+    - `RepeatedLogLines` (`GameSession.streamLog`): Forge logs a replacement effect every time it applies, and
+      Platinum Angel's "You can't lose the game and your opponents can't win the game." applies at every state
+      check while its controller would lose (over 1,000 lines in that game, each a frame, an event row and a
+      toast). An `EFFECT_REPLACED` line now goes out once a turn per wording.
+    - **Resolve all**: the priority bar and the Interaction Stack offer "Resolve all (N)" with two or more
+      items on the stack. The answer `{option: null, passStack: true}` sets `BridgeSession.passStack(mark)`
+      (mark = newest stack id); `chooseSpellAbilityToPlay` then passes until the stack is empty. An opponent's
+      item added after the mark that the seat's `respondTo` setting would stop for hands priority back; Hold
+      cancels it. Choices inside a trigger (targets, "you may", order) are still asked.
+  - Still open from that game: a player eliminated mid-game gets no log line until the game ends.
 - **Counts are clamped to the options (2026-10-19).** Owner report: Blasphemous Edict ("each player
   sacrifices thirteen creatures") with six creatures sent a choose-13-of-6 prompt that could never be
   answered, so the spell never resolved. Rule 701.21a: a player sacrifices as many as they can. The
