@@ -119,8 +119,12 @@ class AttackAndCostsTest {
 
     /** One game: the human against `opponents` AI seats, driven by `script` until it concedes. */
     private static List<String> play(int opponents, Script script) throws Exception {
+        return play(opponents, "Krenko, Mob Boss", script);
+    }
+
+    private static List<String> play(int opponents, String commander, Script script) throws Exception {
         Deck deck = new Deck("Owner report");
-        deck.getOrCreate(DeckSection.Commander).add(card("Krenko, Mob Boss"), 1);
+        deck.getOrCreate(DeckSection.Commander).add(card(commander), 1);
         deck.getMain().add(card("Mountain"), 99);
         LinkedBlockingQueue<JsonObject> queue = new LinkedBlockingQueue<>();
         BridgeSession human = new BridgeSession(0, 60_000);
@@ -401,6 +405,87 @@ class AttackAndCostsTest {
         assertTrue(lines.keep("EFFECT_REPLACED", angel, 31), "again on the next turn");
         assertTrue(lines.keep("STACK_RESOLVE", "Shock", 31));
         assertTrue(lines.keep("STACK_RESOLVE", "Shock", 31), "other log lines are never dropped");
+    }
+
+    // ------------------------------------------------------------------ the commander
+
+    /**
+     * Owner report 2026-11-18, the first game after the alternative-cost change went live: "I'm not allowed to cast
+     * my commander". The commander is cast from the command zone through a permission, which is one of the
+     * alternative ways to cast that the list of plays now includes.
+     */
+    @Test
+    void theCommanderIsOfferedFromTheCommandZoneAndCanBeCast() throws Exception {
+        int[] step = {0};
+        List<String> offered = new ArrayList<>();
+        boolean[] landed = {false};
+        List<String> trace = play(1, new Script() {
+            @Override public void setUp(Game game, Player me) {
+                for (int i = 0; i < 4; i++) put(game, me, "Mountain");
+            }
+
+            @Override public void main(Game game, Player me, JsonObject p, JsonObject a) {
+                if (step[0] == 0) {
+                    step[0] = 1;
+                    List<JsonObject> krenko = options(p, "Krenko, Mob Boss");
+                    for (JsonObject o : krenko) offered.add(o.get("zone").getAsString() + ": " + o.get("description").getAsString() + " [" + o.get("cost") + "]");
+                    if (!krenko.isEmpty()) {
+                        a.addProperty("option", krenko.get(0).get("index").getAsInt());
+                        return;
+                    }
+                } else if (step[0] == 1) {
+                    step[0] = 2;
+                    landed[0] = onBattlefield(me, "Krenko, Mob Boss");
+                }
+                a.addProperty("concede", true);
+            }
+        });
+        String why = "\n" + String.join("\n", trace) + "\noffered: " + offered;
+        assertEquals(1, offered.size(), "the commander is offered once" + why);
+        assertTrue(landed[0], "and it was cast from the command zone" + why);
+    }
+
+    /**
+     * The owner's board on that turn (room WYJ9C4, turn 26): Jace, Multiverse Architect ({1}{W}{U}{B}{R}) in the
+     * command zone, Despark ({W}{B}) in hand, and black mana only through Sunken Ruins, which needs blue or black
+     * from a Signet, which needs mana from Sol Ring. Both casts were offered and both failed: "returned to
+     * Command (could not be put on the stack)".
+     */
+    @Test
+    void aSpellPaidThroughSignetsAndAFilterLandIsCastWhenItIsOffered() throws Exception {
+        int[] step = {0};
+        List<String> seen = new ArrayList<>();
+        boolean[] jaceOffered = {false};
+        boolean[] jaceLanded = {false};
+        List<String> trace = play(1, "Jace, Multiverse Architect", new Script() {
+            @Override public void setUp(Game game, Player me) {
+                for (String name : List.of("Plains", "Radiant Summit", "Sunken Ruins", "Sol Ring", "Izzet Signet", "Azorius Signet")) put(game, me, name);
+                for (Card c : me.getCardsIn(ZoneType.Battlefield)) c.setTapped(false);
+            }
+
+            @Override public void main(Game game, Player me, JsonObject p, JsonObject a) {
+                if (step[0] == 0) {
+                    step[0] = 1;
+                    List<JsonObject> jace = options(p, "Jace, Multiverse Architect");
+                    for (JsonObject o : jace) seen.add(o.get("zone").getAsString() + ": " + o.get("description").getAsString());
+                    jaceOffered[0] = !jace.isEmpty();
+                    if (jaceOffered[0]) {
+                        a.addProperty("option", jace.get(0).get("index").getAsInt());
+                        return;
+                    }
+                } else if (step[0] == 1) {
+                    step[0] = 2;
+                    jaceLanded[0] = onBattlefield(me, "Jace, Multiverse Architect");
+                    StringBuilder sb = new StringBuilder("after: pool " + me.getManaPool().totalMana() + ";");
+                    for (Card c : me.getCardsIn(ZoneType.Battlefield)) sb.append(' ').append(c.getName()).append(c.isTapped() ? "(T)" : "");
+                    seen.add(sb.toString());
+                }
+                a.addProperty("concede", true);
+            }
+        });
+        String why = "\n" + String.join("\n", trace) + "\nseen: " + seen;
+        assertTrue(jaceOffered[0], "the commander is offered" + why);
+        assertTrue(jaceLanded[0], "a cast that is offered goes through" + why);
     }
 
     // ------------------------------------------------------------------ 2. Darksteel Monolith
