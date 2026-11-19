@@ -110,6 +110,8 @@ public final class SeatView {
         j.add("graveyard", cards(p.getCardsIn(ZoneType.Graveyard), viewer));
         j.add("exile", cards(p.getCardsIn(ZoneType.Exile), viewer));
         j.add("command", cards(p.getCardsIn(ZoneType.Command), viewer));
+        JsonArray known = libraryKnown(p, viewer);
+        if (!known.isEmpty()) j.add("libraryKnown", known);
         return j;
     }
 
@@ -119,6 +121,29 @@ public final class SeatView {
             // Forge keeps bookkeeping "effect" cards (e.g. the Commander Effect) in the command zone; they are not cards a player sees.
             if (c.isImmutable() && !c.isEmblem()) continue;
             a.add(card(c, viewer));
+        }
+        return a;
+    }
+
+    /**
+     * The library cards the rules let this seat look at, each with its `position` (0 = the top): Bolas's Citadel
+     * and Future Sight ("you may look at the top card of your library any time"), Courser of Kruphix ("play with
+     * the top card of your library revealed", which every seat sees). Forge marks such a card per player and
+     * `canBeShownTo` reads the mark; every other library card stays out of the view, and a spectator gets none.
+     * (Owner report 2026-11-18: with the Citadel out the engine offered the top card, but the table was never
+     * sent it, so there was nothing to look at and nothing to tap.)
+     */
+    private static JsonArray libraryKnown(Player p, Player viewer) {
+        JsonArray a = new JsonArray();
+        if (viewer == null) return a;
+        int position = 0;
+        for (Card c : p.getCardsIn(ZoneType.Library)) {
+            if (c.getView().canBeShownTo(viewer.getView())) {
+                JsonObject j = card(c, viewer);
+                j.addProperty("position", position);
+                a.add(j);
+            }
+            position++;
         }
         return a;
     }

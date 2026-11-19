@@ -65,6 +65,8 @@ export interface EngineCardJson {
   /** The exiled copy of a prepared spell: its creature's card id and name. */
   preparedBy?: number;
   preparedByName?: string;
+  /** A library card the rules let this seat look at: 0 = the top. */
+  position?: number;
   // prompt-only extras
   index?: number;
   kind?: string;
@@ -93,6 +95,8 @@ export interface EnginePlayerJson {
   graveyard: EngineCardJson[];
   exile: EngineCardJson[];
   command: EngineCardJson[];
+  /** Library cards the rules let this frame's seat look at (Bolas's Citadel, Courser of Kruphix); absent when none. */
+  libraryKnown?: EngineCardJson[];
 }
 
 export interface EngineStateJson {
@@ -249,7 +253,7 @@ function toViewPlayer(p: EnginePlayerJson, ctx: ConvertContext, printings: Map<s
     mana,
     keepMana: false,
     manualAnthems: [],
-    library: { count: p.libraryCount, known: [] },
+    library: { count: p.libraryCount, known: (p.libraryKnown ?? []).map((c) => ({ ...toViewCard(c, ctx, printings), ...(typeof c.position === "number" ? { position: c.position } : {}) })) },
     hand: { count: p.handCount, cards: own ? list(p.hand) : [] },
     graveyard: list(p.graveyard),
     exile: list(p.exile),

@@ -67,8 +67,11 @@ interface CardsPanel {
   title: string;
   subtitle?: string;
   cards: ViewCard[];
-  /** "library": the panel follows my known library cards and offers Shuffle. */
-  follow?: "library";
+  /**
+   * "library": the panel follows my known library cards and offers Shuffle (classic tables).
+   * "libraryLook": engine tables, the library cards a card in play lets me look at; it follows them as the top changes.
+   */
+  follow?: "library" | "libraryLook";
 }
 
 function DropRow({ id, className, children }: { id: string; className: string; children: React.ReactNode }) {
@@ -411,6 +414,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
   const liveCardsPanel = useMemo(() => {
     if (!cardsPanel) return null;
     if (cardsPanel.follow === "library") return mePlayer ? { ...cardsPanel, cards: mePlayer.library.known } : null;
+    if (cardsPanel.follow === "libraryLook") return mePlayer ? { ...cardsPanel, title: libraryLookTitle(mePlayer.library.known), cards: mePlayer.library.known } : null;
     const ids = new Set(cardsPanel.cards.map((c) => c.iid));
     const all = Object.values(view.players).flatMap((p) => [...p.graveyard, ...p.exile, ...p.command, ...p.hand.cards, ...p.library.known, ...battlefieldCards(p)]);
     return { ...cardsPanel, cards: all.filter((c) => ids.has(c.iid)) };
@@ -775,9 +779,21 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
         {mePlayer && (
           <div className="table-bottom">
             <div className="zone-btns">
-              <DropButton id="zone:library" className={`is-library ${mySleeve?.className ?? ""}`} style={mySleeve?.style} onClick={() => setSheet({ kind: "library" })} label={`Library, ${mePlayer.library.count} cards`}>
+              <DropButton
+                id="zone:library"
+                className={`is-library ${mySleeve?.className ?? ""}`}
+                style={mySleeve?.style}
+                onClick={() =>
+                  // Engine tables: a card in play may let me look at library cards (Bolas's Citadel); the button shows them.
+                  engineMode && mePlayer.library.known.length > 0
+                    ? setCardsPanel({ title: libraryLookTitle(mePlayer.library.known), subtitle: LIBRARY_LOOK_NOTE, cards: mePlayer.library.known, follow: "libraryLook" })
+                    : setSheet({ kind: "library" })
+                }
+                label={`Library, ${mePlayer.library.count} cards${engineMode && mePlayer.library.known.length > 0 ? ", you may look at the top" : ""}`}
+              >
                 <span>Library</span>
                 <strong>{mePlayer.library.count}</strong>
+                {engineMode && <LibraryLookBadge known={mePlayer.library.known.length} playable={playableIn(offZone, me ?? "", "library")} />}
               </DropButton>
               <DropButton id="zone:graveyard" onClick={() => showCards("Your graveyard", mePlayer.graveyard)} label={`Graveyard, ${mePlayer.graveyard.length} cards`}>
                 <span>Grave</span>
@@ -943,7 +959,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
               </button>
             </div>
           )}
-          <CardList cards={liveCardsPanel.cards} printings={printings} onTap={tapCard} onHold={engineMode ? engineHold : holdCard} sleeveOf={sleeveOf} highlighted={highlighted} empty="No cards here." />
+          <CardList cards={liveCardsPanel.cards} printings={printings} onTap={tapCard} onHold={engineMode ? engineHold : holdCard} sleeveOf={sleeveOf} highlighted={highlighted} empty={liveCardsPanel.follow === "libraryLook" ? "Nothing lets you look at your library right now." : "No cards here."} />
         </Panel>
       )}
       {opponent && view.players[opponent] && (
@@ -1014,6 +1030,20 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       )}
     </DndContext>
   );
+}
+
+const LIBRARY_LOOK_NOTE = "A card in play lets you look at this. A glowing card can be played from here.";
+
+/** "Top of your library" for the usual case (only the top card may be looked at). */
+export function libraryLookTitle(known: ViewCard[]): string {
+  return known.length <= 1 && (known[0]?.position ?? 0) === 0 ? "Top of your library" : "Your library: cards you may look at (top first)";
+}
+
+/** On the Library button: "1 to play" when the top card may be played now, "Look" when it may only be looked at. */
+export function LibraryLookBadge({ known, playable }: { known: number; playable: number }) {
+  if (playable > 0) return <PlayableBadge count={playable} />;
+  if (known === 0) return null;
+  return <em className="zone-playable is-look" aria-hidden="true">Look</em>;
 }
 
 /** "2 to play" on a zone button when cards in that zone may be played right now. */

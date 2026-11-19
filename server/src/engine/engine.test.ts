@@ -622,6 +622,35 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(v.stack[1]!.controller).not.toBe(v.viewer);
   });
 
+  it("shows a library card the engine lets a seat look at to that seat only, and offers it to play", async () => {
+    // Owner report 2026-11-18: Bolas's Citadel ("look at the top card of your library any time ... play it").
+    const gameId = ctx.roomsManager.get(code)!.id;
+    const A = pid[0]!;
+    const B = pid[1]!;
+    const player = (id: number, seat: number, name: string, viewer: number) => ({
+      id, seat, name, isYou: viewer === id, human: true, life: 40, poison: 0, lost: false, handCount: 1, libraryCount: 97, landsPlayedThisTurn: 0, commanderDamage: {},
+      battlefield: [], graveyard: [], exile: [], command: [],
+    });
+    const base = { type: "state", gameId, turn: 3, phase: "MAIN1", activePlayer: A, priorityPlayer: A, gameOver: false, stack: [], combat: null, log: [] };
+    const ma = alex.mark();
+    const mb = blair.mark();
+    engine.send({ ...base, seat: 0, viewer: A, players: [{ ...player(A, 0, "Alex", A), libraryKnown: [{ ...card(71, "Forest", "Library", A), position: 0 }] }, player(B, 1, "Blair", A)] });
+    engine.send({ ...base, seat: 1, viewer: B, players: [player(A, 0, "Alex", B), player(B, 1, "Blair", B)] });
+    const mine = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.turn === 3 && f.view.players[f.view.viewer!]!.library.known.length === 1, ma)).view;
+    const top = mine.players[mine.viewer!]!.library.known[0]!;
+    expect(top).toMatchObject({ iid: "71", printingId: FOREST, position: 0, public: false });
+    expect(top.zone).toEqual({ kind: "library", owner: mine.viewer });
+    const theirs = await blair.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.turn === 3, mb);
+    expect(Object.values(theirs.view.players).every((p) => p.library.known.length === 0)).toBe(true);
+    expect(JSON.stringify(theirs)).not.toContain('"71"');
+    const mp = alex.mark();
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 41, prompt: "priority", title: "You have priority", phase: "MAIN1", myTurn: true, stackEmpty: true, stackTopMine: false, holding: false,
+      options: [{ index: 0, cardId: 71, cardName: "Forest", zone: "Library", kind: "land", description: "Play land by Bolas's Citadel", cost: "{0}, Pay 0 life", targets: false }] });
+    const offered = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 41, mp)).view.engine!.prompt!;
+    if (offered.kind !== "priority") throw new Error("unreachable");
+    expect(offered.options[0]).toMatchObject({ iid: "71", zone: "library", kind: "land" });
+  });
+
   it("announces each round in the log before its first turn line and shows the round in the view", async () => {
     const gameId = ctx.roomsManager.get(code)!.id;
     const A = pid[0]!;
