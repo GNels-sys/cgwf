@@ -115,9 +115,13 @@ public final class HiddenInfoAudit {
         Set<String> secretNames = new HashSet<>();
         Set<String> publicNames = new HashSet<>();
         Map<Integer, Player> players = new HashMap<>();
+        Map<Integer, Player> shownLibrary = new HashMap<>();
         for (Player p : game.getRegisteredPlayers()) { // eliminated seats keep their zones and stay in the view
             players.put(p.getId(), p);
             for (Card c : p.getCardsIn(ZoneType.Library)) {
+                // a library card the rules show this viewer (Bolas's Citadel, Courser of Kruphix) is not a secret
+                // for them; it may appear only in that player's "libraryKnown" list, checked below
+                if (viewer != null && c.getView().canBeShownTo(viewer.getView())) { shownLibrary.put(c.getId(), p); continue; }
                 secretIds.add(c.getId());
                 secretWhere.put(c.getId(), p.getName() + "'s library");
                 secretNames.add(c.getName());
@@ -153,6 +157,13 @@ public final class HiddenInfoAudit {
                 Player p = players.get(pj.get("id").getAsInt());
                 if (p == null) { leaks.add(who + ": unknown player id in view"); continue; }
                 if (pj.has("library")) leaks.add(who + " sees a 'library' array for " + p.getName());
+                if (pj.has("libraryKnown")) {
+                    if (viewer == null) leaks.add("spectator sees library cards of " + p.getName());
+                    for (JsonElement ke : pj.getAsJsonArray("libraryKnown")) {
+                        int id = ke.getAsJsonObject().get("id").getAsInt();
+                        if (shownLibrary.get(id) != p) leaks.add(who + " sees library card #" + id + " of " + p.getName() + " that the rules do not show them");
+                    }
+                }
                 if (p != viewer && pj.has("hand")) leaks.add(who + " sees a 'hand' array for " + p.getName());
                 if (pj.get("handCount").getAsInt() != p.getCardsIn(ZoneType.Hand).size()) leaks.add(who + ": handCount wrong for " + p.getName());
                 if (pj.get("libraryCount").getAsInt() != p.getCardsIn(ZoneType.Library).size()) leaks.add(who + ": libraryCount wrong for " + p.getName());

@@ -1415,6 +1415,23 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   Pay 1 life"; tap = the same as tapping a glowing card, long-press = Pay with), my Exile / Grave / Cmd buttons get
   an "N to play" badge, and zone card lists glow like the table. Tests: `offZonePlays.test.ts`,
   `offZoneBar.test.tsx` (a real render: the row, the cost, a tap plays it).
+- **Looking at and playing the top of the library (owner report 2026-11-18, a Y'shtola deck with Bolas's Citadel).**
+  "It won't let me look at the top card and play it by paying life." The engine was right again: with the Citadel
+  out the priority list had the top card ("Play land by Bolas's Citadel", "{0}, Pay 4 life"). But `SeatView` never
+  sent a library card, so `library.known` was always empty on engine tables: nothing to look at, and the play
+  option pointed at a card the table did not have. Now `SeatView.libraryKnown` adds, per player, the library cards
+  Forge says this seat may look at (`CardView.canBeShownTo`, the same test the priority list already used), each
+  with `position` (0 = top): "look at the top card any time" (Bolas's Citadel, Future Sight) for that seat only,
+  "play with the top card revealed" (Courser of Kruphix) for every seat; spectators get none. The relay maps it to
+  `library.known` (`server/src/engine/view.ts`). Client: the priority bar's row offers it ("Hill Giant · Top of
+  your library · Pay 4 life", `offZonePlays` already read `library.known`); the Library button shows "1 to play"
+  or "Look" (`LibraryLookBadge`) and on an engine table opens the card ("Top of your library", a list that follows
+  the top as it changes; a glowing card is played with a tap); an opponent's revealed top is under "Revealed" in
+  their panel. `HiddenInfoAudit` now allows a library card only in the `libraryKnown` list of its own library and
+  only when Forge shows it to that viewer. Tests: engine `TopOfLibraryTest` (a real game: the view shows the top
+  card to its owner only, a spell is cast from the top for life equal to its mana value, a land is played from
+  the top), relay `engine.test.ts` "shows a library card the engine lets a seat look at to that seat only",
+  client `offZoneBar.test.tsx`. Needs an ENGINE deploy and a web deploy.
 - **Opening hand (2026-10-20).** Owner request: free mulligans for the table, and a "draw 10, put 3 back"
   start. Lobby setting (host, frozen at start, shown to everyone with its rules in plain words from
   `OPENING_HAND_TEXT` in `shared/src/openingHand.ts`; `rooms.opening_hand` / `free_mulligans`, migration

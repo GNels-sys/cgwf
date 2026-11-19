@@ -2726,6 +2726,7 @@ button.engine-row { cursor: pointer; width: 100%; }
 .offzone-play-label strong { font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .offzone-play-label .small { font-size: 0.7rem; line-height: 1.2; }
 .zone-btn { position: relative; }
+.zone-playable.is-look { background: var(--bg-elev-2); color: var(--accent); border: 1px solid var(--accent); }
 .zone-playable { position: absolute; top: -7px; right: -6px; padding: 1px 5px; border-radius: 8px; background: var(--accent); color: var(--bg, #000); font: 600 0.62rem/1.4 var(--font-ui, inherit); font-style: normal; white-space: nowrap; pointer-events: none; }
 
 /* Prepared spells (2026-11-17): the chip on a prepared creature and its line in the card view. */
