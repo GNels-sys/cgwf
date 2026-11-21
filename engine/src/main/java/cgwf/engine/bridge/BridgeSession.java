@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import forge.game.player.Player;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -13,6 +14,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -188,9 +190,47 @@ public final class BridgeSession {
         replay = null;
     }
 
+    // ------------------------------------------------------------------ run a loop (LoopReplay)
+
+    private final LoopReplay.Watch loopWatch = new LoopReplay.Watch();
+    private LoopReplay loop;
+    private volatile Consumer<String> loopLog;
+
+    /** Where "X runs a loop" lines go (the game log); set by the seat's controller. */
+    public void setLoopLog(Consumer<String> log) { this.loopLog = log; }
+
+    /** The loop this seat is running, or null. */
+    public LoopReplay loop() { return loop; }
+
+    /** End the running loop (an opponent responded, nothing is left on the stack): the seat is told why. */
+    public void stopLoop(String why) {
+        LoopReplay l = loop;
+        if (l == null) return;
+        l.stop(why);
+        endLoop(l);
+    }
+
+    private void endLoop(LoopReplay l) {
+        if (loop != l) return;
+        loop = null;
+        loopWatch.clear();
+        JsonObject n = new JsonObject();
+        n.addProperty("type", "notice");
+        n.addProperty("kind", "info");
+        n.addProperty("title", "Loop");
+        n.addProperty("text", l.summary());
+        send(n);
+        Consumer<String> log = loopLog;
+        if (log != null && l.done() > 0) log.accept("ran a loop " + l.done() + (l.done() == 1 ? " time." : " times."));
+    }
+
     /** Sends a prompt and waits for the answer. Null = nobody answered (fall back to AI). */
     public JsonObject ask(JsonObject prompt) {
-        if (absent) return null;
+        if (absent) {
+            loop = null;
+            loopWatch.clear();
+            return null;
+        }
         CastReplay r = replay;
         if (r != null && r.active()) {
             JsonObject auto = r.answerFor(prompt);
@@ -200,8 +240,71 @@ public final class BridgeSession {
             }
             r.stop("could not repeat the answer to \"" + CastReplay.str(prompt, "title") + "\"");
         }
+        // "Run the loop": answer from the recorded round while it holds
+        LoopReplay l = loop;
+        boolean paused = false;
+        if (l != null) {
+            JsonObject auto = l.answerFor(prompt);
+            if (auto != null) {
+                if (!l.active()) endLoop(l); // that was the last round asked for
+                return auto;
+            }
+            if (l.active()) {
+                paused = true;
+                prompt.add("loopPaused", l.pausedJson());
+            } else {
+                endLoop(l);
+            }
+        }
+        // a round answered the same way again and again: offer to run it (never inside a cast being recorded)
+        List<CastReplay.Step> cycle = null;
+        boolean watching = loop == null && recording == null && (r == null || !r.active());
+        if (watching) {
+            loopWatch.scope(LoopReplay.scopeOf(prompt));
+            cycle = loopWatch.cycleFor(prompt);
+            if (cycle != null) prompt.add("loop", LoopReplay.offerJson(cycle, loopWatch.rounds(cycle.size())));
+        } else if (loop == null) {
+            loopWatch.clear();
+        }
         JsonObject answered = askSeat(prompt);
-        if (answered != null && recording != null) recording.add(prompt, answered);
+        if (answered == null) {
+            loopWatch.clear();
+            if (paused) stopLoop("nobody answered");
+            return null;
+        }
+        if (paused) {
+            if (LoopReplay.isTrue(answered, "stopLoop")) stopLoop("you stopped it");
+            else {
+                l.resume(prompt, answered);
+                if (!l.active()) endLoop(l);
+            }
+            return answered;
+        }
+        if (answered.has("loop") && !answered.get("loop").isJsonNull()) {
+            int times = 0;
+            try { times = answered.get("loop").getAsInt(); } catch (RuntimeException e) { times = 0; }
+            if (cycle != null && times >= 1) {
+                LoopReplay started = new LoopReplay(cycle, times, LoopReplay.libraryOf(prompt));
+                JsonObject auto = started.answerFor(prompt);
+                if (auto != null) {
+                    loop = started;
+                    Consumer<String> log = loopLog;
+                    if (log != null) log.accept("runs a loop of " + cycle.size() + (cycle.size() == 1 ? " choice" : " choices") + ", up to " + started.wanted() + (started.wanted() == 1 ? " time." : " times."));
+                    if (!started.active()) endLoop(started);
+                    return auto;
+                }
+            }
+            // no loop to run (nothing was offered here): the question itself is asked once more
+            sendError("there is no loop to run here; answer the question itself");
+            prompt.remove("loop");
+            loopWatch.clear();
+            JsonObject again = askSeat(prompt);
+            if (again == null || again.has("loop")) return null;
+            if (recording != null) recording.add(prompt, again);
+            return again;
+        }
+        if (watching) loopWatch.add(prompt, answered);
+        if (recording != null) recording.add(prompt, answered);
         return answered;
     }
 

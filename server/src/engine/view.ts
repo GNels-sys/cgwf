@@ -1,4 +1,4 @@
-import { type EngineRepeatOffer,
+import { type EngineLoopOffer, type EngineLoopPause, type EngineRepeatOffer,
   EMPTY_MANA,
   defaultSection,
   type CardPrinting,
@@ -440,6 +440,36 @@ function str(v: unknown): string | null {
 }
 
 export function toEnginePrompt(raw: Record<string, unknown>, ctx: ConvertContext): EnginePrompt | null {
+  const p: EnginePrompt | null = promptBody(raw, ctx);
+  if (!p) return null;
+  const loop = loopOffer(raw.loop);
+  if (loop) p.loop = loop;
+  const paused = loopPause(raw.loopPaused);
+  if (paused) p.loopPaused = paused;
+  return p;
+}
+
+/** The engine's "you keep answering the same way: run the loop?" offer (2026-11-21), or null. */
+function loopOffer(v: unknown): EngineLoopOffer | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  if (typeof r.steps !== "number" || r.steps < 1) return null;
+  return {
+    steps: r.steps,
+    seen: typeof r.seen === "number" ? r.seen : 2,
+    max: typeof r.max === "number" && r.max >= 1 ? r.max : 500,
+    titles: Array.isArray(r.titles) ? r.titles.slice(0, 8).map((t) => cleanEngineText(String(t))) : [],
+    key: typeof r.key === "string" ? r.key : "",
+  };
+}
+
+function loopPause(v: unknown): EngineLoopPause | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  return { reason: cleanEngineText(String(r.reason ?? "")), done: typeof r.done === "number" ? r.done : 0, left: typeof r.left === "number" ? r.left : 0 };
+}
+
+function promptBody(raw: Record<string, unknown>, ctx: ConvertContext): EnginePrompt | null {
   const promptId = Number(raw.promptId);
   const title = String(raw.title ?? "");
   switch (raw.prompt) {
@@ -556,7 +586,10 @@ export function toEngineAnswer(answer: EngineAnswer, ctx: ConvertContext): Recor
   const forgeIdOf = (userId: PlayerId): number | null => ctx.seats.find((s) => s.userId === userId)?.playerId ?? null;
   const ref = (r: EngineEntityRef) => (r.kind === "player" ? { kind: "player", id: forgeIdOf(r.player) } : { kind: "card", id: Number(r.iid) });
   const out: Record<string, unknown> = { promptId: answer.promptId };
-  if ("attacks" in answer) {
+  if (answer.stopLoop) out.stopLoop = true;
+  if ("loop" in answer) {
+    out.loop = Math.max(1, Math.min(500, Math.floor(Number(answer.loop))));
+  } else if ("attacks" in answer) {
     out.attacks = answer.attacks.map((a) => ({ cardId: Number(a.iid), defender: ref(a.defender) }));
   } else if ("blocks" in answer) {
     out.blocks = answer.blocks.map((b) => ({ blockerId: Number(b.blockerIid), attackerId: Number(b.attackerIid) }));
@@ -604,6 +637,8 @@ export function isEngineAnswer(v: unknown): v is EngineAnswer {
   if (!v || typeof v !== "object") return false;
   const a = v as Record<string, unknown>;
   if (typeof a.promptId !== "number") return false;
+  if (a.stopLoop !== undefined && typeof a.stopLoop !== "boolean") return false;
+  if ("loop" in a) return typeof a.loop === "number" && Number.isFinite(a.loop) && a.loop >= 1;
   if ("attacks" in a) return Array.isArray(a.attacks);
   if ("blocks" in a) return Array.isArray(a.blocks);
   if ("options" in a) return Array.isArray(a.options) && (a.options as unknown[]).every((n) => typeof n === "number");

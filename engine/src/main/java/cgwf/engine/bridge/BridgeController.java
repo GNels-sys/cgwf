@@ -99,6 +99,7 @@ public final class BridgeController extends PlayerControllerAi {
         super(game, p, lp);
         this.game = game;
         this.session = session;
+        session.setLoopLog(text -> game.getGameLog().add(GameLogEntryType.INFORMATION, player.getName() + " " + text));
     }
 
     public BridgeSession session() { return session; }
@@ -170,6 +171,14 @@ public final class BridgeController extends PlayerControllerAi {
                 }
             }
             if (!replay.active()) endReplay(replay);
+        }
+        // "Run the loop": while my own trigger or spell is on top it resolves and the loop goes on; anything
+        // else at a priority means the loop is over (the stack ran empty) or was answered (an opponent's item).
+        LoopReplay running = session.loop();
+        if (running != null && running.active()) {
+            SpellAbilityStackInstance top = stack.isEmpty() ? null : stack.peek();
+            if (top != null && top.getActivatingPlayer() == player) return null;
+            session.stopLoop(stack.isEmpty() ? "nothing was left on the stack" : "an opponent responded");
         }
         boolean stackTopNotMine = false;
         if (!stack.isEmpty()) {
