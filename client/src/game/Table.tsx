@@ -18,6 +18,7 @@ import { useSettings } from "../settings";
 import { anthemActions, cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
 import { setAmbient, stopAmbient } from "./ambient";
 import { AttackSplitSheet } from "./AttackSplit";
+import { LoopBanner, LoopOfferDialog } from "./LoopPrompt";
 import { toggleMany } from "./attackGroups";
 import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
@@ -185,7 +186,14 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
     });
   }, [prompt]); // eslint-disable-line react-hooks/exhaustive-deps
   const setPick = useCallback((p: EnginePick) => setPickState(p), []);
-  const answerEngine = useCallback((a: EngineAnswer) => sock.send({ t: "engine", answer: a }), [sock]);
+  // "Run the loop" (2026-11-21): an offer the player put aside (by its key), and "stop the loop" on a paused one,
+  // which rides on whatever answer the player gives next.
+  const [loopLater, setLoopLater] = useState<string | null>(null);
+  const [loopStop, setLoopStop] = useState(false);
+  const loopStopRef = useRef(false);
+  loopStopRef.current = loopStop && Boolean(prompt?.loopPaused);
+  useEffect(() => setLoopStop(false), [prompt?.promptId]);
+  const answerEngine = useCallback((a: EngineAnswer) => sock.send({ t: "engine", answer: loopStopRef.current ? { ...a, stopLoop: true } : a }), [sock]);
   // The Interaction Stack window opens on its own whenever a new chain forms (a response on top of
   // something, or a spell aimed at a stack item) and stays until the stack empties or the player tucks it away.
   const chain = engineMode && isInteraction(view.stack);
@@ -853,6 +861,12 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       </div>
 
       {/* ---- overlays ---- */}
+      {engineMode && prompt && me && (prompt.loop || prompt.loopPaused) &&
+        (prompt.loop && !prompt.loopPaused && loopLater !== prompt.loop.key ? (
+          <LoopOfferDialog offer={prompt.loop} onRun={(times) => answerEngine({ promptId: prompt.promptId, loop: times })} onLater={() => setLoopLater(prompt.loop!.key)} />
+        ) : (
+          <LoopBanner offer={prompt.loop ?? null} pause={prompt.loopPaused ?? null} stopping={loopStop} onOpen={() => setLoopLater(null)} onStop={setLoopStop} />
+        ))}
       {chain && !chainMin && !(prompt && prompt.kind !== "priority") && (
         <InteractionStack stack={view.stack} view={view} printings={printings} members={room.members} onZoom={holdCard} prompt={prompt} me={me} answer={answerEngine} onMinimize={() => setChainMin(true)} />
       )}

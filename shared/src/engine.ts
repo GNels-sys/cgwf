@@ -103,7 +103,30 @@ export interface EnginePlayable {
   targets: boolean;
 }
 
-export type EnginePrompt =
+/**
+ * "Run the loop" (owner, 2026-11-21): the seat answered the same run of questions the same way again and again
+ * (a trigger loop such as Enduring Tenacity + Bloodthirsty Conqueror), and this prompt would start the run once
+ * more. `steps` questions make one round, `seen` rounds were answered by hand, `titles` are the questions.
+ * `key` names the round, so a dismissed offer stays dismissed. Answer `{promptId, loop: N}` to run it.
+ */
+export interface EngineLoopOffer {
+  steps: number;
+  seen: number;
+  max: number;
+  titles: string[];
+  key: string;
+}
+
+/** The running loop stopped at this one question (a recorded choice is gone); its answer continues the loop. */
+export interface EngineLoopPause {
+  reason: string;
+  done: number;
+  left: number;
+}
+
+export type EnginePrompt = EnginePromptBody & { loop?: EngineLoopOffer | null; loopPaused?: EngineLoopPause | null };
+
+export type EnginePromptBody =
   | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean; holding: boolean; threat?: string | null; repeat?: EngineRepeatOffer | null }
   /** `cancelLabel`: what Cancel means here ("Keep current targets" when a copy or redirect may choose new targets); default "Cancel". */
   | { kind: "targets"; promptId: number; title: string; ability: string; source: string | null; min: number; max: number; options: EngineOption[]; cancelLabel?: string | null }
@@ -156,7 +179,11 @@ export type EnginePrompt =
 export type EnginePromptKind = EnginePrompt["kind"];
 
 /** Answers, mirrored from the engine protocol; `promptId` must echo the prompt. */
-export type EngineAnswer =
+export type EngineAnswer = EngineAnswerBody & { /** On a prompt with `loopPaused`: end the loop with this answer. */ stopLoop?: boolean };
+
+export type EngineAnswerBody =
+  /** Run the offered loop up to N more rounds; the engine answers this prompt from the recorded round. */
+  | { promptId: number; loop: number }
   | { promptId: number; option: number | null; passUntilTurn?: number; /** "Resolve all": pass until the stack is empty (2026-11-18). */ passStack?: boolean; concede?: boolean; /** "Pay with": iids of the mana sources to tap first (Stage 2 M5). */ paySources?: string[]; /** Cast this option that many times with the recorded choices (2026-11-04). */ repeat?: number }
   | { promptId: number; options: number[]; cancel?: boolean }
   | { promptId: number; attacks: Array<{ iid: string; defender: EngineEntityRef }> }

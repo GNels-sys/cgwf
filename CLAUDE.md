@@ -1698,6 +1698,41 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   real Sprout Swarm with buyback cast three times: one set of prompts, three saprolings, the offer and the
   notice), relay `engine.test.ts` (offer out, count back, `convoke` on the stops), `shared/src/settings.test.ts`,
   client `repeatControl.test.tsx`.
+- **Run the loop (owner, 2026-11-21).** "An infinite combo made me win but I had to click through the infinite to
+  ping each player." The game (room read with the owner's OK): Enduring Tenacity + Bloodthirsty Conqueror, with
+  Ajani and Niv-Mizzet also triggering on life gain, asked three questions every round (order the triggers, the
+  target, pay life to draw), about ninety rounds. "Repeat this cast" does not apply: a trigger loop never returns
+  to a priority prompt. `engine/.../bridge/LoopReplay.java`: `Watch` (in `BridgeSession.ask`) records the answers a
+  seat gives by hand (choose, chooseMany, targets, mode, number, confirm, order, text, assign). When the same run of
+  up to 8 questions was answered the same way twice in a row (three times for a single question), inside one
+  phase of one turn, with nothing in between but plain priority passes, the question that would start the run
+  again carries `loop {steps, seen, max, titles, key}`. Playing something, ending the turn, a cancel, any other
+  prompt kind, a new phase and a cast being recorded all clear the history. The answer `{promptId, loop: N}`
+  (N up to `LoopReplay.MAX_TIMES` = 500) starts a `LoopReplay`: the engine answers that prompt and the next N
+  rounds from the recording, by NAME against the current options (orders too). Two prompts are the same question
+  when kind, title, detail, source, ability, min, max, total, mode, optional, reason and note agree.
+  **Every round is really played**, so opponents get their priority as always and the win comes when the loop
+  takes the last life; nothing declares a win. While the loop runs, `chooseSpellAbilityToPlay` passes when the
+  seat's own item is on top of the stack. The loop ends when a different question comes up, an opponent's item
+  is on top at the seat's priority ("an opponent responded"), the stack is empty at its priority, the seat's
+  library ran out during the loop (a draw loop must not deck its owner), or the rounds are done; the seat gets a
+  notice ("The loop ran 18 times; it stopped because ...") and the log says "X runs a loop of 3 choices" / "X ran
+  a loop 18 times." **Paused, not ended**, when only a recorded pick is gone (the drained opponent is out): that
+  one question goes to the seat with `loopPaused {reason, done, left}` ("Daretti bot is no longer a choice"), and
+  its answer takes the old one's place for the rest; `stopLoop: true` on that answer ends the loop instead.
+  Nothing is decided for the seat that it did not decide in the recorded round; bots and absent seats never loop.
+  Client (`client/src/game/LoopPrompt.tsx`): the pop-up "This looks like a loop" (the questions, "Run it until it
+  ends" = 500 rounds, a typed number, "Not now"), above every sheet; put aside, it stays as a "Loop found" banner
+  for that round (`key`); a paused loop shows a banner with the reason and "Stop the loop" (`Table.tsx` adds
+  `stopLoop` to whatever answer follows). **Known limits:** a human opponent whose stops catch the loop's items
+  (each targets them) is still asked every round, and can use End turn to let it run; a loop whose numbers or
+  wording change each round (a title naming a growing amount) is not spotted; loops that go through a priority
+  play (activated abilities) are not spotted either, only "Repeat this cast" covers a re-cast spell. Tests: engine
+  `LoopReplayTest` (pure: spotting, what breaks a run, by-name answers, pause and resume, the session's offer /
+  run / stop), `LoopShortcutTest` (a real three-player game with the two cards and Ajani's Pridemate: offered
+  after two rounds, 18 questions become 5, one new target when the first opponent is out, the human wins), relay
+  `engine.test.ts` (offer out, `{loop}` back clamped, `loopPaused`, `stopLoop`), client `loopPrompt.test.tsx`.
+  Needs an ENGINE deploy and a web deploy.
 - **Mana: automatic, with "Pay with" (Stage 2 M5, owner's option 1).** Mana is still paid by
   Forge's AI payer, but a long-press on a glowing spell or ability opens the **Pay with** sheet
   (`PayWithSheet` in `EnginePrompts.tsx`): the card, the cost pips, and every untapped permanent

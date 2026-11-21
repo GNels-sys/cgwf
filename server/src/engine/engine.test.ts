@@ -360,6 +360,24 @@ describe("engine tables (relay to the rules engine)", () => {
     alex.send({ t: "engine", answer: { promptId: 71, option: 1, repeat: 40 } });
     const repeated = await engine.waitFor((f) => f.type === "answer" && f.promptId === 71);
     expect(repeated).toMatchObject({ seat: 0, option: 1, repeat: 40 });
+    // "Run the loop" (2026-11-21): the offer on any prompt reaches the seat, and {loop: N} travels back alone
+    engine.send({
+      type: "prompt", gameId, seat: 0, promptId: 72, prompt: "confirm", title: "Pay 1 life?", detail: null, mode: null, options: ["Yes", "No"], source: "Niv-Mizzet (31)",
+      loop: { steps: 3, seen: 2, max: 500, key: "1a2b", titles: ["Order your triggered abilities", "Choose targets for Enduring Tenacity (30)", "Pay 1 life?"] },
+    });
+    const looped = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 72, ma)).view;
+    expect(looped.engine?.prompt).toMatchObject({ kind: "confirm", loop: { steps: 3, seen: 2, max: 500, key: "1a2b", titles: ["Order your triggered abilities", "Choose targets for Enduring Tenacity", "Pay 1 life?"] } });
+    alex.send({ t: "engine", answer: { promptId: 72, loop: 9999 } });
+    const ran = await engine.waitFor((f) => f.type === "answer" && f.promptId === 72);
+    expect(ran).toMatchObject({ seat: 0, loop: 500 });
+    expect(ran).not.toHaveProperty("confirm");
+    // a paused loop says why; "stop the loop" rides on the seat's own answer
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 73, prompt: "confirm", title: "Pay 1 life?", detail: null, mode: null, options: ["Yes", "No"], source: null, loopPaused: { reason: "Blair is no longer a choice", done: 4, left: 496 } });
+    const paused = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 73, ma)).view;
+    expect(paused.engine?.prompt).toMatchObject({ loopPaused: { reason: "Blair is no longer a choice", done: 4, left: 496 } });
+    expect(paused.engine?.prompt).not.toHaveProperty("loop");
+    alex.send({ t: "engine", answer: { promptId: 73, confirm: false, stopLoop: true } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 73)).toMatchObject({ seat: 0, confirm: false, stopLoop: true });
     // and the answer is on the room's event log
     const events = ctx.roomsManager.get(code)!.currentState() === null ? "engine" : "classic";
     expect(events).toBe("engine");
