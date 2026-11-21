@@ -38,18 +38,36 @@ public final class LoopReplay {
     private static final String[] SAME = {"detail", "source", "ability", "min", "max", "total", "mode", "optional", "reason", "note"};
 
     private final List<CastReplay.Step> steps;
-    private final int wanted;
+    private int wanted;
     private final int libraryAtStart;
     private int done;
     private int cursor;
     private String stopped;
     private String paused;
+    /** The newest stack item when the loop began (-1 = unknown): older items of an opponent's are not responses. */
+    private int stackMark = -1;
+    /** "Yes for N, then No for the rest": after the rounds asked for, give the other answer until it ends. */
+    private boolean thenOther;
+    private int flippedAt = -1;
+    private final String nowLabel;
+    private final String thenLabel;
+    private int libraryLastRound = -1;
 
     public LoopReplay(List<CastReplay.Step> steps, int wanted, int libraryAtStart) {
         this.steps = new ArrayList<>(steps);
         this.wanted = Math.max(1, Math.min(MAX_TIMES, wanted));
         this.libraryAtStart = libraryAtStart;
+        JsonObject flip = flipJson(steps);
+        this.nowLabel = flip == null ? "" : flip.get("now").getAsString();
+        this.thenLabel = flip == null ? "" : flip.get("then").getAsString();
     }
+
+    public void stackMark(int newestStackId) { this.stackMark = newestStackId; }
+    public int stackMark() { return stackMark; }
+
+    /** After the rounds asked for, answer the other way until the loop ends (a single yes/no question only). */
+    public void thenOther() { thenOther = flipJson(steps) != null; }
+    public boolean flipped() { return flippedAt >= 0; }
 
     public int steps() { return steps.size(); }
     public int wanted() { return wanted; }
@@ -74,9 +92,19 @@ public final class LoopReplay {
     public JsonObject answerFor(JsonObject prompt) {
         paused = null;
         if (!active()) return null;
-        if (libraryAtStart > 0 && libraryOf(prompt) == 0) {
+        int library = libraryOf(prompt);
+        if (libraryAtStart > 0 && library == 0) {
             stop("your library is empty");
             return null;
+        }
+        if (cursor == 0 && library >= 0) {
+            // a round that draws more cards than are left would lose the game: stop before it
+            int drew = libraryLastRound < 0 ? 0 : libraryLastRound - library;
+            if (drew > 0 && library < drew) {
+                stop("your library has only " + library + (library == 1 ? " card" : " cards") + " left");
+                return null;
+            }
+            libraryLastRound = library;
         }
         CastReplay.Step s = steps.get(cursor);
         if (!signature(prompt).equals(signature(s.prompt()))) {
@@ -107,8 +135,47 @@ public final class LoopReplay {
         if (cursor >= steps.size()) {
             cursor = 0;
             done++;
-            if (done >= wanted) stopped = "done";
+            if (done >= wanted) {
+                if (thenOther && flip()) {
+                    thenOther = false;
+                    flippedAt = done;
+                    wanted = done + MAX_TIMES;
+                } else {
+                    stopped = "done";
+                }
+            }
         }
+    }
+
+    /** Turns the single yes/no round's answer into the other one. */
+    private boolean flip() {
+        if (flipJson(steps) == null) return false;
+        CastReplay.Step s = steps.get(0);
+        JsonObject a = s.answer().deepCopy();
+        a.addProperty("confirm", !a.get("confirm").getAsBoolean());
+        steps.set(0, new CastReplay.Step(s.prompt(), a));
+        return true;
+    }
+
+    /** For a round that is one yes/no question: the answer given now and the other one, by their button labels; else null. */
+    static JsonObject flipJson(List<CastReplay.Step> cycle) {
+        if (cycle.size() != 1) return null;
+        CastReplay.Step s = cycle.get(0);
+        if (!"confirm".equals(CastReplay.str(s.prompt(), "prompt"))) return null;
+        JsonObject a = s.answer();
+        if (!a.has("confirm") || !a.get("confirm").isJsonPrimitive() || !a.get("confirm").getAsJsonPrimitive().isBoolean()) return null;
+        String yes = "Yes";
+        String no = "No";
+        JsonElement opts = s.prompt().get("options");
+        if (opts != null && opts.isJsonArray() && opts.getAsJsonArray().size() >= 2 && opts.getAsJsonArray().get(0).isJsonPrimitive() && opts.getAsJsonArray().get(1).isJsonPrimitive()) {
+            yes = opts.getAsJsonArray().get(0).getAsString();
+            no = opts.getAsJsonArray().get(1).getAsString();
+        }
+        boolean said = a.get("confirm").getAsBoolean();
+        JsonObject j = new JsonObject();
+        j.addProperty("now", said ? yes : no);
+        j.addProperty("then", said ? no : yes);
+        return j;
     }
 
     /** The loop's state for the paused prompt: why, rounds done, rounds left. */
@@ -123,6 +190,10 @@ public final class LoopReplay {
     /** What the seat is told when the loop is over. */
     public String summary() {
         String ran = "The loop ran " + done + (done == 1 ? " time" : " times");
+        if (flippedAt >= 0) {
+            int rest = done - flippedAt;
+            ran = "The loop answered \"" + nowLabel + "\" " + flippedAt + (flippedAt == 1 ? " time" : " times") + ", then \"" + thenLabel + "\" " + rest + (rest == 1 ? " time" : " times");
+        }
         if (finished() || stopped == null) return ran + ".";
         return ran + "; it stopped because " + stopped + ".";
     }
@@ -219,6 +290,8 @@ public final class LoopReplay {
             key.append(signature(s.prompt())).append('\u0001').append(answerKey(s)).append('\u0002');
         }
         j.add("titles", titles);
+        JsonObject flip = flipJson(cycle);
+        if (flip != null) j.add("flip", flip); // one yes/no question: "Yes for N, then No for the rest" is possible
         j.addProperty("key", Integer.toHexString(key.toString().hashCode()));
         return j;
     }
@@ -394,6 +467,7 @@ public final class LoopReplay {
         JsonObject a = answer.deepCopy();
         a.remove("promptId");
         a.remove("loop");
+        a.remove("then");
         a.remove("stopLoop");
         return a;
     }

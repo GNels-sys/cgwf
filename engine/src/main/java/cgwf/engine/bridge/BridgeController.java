@@ -100,6 +100,11 @@ public final class BridgeController extends PlayerControllerAi {
         this.game = game;
         this.session = session;
         session.setLoopLog(text -> game.getGameLog().add(GameLogEntryType.INFORMATION, player.getName() + " " + text));
+        session.setLoopStackMark(() -> {
+            int newest = -1;
+            for (SpellAbilityStackInstance si : game.getStack()) newest = Math.max(newest, si.getId());
+            return newest;
+        });
     }
 
     public BridgeSession session() { return session; }
@@ -172,13 +177,26 @@ public final class BridgeController extends PlayerControllerAi {
             }
             if (!replay.active()) endReplay(replay);
         }
-        // "Run the loop": while my own trigger or spell is on top it resolves and the loop goes on; anything
-        // else at a priority means the loop is over (the stack ran empty) or was answered (an opponent's item).
+        // "Run the loop": while my own trigger or spell is on top it resolves and the loop goes on. So does an
+        // opponent's trigger that was on the stack before the loop began (2026-11-21: an opponent's 120 Scute
+        // Swarm triggers, each of which set off the seat's own): the seat had its say on those already. An
+        // opponent's spell or activated ability on top ends the loop, and so does an empty stack. A NEW trigger
+        // of an opponent's is left to the seat's own stops: asked about it, the loop ends; passed, it goes on.
         LoopReplay running = session.loop();
+        boolean loopOverNewTrigger = false;
         if (running != null && running.active()) {
             SpellAbilityStackInstance top = stack.isEmpty() ? null : stack.peek();
-            if (top != null && top.getActivatingPlayer() == player) return null;
-            session.stopLoop(stack.isEmpty() ? "nothing was left on the stack" : "an opponent responded");
+            if (top == null) {
+                session.stopLoop("nothing was left on the stack");
+            } else if (top.getActivatingPlayer() == player) {
+                return null;
+            } else if (!top.isTrigger()) {
+                session.stopLoop(top.getId() > running.stackMark() ? "an opponent responded" : "an opponent's spell or ability is next on the stack");
+            } else if (top.getId() <= running.stackMark()) {
+                return null;
+            } else {
+                loopOverNewTrigger = true;
+            }
         }
         boolean stackTopNotMine = false;
         if (!stack.isEmpty()) {
@@ -208,6 +226,7 @@ public final class BridgeController extends PlayerControllerAi {
         if (DEBUG_PRIORITY) System.err.println("[priority] seat=" + session.seat() + " legal=" + legal.size() + " autoPassEmpty=" + session.autoPassesEmpty(ph.getTurn()));
         // Nothing to play or activate: pass without asking (Arena-style), unless the seat holds this turn.
         if (legal.isEmpty() && session.autoPassesEmpty(ph.getTurn())) return null;
+        if (loopOverNewTrigger) session.stopLoop("an opponent's trigger needs your answer");
         JsonObject p = prompt("priority", "You have priority");
         JsonArray opts = new JsonArray();
         for (int i = 0; i < legal.size(); i++) opts.add(abilityJson(i, legal.get(i)));

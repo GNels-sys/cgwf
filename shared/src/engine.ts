@@ -115,6 +115,11 @@ export interface EngineLoopOffer {
   max: number;
   titles: string[];
   key: string;
+  /**
+   * Set when the round is one yes/no question (2026-11-21): the button label of the answer given so far and of the
+   * other one. Then `{loop: N, then: "other"}` answers `now` N more times and `then` for the rest.
+   */
+  flip?: { now: string; then: string } | null;
 }
 
 /** The running loop stopped at this one question (a recorded choice is gone); its answer continues the loop. */
@@ -183,7 +188,7 @@ export type EngineAnswer = EngineAnswerBody & { /** On a prompt with `loopPaused
 
 export type EngineAnswerBody =
   /** Run the offered loop up to N more rounds; the engine answers this prompt from the recorded round. */
-  | { promptId: number; loop: number }
+  | { promptId: number; loop: number; /** After those rounds, give the other answer until the loop ends (offers with `flip`). */ then?: "other" }
   | { promptId: number; option: number | null; passUntilTurn?: number; /** "Resolve all": pass until the stack is empty (2026-11-18). */ passStack?: boolean; concede?: boolean; /** "Pay with": iids of the mana sources to tap first (Stage 2 M5). */ paySources?: string[]; /** Cast this option that many times with the recorded choices (2026-11-04). */ repeat?: number }
   | { promptId: number; options: number[]; cancel?: boolean }
   | { promptId: number; attacks: Array<{ iid: string; defender: EngineEntityRef }> }

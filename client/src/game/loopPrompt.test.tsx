@@ -61,6 +61,27 @@ describe("the loop pop-up", () => {
     expect(runs).toEqual([25, 500]);
   });
 
+  it("offers a single yes/no question as: this answer N more times, then the other for the rest", () => {
+    const runs: Array<[number, boolean | undefined]> = [];
+    const offer = { steps: 1, seen: 3, max: 500, key: "9f", titles: ["Pay 2 life?"], flip: { now: "Yes", then: "No" } };
+    act(() => root.render(<LoopOfferDialog offer={offer} onRun={(n, other) => runs.push([n, other])} onLater={() => {}} />));
+    expect(host.textContent).toContain('or "Yes" this many more times');
+    const input = host.querySelector<HTMLInputElement>("input[type=number]")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    act(() => {
+      setter.call(input, "67");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => button('then "No" for the rest').click());
+    act(() => void host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    act(() => button("Run it until it ends").click());
+    expect(runs).toEqual([[67, true], [67, undefined], [500, undefined]]);
+    // an offer without the two labels has the plain form only
+    act(() => root.render(<LoopOfferDialog offer={OFFER} onRun={() => {}} onLater={() => {}} />));
+    expect(host.textContent).not.toContain("for the rest");
+    expect(host.textContent).toContain("or this many rounds");
+  });
+
   it("words one question and longer runs", () => {
     expect(loopSeenText({ ...OFFER, steps: 1, seen: 3 })).toBe("You answered the same question the same way 3 times in a row.");
     expect(loopPausedText({ reason: "Blair is no longer a choice", done: 4, left: 496 })).toBe("Blair is no longer a choice. Answer this one and the loop carries on with your new answer.");

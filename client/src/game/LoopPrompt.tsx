@@ -6,6 +6,9 @@ import type { EngineLoopOffer, EngineLoopPause } from "@cgwf/shared";
  * every round until the table was dead). The engine offers it when the same run of questions was answered the
  * same way again and again; accepting answers the rounds from those choices. Every round is still played out,
  * so opponents can respond, and the game is won when the loop really takes the last life.
+ *
+ * A round that is one yes/no question (owner, 2026-11-21: sixty "pay life to draw?" triggers, wanted "X of them one
+ * way and the rest the other") also offers: this answer N more times, then the other answer for the rest.
  */
 
 export function loopSeenText(offer: EngineLoopOffer): string {
@@ -22,7 +25,7 @@ export function loopPausedText(pause: EngineLoopPause): string {
 const LOOP_RULES = "Each round is still played out, so opponents can respond. It stops by itself if they do, or when something new is asked. If a choice is gone (a player is out) you pick once and it carries on.";
 
 /** The pop-up: what was spotted, and the two ways to run it. */
-export function LoopOfferDialog({ offer, onRun, onLater }: { offer: EngineLoopOffer; onRun: (times: number) => void; onLater: () => void }) {
+export function LoopOfferDialog({ offer, onRun, onLater }: { offer: EngineLoopOffer; onRun: (times: number, thenOther?: boolean) => void; onLater: () => void }) {
   const [times, setTimes] = useState("10");
   const parsed = Math.floor(Number(times));
   const ok = Number.isFinite(parsed) && parsed >= 1;
@@ -43,6 +46,9 @@ export function LoopOfferDialog({ offer, onRun, onLater }: { offer: EngineLoopOf
           <button className="btn btn-primary" onClick={() => onRun(offer.max)}>
             Run it until it ends
           </button>
+          <button className="btn btn-small" onClick={onLater}>
+            Not now
+          </button>
           <form
             className="loop-times"
             onSubmit={(e) => {
@@ -51,16 +57,24 @@ export function LoopOfferDialog({ offer, onRun, onLater }: { offer: EngineLoopOf
             }}
           >
             <label>
-              <span>or this many rounds</span>
+              <span>{offer.flip ? `or "${offer.flip.now}" this many more times` : "or this many rounds"}</span>
               <input type="number" inputMode="numeric" min={1} max={offer.max} value={times} onChange={(e) => setTimes(e.target.value)} aria-label="How many rounds" />
             </label>
-            <button type="submit" className="btn btn-small" disabled={!ok}>
-              Go
-            </button>
+            {offer.flip ? (
+              <>
+                <button type="button" className="btn btn-small btn-primary" disabled={!ok} onClick={() => ok && onRun(n, true)}>
+                  then "{offer.flip.then}" for the rest
+                </button>
+                <button type="submit" className="btn btn-small" disabled={!ok}>
+                  then ask me again
+                </button>
+              </>
+            ) : (
+              <button type="submit" className="btn btn-small" disabled={!ok}>
+                Go
+              </button>
+            )}
           </form>
-          <button className="btn btn-small" onClick={onLater}>
-            Not now
-          </button>
         </div>
         <p className="muted small">
           {LOOP_RULES} At most {offer.max} rounds.

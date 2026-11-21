@@ -2788,7 +2788,7 @@ button.engine-row { cursor: pointer; width: 100%; }
 .loop-steps li { margin: 2px 0; }
 .loop-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
 .loop-actions .btn { min-height: 44px; }
-.loop-times { display: flex; align-items: flex-end; gap: 6px; }
+.loop-times { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px; }
 .loop-times label { display: flex; flex-direction: column; gap: 2px; font-size: 0.8rem; }
 .loop-times input { width: 6rem; min-height: 44px; padding: 4px 8px; font-size: 1rem; }
 .loop-banner { position: fixed; top: max(6px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 88; display: flex; align-items: center; gap: 10px; width: max-content; max-width: min(94vw, 560px); padding: 6px 8px 6px 12px; border: 1px solid var(--accent); border-radius: 12px; background: var(--bg-elev); box-shadow: 0 8px 24px #0008; font-size: 0.85rem; line-height: 1.25; }
