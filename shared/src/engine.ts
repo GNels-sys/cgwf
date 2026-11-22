@@ -269,6 +269,13 @@ export function respondModeOf(s: { respond?: unknown; respondTo?: unknown }): Re
 /** Steps a seat can stop at (untap and cleanup never give priority), in turn order, for the toggles row. */
 export const STOPPABLE_PHASES: EnginePhase[] = ["UPKEEP", "DRAW", "MAIN1", "COMBAT_BEGIN", "COMBAT_DECLARE_ATTACKERS", "COMBAT_DECLARE_BLOCKERS", "COMBAT_DAMAGE", "COMBAT_END", "MAIN2", "END_OF_TURN"];
 
+export interface EngineRepeating {
+  kind: "cast" | "loop";
+  name: string;
+  done: number;
+  wanted: number;
+}
+
 /** What a stack item looks like in an engine game (the classic StackItem shape, plus who is waiting). */
 export interface EngineInfo {
   /** Forge's current step name. */
@@ -282,6 +289,11 @@ export interface EngineInfo {
   stops: EngineStops;
   /** The turn number this seat is holding priority for (every priority stops, nothing auto-passes), or null. */
   holdTurn: number | null;
+  /**
+   * What the engine is repeating for THIS seat right now (2026-11-22): a cast ("Repeat this cast N times") or a
+   * loop of answers. `wanted` 0 = until it ends. The table shows the progress and a Stop button (`{t:"stopRepeat"}`).
+   */
+  repeating?: EngineRepeating | null;
   /** True while the relay has lost the engine (the table shows "reconnecting to the rules engine"). */
   engineDown: boolean;
 }

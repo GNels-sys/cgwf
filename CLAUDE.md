@@ -1792,6 +1792,47 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   the setting off no question and the damage is dealt; the default and an older relay), relay `engine.test.ts`
   (the setting on the wire and saved, `attack` on the prompt), `shared/src/settings.test.ts`, client
   `offZoneBar.test.tsx` (the headline). Needs an ENGINE deploy and a web deploy.
+- **A long repeat ran the engine out of memory; Stop for a running repeat (owner, 2026-11-22).** "I told it to go
+  through the [Sprout Swarm] loop 500 times but it's slowing down greatly when it hit the 200th token ... We just
+  hit an engine failure." The engine's log (`fly logs --app cgwf-engine`): `game ... thread died:
+  java.lang.OutOfMemoryError: Java heap space` inside a token creation, minutes after `AI eval thread at timeout`.
+  Measured locally with 300 creatures in play (`jcmd <pid> GC.class_histogram`): fifty repeated casts took live
+  `forge.game.card.Card` objects from 1,700 to 34,000, about 9 MB a cast, none freed before the end of the turn.
+  - **Why.** Forge snapshots the whole battlefield (a copy of every card) when a spell is cast and when an effect
+    is applied, and stores the snapshot on the ability object (`SpellAbility.lastStateBattlefield`). Those
+    abilities are then kept until the turn ends by: `MagicStack.thisTurnCast` (every spell cast this turn); the
+    card's own `numberAbilityResolved` table (keyed by the ability); each token's `tokenSpawningAbility`; and the
+    replacement effects (buyback's "return it to your hand") of every earlier self of the card, which the zones'
+    "entered this turn" lists keep alive. Cost: casts x board size.
+  - **Fix: `engine/.../bridge/CastSnapshots.trim(game)`**, called at the top of every human priority
+    (`BridgeController.chooseSpellAbilityToPlay`), does nothing on an ordinary turn (eight casts or fewer). Past
+    that it empties the snapshots of: casts older than the newest eight that are not on the stack; abilities in
+    any card's resolved-this-turn table; token makers; and every ability, trigger and replacement effect of old
+    card copies (not cards in the game, not on the stack) reachable from this turn's casts, token makers and the
+    zones' entered-this-turn lists. Counts (storm, "second spell each turn", "only once each turn") are untouched;
+    Forge itself empties the same field on last-known-information copies. `numberAbilityResolved` is private
+    (reflection); if a Forge bump renames it the trim logs once and `RepeatLongRunTest` fails.
+  - **Stop.** While the engine repeats a cast or runs a loop for a seat it asks that seat nothing, so there was
+    no way out. The seat's own state frame now carries `repeating {kind: cast|loop, name, done, wanted}`
+    (`BridgeSession.repeatingJson`, `EngineInfo.repeating`); the table shows "Repeating Sprout Swarm: 212 of 500."
+    with a **Stop** button (`RepeatingBanner`). Stop = `{t:"stopRepeat"}` -> relay -> engine frame `stopRepeat` ->
+    `BridgeSession.requestStopRepeat()`; the game thread acts at its next question or priority
+    (`applyStopRequest`): the notice reads "Repeated Sprout Swarm 212 of 500 times; stopped: you stopped it."
+    What was already made stays.
+  - **Cheaper rounds.** (a) While any seat is repeating, `GameSession.onEvent` sends state frames at most every
+    400 ms instead of at every priority (the state before a question and the end of the game still go at once).
+    (b) Bots: `BridgeAiLobbyPlayer`'s controller decides ONCE per repeat or loop whether to respond; having let it
+    go it passes the remaining priorities of that repeat without running Forge's AI (the same question every
+    round; it was the "AI eval thread at timeout" in the log). A bot that responds ends the repeat as before.
+  - **Not done, on purpose:** "just create the total number of tokens". Each cast is still played: its cast and
+    enters-the-battlefield triggers, the convoke taps and the opponents' chance to respond depend on the board as
+    it grows, and working out the end state without playing it would mean a second rules engine.
+  - How the holders were found: `RetentionWalk` (test helper) walks the object graph from the `Game` and counts
+    card copies that are not cards of the game, with the field paths that reach them; it also walks INTO those
+    copies, since most of the leak hung off them. Tests: engine `RepeatLongRunTest` (real games: 26 repeats with
+    150 creatures keep under 16 boards' worth of copies, 9,067 without the fix; a running repeat reports its
+    progress and Stop ends it part-way), relay `engine.test.ts` (`repeating` only on that seat's frame,
+    `stopRepeat` to the engine), client `loopPrompt.test.tsx`. Needs an ENGINE deploy and a web deploy.
 - **Mana: automatic, with "Pay with" (Stage 2 M5, owner's option 1).** Mana is still paid by
   Forge's AI payer, but a long-press on a glowing spell or ability opens the **Pay with** sheet
   (`PayWithSheet` in `EnginePrompts.tsx`): the card, the cost pips, and every untapped permanent

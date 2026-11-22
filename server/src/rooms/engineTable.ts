@@ -631,6 +631,14 @@ export class EngineTable {
     this.sendSeat(seat);
   }
 
+  /** Stop the repeat or loop the engine is running for this seat (the table's Stop button). */
+  stopRepeat(userId: string): void {
+    this.ensureLoaded();
+    const seat = this.seatOf(userId);
+    if (seat === null) throw new EngineRoomError("spectators have nothing to stop");
+    this.client.trySend({ type: "stopRepeat", gameId: this.room.id, seat });
+  }
+
   concede(userId: string): void {
     const seat = this.seatOf(userId);
     if (seat === null) return;

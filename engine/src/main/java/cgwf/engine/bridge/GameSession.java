@@ -40,6 +40,8 @@ public final class GameSession {
 
     public static final int SPECTATOR = -1;
     private static final long MIN_FLUSH_GAP_NANOS = 100_000_000L;
+    /** While a repeat or loop runs for a seat: at most this often. */
+    private static final long REPEAT_FLUSH_GAP_NANOS = 400_000_000L;
 
     private final String gameId;
     private final long seed;
@@ -417,8 +419,25 @@ public final class GameSession {
         boolean force = e instanceof GameEventPlayerPriority || e instanceof GameEventTurnPhase
                 || e instanceof GameEventGameFinished || e instanceof GameEventGameOutcome || e instanceof GameEventGameStarted;
         long now = System.nanoTime();
-        if (force || now - lastFlushNanos > MIN_FLUSH_GAP_NANOS) flush(false);
+        // While a seat's repeat or loop is answering for it, a state frame at every priority is wasted work: with a
+        // few hundred tokens each frame is large, and there are several priorities per cast (2026-11-22). The end
+        // of the game still goes out at once, and so does the state before any question (flushIfDirty).
+        boolean repeating = anyRepeating();
+        boolean ending = e instanceof GameEventGameFinished || e instanceof GameEventGameOutcome;
+        long gap = repeating ? REPEAT_FLUSH_GAP_NANOS : MIN_FLUSH_GAP_NANOS;
+        if (ending || (force && !repeating) || now - lastFlushNanos > gap) flush(false);
         else dirty = true;
+    }
+
+    private boolean anyRepeating() {
+        for (BridgeSession s : humans.values()) if (s.repeating()) return true;
+        return false;
+    }
+
+    /** The seat pressed Stop on its running repeat or loop. */
+    public void stopRepeat(int seat) {
+        BridgeSession s = humans.get(seat);
+        if (s != null) s.requestStopRepeat();
     }
 
     private void flushIfDirty() {
@@ -433,6 +452,8 @@ public final class GameSession {
             if (!humans.containsKey(e.getKey())) continue;
             JsonObject view = SeatView.build(game, e.getValue(), this::seatOf);
             view.addProperty("round", rounds.round());
+            JsonObject repeating = humans.get(e.getKey()).repeatingJson();
+            if (repeating != null) view.add("repeating", repeating); // that seat's own screen: progress and a Stop button
             lastState.put(e.getKey(), view.toString());
             emit(view, e.getKey());
         }
