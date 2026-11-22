@@ -200,6 +200,62 @@ public final class BridgeSession {
         replay = null;
     }
 
+    // ------------------------------------------------------------------ stopping a repeat or a loop by hand
+
+    private volatile boolean stopRepeatRequested;
+
+    /**
+     * The seat pressed Stop (owner, 2026-11-22: a repeat of 500 that slowed down had no way out). Called from the
+     * control socket's thread; the game thread acts on it at its next question or priority.
+     */
+    public void requestStopRepeat() { stopRepeatRequested = true; }
+
+    /** Game thread: end a running repeat or loop if the seat asked to. True when something was stopped. */
+    public boolean applyStopRequest() {
+        if (!stopRepeatRequested) return false;
+        stopRepeatRequested = false;
+        boolean stopped = false;
+        CastReplay r = replay;
+        if (r != null && r.active()) {
+            r.stop("you stopped it");
+            stopped = true;
+        }
+        if (loop != null) {
+            stopLoop("you stopped it");
+            stopped = true;
+        }
+        return stopped;
+    }
+
+    /** What this seat is repeating right now, for its own screen: {kind, name, done, wanted}; null when nothing. */
+    public JsonObject repeatingJson() {
+        CastReplay r = replay;
+        LoopReplay l = loop;
+        JsonObject j = new JsonObject();
+        if (r != null && r.active()) {
+            j.addProperty("kind", "cast");
+            j.addProperty("name", r.cardName());
+            j.addProperty("done", r.done());
+            j.addProperty("wanted", r.wanted());
+            return j;
+        }
+        if (l != null && l.active()) {
+            j.addProperty("kind", "loop");
+            j.addProperty("name", "the loop");
+            j.addProperty("done", l.done());
+            j.addProperty("wanted", l.flipped() ? 0 : l.wanted());
+            return j;
+        }
+        return null;
+    }
+
+    /** True while this seat's repeat or loop is answering for it. */
+    public boolean repeating() {
+        CastReplay r = replay;
+        LoopReplay l = loop;
+        return (r != null && r.active()) || (l != null && l.active());
+    }
+
     // ------------------------------------------------------------------ run a loop (LoopReplay)
 
     private final LoopReplay.Watch loopWatch = new LoopReplay.Watch();
@@ -246,6 +302,7 @@ public final class BridgeSession {
             loopWatch.clear();
             return null;
         }
+        applyStopRequest();
         CastReplay r = replay;
         if (r != null && r.active()) {
             JsonObject auto = r.answerFor(prompt);

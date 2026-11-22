@@ -18,7 +18,7 @@ import { useSettings } from "../settings";
 import { anthemActions, cardActions, diceActions, libraryActions, playerActions, type Ctx } from "./actions";
 import { setAmbient, stopAmbient } from "./ambient";
 import { AttackSplitSheet } from "./AttackSplit";
-import { LoopBanner, LoopOfferDialog } from "./LoopPrompt";
+import { LoopBanner, LoopOfferDialog, RepeatingBanner } from "./LoopPrompt";
 import { toggleMany } from "./attackGroups";
 import { Battlefield } from "./Battlefield";
 import { CardTile } from "./CardTile";
@@ -861,6 +861,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       </div>
 
       {/* ---- overlays ---- */}
+      {engineMode && me && engine?.repeating && !prompt && <RepeatingBanner key={`${engine.repeating.kind}:${engine.repeating.name}`} repeating={engine.repeating} onStop={() => sock.send({ t: "stopRepeat" })} />}
       {engineMode && prompt && me && (prompt.loop || prompt.loopPaused) &&
         (prompt.loop && !prompt.loopPaused && loopLater !== prompt.loop.key ? (
           <LoopOfferDialog offer={prompt.loop} onRun={(times, thenOther) => answerEngine({ promptId: prompt.promptId, loop: times, ...(thenOther ? { then: "other" as const } : {}) })} onLater={() => setLoopLater(prompt.loop!.key)} />

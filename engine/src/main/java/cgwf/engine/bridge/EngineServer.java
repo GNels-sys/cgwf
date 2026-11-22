@@ -121,6 +121,7 @@ public final class EngineServer extends WebSocketServer {
                 }
                 case "answer" -> game(gameId).answer(seat(m), m);
                 case "setStops" -> game(gameId).setStops(seat(m), m.has("stops") && m.get("stops").isJsonObject() ? m.getAsJsonObject("stops") : null);
+                case "stopRepeat" -> game(gameId).stopRepeat(seat(m));
                 case "hold" -> game(gameId).setHold(seat(m), m.has("turn") && !m.get("turn").isJsonNull() ? m.get("turn").getAsInt() : 0);
                 case "resync" -> game(gameId).resync(m.has("seat") && !m.get("seat").isJsonNull() ? m.get("seat").getAsInt() : GameSession.SPECTATOR);
                 case "attachSeat" -> game(gameId).setAbsent(seat(m), false);

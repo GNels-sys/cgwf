@@ -1,4 +1,4 @@
-import { type EngineLoopOffer, type EngineLoopPause, type EngineRepeatOffer,
+import { type EngineLoopOffer, type EngineLoopPause, type EngineRepeating, type EngineRepeatOffer,
   EMPTY_MANA,
   defaultSection,
   type CardPrinting,
@@ -101,6 +101,8 @@ export interface EnginePlayerJson {
 
 export interface EngineStateJson {
   type: "state";
+  /** Set on a seat's own frame while the engine repeats a cast or a loop for it. */
+  repeating?: unknown;
   turn: number;
   /** Rounds for people (engine RoundTracker); Forge's turn stays the truth. */
   round?: number;
@@ -347,9 +349,22 @@ export function engineToView(s: EngineStateJson, ctx: ConvertContext): { view: P
     drewForTurn: true,
     combat: toCombat(s, ctx),
     winAdvisories: [],
-    engine: { ...ctx.engine, phase: s.phase ?? null },
+    engine: { ...ctx.engine, phase: s.phase ?? null, repeating: repeatingOf(s.repeating) },
   };
   return { view, printings };
+}
+
+/** The engine's "I am repeating this for you" note on a seat's own state frame (2026-11-22), or null. */
+function repeatingOf(v: unknown): EngineRepeating | null {
+  if (!v || typeof v !== "object") return null;
+  const r = v as Record<string, unknown>;
+  if (r.kind !== "cast" && r.kind !== "loop") return null;
+  return {
+    kind: r.kind,
+    name: cleanEngineText(String(r.name ?? "")).slice(0, 80),
+    done: typeof r.done === "number" && r.done >= 0 ? Math.floor(r.done) : 0,
+    wanted: typeof r.wanted === "number" && r.wanted >= 0 ? Math.floor(r.wanted) : 0,
+  };
 }
 
 // ---------------------------------------------------------------- prompts

@@ -151,11 +151,13 @@ public final class BridgeController extends PlayerControllerAi {
             player.concede();
             return null;
         }
+        CastSnapshots.trim(game); // a long turn must not keep a copy of the battlefield per spell cast (2026-11-22)
         if (autopilot()) return super.chooseSpellAbilityToPlay();
 
         PhaseHandler ph = game.getPhaseHandler();
         PhaseType phase = ph.getPhase();
         MagicStack stack = game.getStack();
+        session.applyStopRequest(); // the seat pressed Stop on a running repeat or loop
         // "Repeat this cast N times": cast again while the recording holds, letting each copy resolve in between
         CastReplay replay = session.replay();
         if (replay != null) {

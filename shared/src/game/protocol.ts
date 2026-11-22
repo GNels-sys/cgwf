@@ -101,6 +101,8 @@ export type ClientMessage =
   | { t: "stops"; stops: EngineStops }
   /** Engine tables: hold priority for this turn (every priority stops, nothing auto-passes); null releases. */
   | { t: "hold"; turn: number | null }
+  /** Engine tables: stop the repeat or loop the engine is running for me (2026-11-22). */
+  | { t: "stopRepeat" }
   /** Concede (any table); on engine tables the engine records it at the seat's next decision. */
   | { t: "concede" }
   | { t: "ping" };

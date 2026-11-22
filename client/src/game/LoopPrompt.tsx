@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { EngineLoopOffer, EngineLoopPause } from "@cgwf/shared";
+import type { EngineLoopOffer, EngineLoopPause, EngineRepeating } from "@cgwf/shared";
 
 /**
  * "Run the loop" (owner, 2026-11-21: Enduring Tenacity + Bloodthirsty Conqueror asked the same three questions
@@ -80,6 +80,37 @@ export function LoopOfferDialog({ offer, onRun, onLater }: { offer: EngineLoopOf
           {LOOP_RULES} At most {offer.max} rounds.
         </p>
       </div>
+    </div>
+  );
+}
+
+export function repeatingText(r: EngineRepeating): string {
+  const what = r.kind === "cast" ? `Repeating ${r.name}` : "Running the loop";
+  return r.wanted > 0 ? `${what}: ${r.done} of ${r.wanted}.` : `${what}: ${r.done} so far.`;
+}
+
+/**
+ * While the engine repeats a cast or a loop for me nothing is asked, so this is the only control on screen
+ * (owner, 2026-11-22: "how do I stop the loop if it's causing the game to slow down?"). Stop ends it after the
+ * step in hand; what was already made stays.
+ */
+export function RepeatingBanner({ repeating, onStop }: { repeating: EngineRepeating; onStop: () => void }) {
+  const [asked, setAsked] = useState(false);
+  return (
+    <div className="loop-banner" role="status">
+      <span>
+        <strong>{repeatingText(repeating)}</strong> {asked ? "Stopping after this one..." : "You are not asked anything while it runs."}
+      </span>
+      <button
+        className="btn btn-small btn-primary"
+        disabled={asked}
+        onClick={() => {
+          setAsked(true);
+          onStop();
+        }}
+      >
+        Stop
+      </button>
     </div>
   );
 }

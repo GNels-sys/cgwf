@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LoopBanner, LoopOfferDialog, loopPausedText, loopSeenText } from "./LoopPrompt";
+import { LoopBanner, LoopOfferDialog, RepeatingBanner, loopPausedText, loopSeenText, repeatingText } from "./LoopPrompt";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -108,6 +108,17 @@ describe("the loop pop-up", () => {
     expect(host.textContent).toContain("The loop ends with this answer.");
     act(() => button("Keep the loop").click());
     expect(stops).toEqual([true, false]);
+  });
+
+  it("shows a running repeat with its progress and a Stop button that works once", () => {
+    let stops = 0;
+    act(() => root.render(<RepeatingBanner repeating={{ kind: "cast", name: "Sprout Swarm", done: 212, wanted: 500 }} onStop={() => stops++} />));
+    expect(host.textContent).toContain("Repeating Sprout Swarm: 212 of 500.");
+    act(() => button("Stop").click());
+    expect(stops).toBe(1);
+    expect(host.textContent).toContain("Stopping after this one...");
+    expect(button("Stop").disabled).toBe(true);
+    expect(repeatingText({ kind: "loop", name: "the loop", done: 40, wanted: 0 })).toBe("Running the loop: 40 so far.");
   });
 
   it("shows nothing without an offer or a pause", () => {

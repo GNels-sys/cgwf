@@ -386,6 +386,27 @@ describe("engine tables (relay to the rules engine)", () => {
     expect(flip.engine?.prompt).toMatchObject({ loop: { steps: 1, seen: 3, flip: { now: "Yes", then: "No" } } });
     alex.send({ t: "engine", answer: { promptId: 74, loop: 67, then: "other" } });
     expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 74)).toMatchObject({ seat: 0, loop: 67, then: "other" });
+    // while the engine repeats for a seat, that seat's frame says so, and Stop travels to the engine (2026-11-22)
+    const mr = alex.mark();
+    const mrb = blair.mark();
+    const A = pid[0]!;
+    const B = pid[1]!;
+    const player = (id: number, seat: number, name: string, viewer: number) => ({
+      id, seat, name, isYou: viewer === id, human: true, life: 40, poison: 0, lost: false, handCount: 1, libraryCount: 97, landsPlayedThisTurn: 0, commanderDamage: {},
+      battlefield: [], graveyard: [], exile: [], command: [],
+    });
+    const repeatingFrame = (seat: number, repeating?: Record<string, unknown>) => {
+      const viewer = seat === 0 ? A : B;
+      return { type: "state", gameId, seat, viewer, turn: 9, phase: "MAIN1", activePlayer: A, priorityPlayer: A, gameOver: false, stack: [], combat: null, log: [], players: [player(A, 0, "Alex", viewer), player(B, 1, "Blair", viewer)], ...(repeating ? { repeating } : {}) };
+    };
+    engine.send(repeatingFrame(0, { kind: "cast", name: "Sprout Swarm (212)", done: 212, wanted: 500 }));
+    engine.send(repeatingFrame(1));
+    const rep = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && Boolean(f.view.engine?.repeating), mr)).view;
+    expect(rep.engine?.repeating).toEqual({ kind: "cast", name: "Sprout Swarm", done: 212, wanted: 500 });
+    const other = (await blair.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state", mrb)).view;
+    expect(other.engine?.repeating ?? null).toBeNull();
+    alex.send({ t: "stopRepeat" });
+    expect(await engine.waitFor((f) => f.type === "stopRepeat")).toMatchObject({ gameId, seat: 0 });
     // a paused loop says why; "stop the loop" rides on the seat's own answer
     engine.send({ type: "prompt", gameId, seat: 0, promptId: 73, prompt: "confirm", title: "Pay 1 life?", detail: null, mode: null, options: ["Yes", "No"], source: null, loopPaused: { reason: "Blair is no longer a choice", done: 4, left: 496 } });
     const paused = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 73, ma)).view;
