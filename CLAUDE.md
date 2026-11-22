@@ -1833,6 +1833,36 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
     150 creatures keep under 16 boards' worth of copies, 9,067 without the fix; a running repeat reports its
     progress and Stop ends it part-way), relay `engine.test.ts` (`repeating` only on that seat's frame,
     `stopRepeat` to the engine), client `loopPrompt.test.tsx`. Needs an ENGINE deploy and a web deploy.
+- **Bots on a very large board decide combat by a quick rule (owner, 2026-11-22, room 84KYWG).** "The Scute Swarm
+  effect happened but the bot hasn't attacked since the tokens were created." Not stuck: the record shows Tifa bot
+  (about 500 creatures after 511 Scute Swarm triggers) entering its declare-attackers step at 16:29:25 and the next
+  event at 16:57:03, 27 min 38 s later, with the engine at 100% CPU (Fly metrics) and then NO attack; the game went
+  on and the owner won at 17:01. Afterwards each bot step took 30 to 40 s. Forge's combat AI weighs every attacker
+  against every blocker and walks every card's triggers for each pair (`AiBlockController`, `ComputerUtilCombat`);
+  its spell choice runs under a deadline (`Game.AI_TIMEOUT`, 5 s per priority: the "AI eval thread at timeout" lines
+  in the log), but building the attack planner (`new AiAttackController`, which predicts the opponents' next
+  combats) happens before that deadline is armed. **The 27-minute stall was NOT reproduced locally** (300 Scute
+  Swarms against 60 creatures: a 48 s bot turn; plain creatures: 100 attackers 1.6 s, 200 attackers 5.2 s), so
+  the fix does not patch one spot: above a size limit the bot never enters Forge's combat analysis.
+  - `engine/.../bridge/BigBoardCombat.java`. **Big** = the bot controls 60 or more creatures, or 150 or more
+    creatures are in play (`isBig`). `BridgeAiLobbyPlayer`'s controller overrides `declareAttackers` and
+    `declareBlockers` for its own seat on a big board; ordinary boards keep Forge's AI.
+  - **Attack rule** (`planAttack`, pure): opponents by life, lowest first; a player whose attackers must pay to
+    attack (`CombatUtil.getAttackCost`) is left alone; an opponent gets just enough of the strongest remaining
+    attackers to be dead even if each of their untapped blockers stops one of the strongest. If nobody can be
+    killed, one creature stays home per creature the opponents control and the rest go at the weakest opponent
+    (none attack if that leaves nothing). Players only, never planeswalkers or battles. An illegal result (attack
+    requirements or restrictions) is replaced by exactly what the rules require, as Forge's AI does.
+  - **Block rule**: while the incoming damage would kill, chump the biggest attackers with the weakest blockers;
+    otherwise block only where the blocker kills the attacker and survives. An illegal block falls back to no
+    blocks, then to Forge's AI.
+  - **Thinking time**: on a big board the bots get 2 s per priority instead of Forge's 5 (`game.AI_TIMEOUT`, set
+    at each bot priority and restored when the board shrinks).
+  - Known limits: the rule ignores evasion, trample, first strike, lifelink, poison and commander damage; it does
+    not hold back for tricks; a bot facing an attack tax does not attack that player at all on a big board.
+  - Tests: engine `BigBoardCombatTest` (the plan as arithmetic; real games: 80 creatures attack with exactly the
+    25 needed through five blockers, 500 creatures decide in about 5 s here, 70 creatures chump-block ten 6/4s
+    down to survival, a small board never takes the quick path). Engine deploy only.
 - **Mana: automatic, with "Pay with" (Stage 2 M5, owner's option 1).** Mana is still paid by
   Forge's AI payer, but a long-press on a glowing spell or ability opens the **Pay with** sheet
   (`PayWithSheet` in `EnginePrompts.tsx`): the card, the cost pips, and every untapped permanent
