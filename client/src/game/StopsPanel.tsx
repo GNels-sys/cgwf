@@ -108,6 +108,13 @@ export function StopsPanel({ stops, onSave, onClose }: { stops: EngineStops; onS
         ))}
       </fieldset>
       <label className="check-row">
+        <input type="checkbox" checked={draft.attacked !== false} onChange={(e) => setDraft({ ...draft, attacked: e.target.checked })} />
+        <span>
+          <strong>Ask me when I am attacked</strong>
+          <span className="muted small">When creatures attack you or your planeswalkers you get a chance to act after attackers are declared and again after blocks, before damage, even if those steps are not stops above. Skipped when you have nothing to play.</span>
+        </span>
+      </label>
+      <label className="check-row">
         <input type="checkbox" checked={draft.autoPassEmpty} onChange={(e) => setDraft({ ...draft, autoPassEmpty: e.target.checked })} />
         <span>
           <strong>Pass automatically when I have nothing to do</strong>

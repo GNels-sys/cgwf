@@ -132,7 +132,7 @@ export interface EngineLoopPause {
 export type EnginePrompt = EnginePromptBody & { loop?: EngineLoopOffer | null; loopPaused?: EngineLoopPause | null };
 
 export type EnginePromptBody =
-  | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean; holding: boolean; threat?: string | null; repeat?: EngineRepeatOffer | null }
+  | { kind: "priority"; promptId: number; title: string; options: EnginePlayable[]; phase: EnginePhase | null; myTurn: boolean; stackEmpty: boolean; stackTopMine: boolean; holding: boolean; threat?: string | null; /** Why the engine stopped in another player's combat: "Hazel attacks you with 10 creatures". */ attack?: string | null; repeat?: EngineRepeatOffer | null }
   /** `cancelLabel`: what Cancel means here ("Keep current targets" when a copy or redirect may choose new targets); default "Cancel". */
   | { kind: "targets"; promptId: number; title: string; ability: string; source: string | null; min: number; max: number; options: EngineOption[]; cancelLabel?: string | null }
   /**
@@ -242,6 +242,12 @@ export interface EngineStops {
    * nothing you can use right now, as on Arena. "Hold priority this turn" overrides it for a turn.
    */
   autoPassEmpty: boolean;
+  /**
+   * Ask me when creatures attack me or my planeswalkers: once after attackers are declared and once after blocks,
+   * before damage (owner, 2026-11-21: held a "prevent all combat damage" instant with the mana open and was only
+   * asked about blockers). Absent on settings saved before that day: on.
+   */
+  attacked?: boolean;
 }
 
 export const DEFAULT_ENGINE_STOPS: EngineStops = {
@@ -251,6 +257,7 @@ export const DEFAULT_ENGINE_STOPS: EngineStops = {
   respondTo: "threats",
   convoke: "needed",
   autoPassEmpty: true,
+  attacked: true,
 };
 
 /** The response mode of any stops shape, old or new. */

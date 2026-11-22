@@ -50,6 +50,13 @@ public final class BridgeSession {
         String convoke = "needed";
         /** Pass automatically when priority comes with nothing to play (Arena-style). */
         boolean autoPassEmpty = true;
+        /**
+         * Offer priority when creatures attack this seat (or its planeswalkers): once after attackers are declared
+         * and once after blocks, before damage. Owner, 2026-11-21: held Tangle ("prevent all combat damage this
+         * turn") with the mana open, was attacked for lethal and only ever asked about blockers, because an
+         * attack does not use the stack and other players' combat steps are not stops by default.
+         */
+        boolean attacked = true;
 
         static Stops defaults() {
             Stops s = new Stops();
@@ -68,6 +75,7 @@ public final class BridgeSession {
             fill(s.theirTurn, j.get("theirTurn"));
             s.respond = !j.has("respond") || j.get("respond").isJsonNull() || j.get("respond").getAsBoolean();
             s.autoPassEmpty = !j.has("autoPassEmpty") || j.get("autoPassEmpty").isJsonNull() || j.get("autoPassEmpty").getAsBoolean();
+            s.attacked = !j.has("attacked") || j.get("attacked").isJsonNull() || j.get("attacked").getAsBoolean(); // an older relay: on
             String mode = j.has("respondTo") && j.get("respondTo").isJsonPrimitive() ? j.get("respondTo").getAsString() : null;
             if ("always".equals(mode) || "threats".equals(mode) || "never".equals(mode)) s.respondTo = mode;
             else s.respondTo = s.respond ? "threats" : "never"; // an older relay: its boolean, with the new default
@@ -93,6 +101,7 @@ public final class BridgeSession {
             j.addProperty("respondTo", respondTo);
             j.addProperty("convoke", convoke);
             j.addProperty("autoPassEmpty", autoPassEmpty);
+            j.addProperty("attacked", attacked);
             return j;
         }
     }
@@ -443,6 +452,16 @@ public final class BridgeSession {
     public boolean stopsAt(String phase, boolean myTurn, boolean stackTopNotMine, int turn) {
         return stopsAt(phase, myTurn, stackTopNotMine, false, turn);
     }
+
+    private volatile String attackAsked = "";
+
+    /** Should an attack on this seat stop here? Once per combat step (`step` = turn and phase), when the seat wants it. */
+    public boolean attackStops(String step) {
+        return stops.attacked && !attackAsked.equals(step);
+    }
+
+    /** The seat was asked in this combat step: later priorities in it follow the ordinary stops. */
+    public void attackAsked(String step) { attackAsked = step == null ? "" : step; }
 
     /** With nothing to play, pass without asking (unless the seat holds this turn or opted out). */
     public boolean autoPassesEmpty(int turn) {

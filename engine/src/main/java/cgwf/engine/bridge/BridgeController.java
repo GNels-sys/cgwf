@@ -219,6 +219,11 @@ public final class BridgeController extends PlayerControllerAi {
             }
         }
         boolean stop = session.stopsAt(phase == null ? "" : phase.name(), ph.isPlayerTurn(player), stackTopNotMine, threat != null, ph.getTurn());
+        // Creatures are attacking this seat: a chance to act once after attackers and once after blocks (2026-11-21),
+        // whatever the phase stops say. "End turn" and a running "Resolve all" were dealt with above.
+        String attack = attackOnMe(ph, phase);
+        String attackStep = attack == null ? null : ph.getTurn() + ":" + phase.name();
+        if (!stop && attackStep != null && session.attackStops(attackStep)) stop = true;
         if (DEBUG_PRIORITY) System.err.println("[priority] seat=" + session.seat() + " turn=" + ph.getTurn() + " phase=" + phase + " myTurn=" + ph.isPlayerTurn(player) + " stackTopNotMine=" + stackTopNotMine + " threat=" + threat + " stop=" + stop + " stops=" + session.stops().toJson());
         if (!stop) return null; // auto-pass
 
@@ -227,6 +232,7 @@ public final class BridgeController extends PlayerControllerAi {
         // Nothing to play or activate: pass without asking (Arena-style), unless the seat holds this turn.
         if (legal.isEmpty() && session.autoPassesEmpty(ph.getTurn())) return null;
         if (loopOverNewTrigger) session.stopLoop("an opponent's trigger needs your answer");
+        if (attackStep != null) session.attackAsked(attackStep);
         JsonObject p = prompt("priority", "You have priority");
         JsonArray opts = new JsonArray();
         for (int i = 0; i < legal.size(); i++) opts.add(abilityJson(i, legal.get(i)));
@@ -237,6 +243,7 @@ public final class BridgeController extends PlayerControllerAi {
         p.addProperty("stackTopMine", !stack.isEmpty() && !stackTopNotMine);
         p.addProperty("holding", session.holding(ph.getTurn()));
         if (threat != null) p.addProperty("threat", threat); // why the engine stopped: "Blair's Swords to Plowshares targets your Krenko, Mob Boss"
+        if (attack != null) p.addProperty("attack", attack); // "Hazel attacks you with 10 creatures"
         // the last spell this seat cast is castable again from the same zone: offer to repeat it N times
         CastReplay.Recording last = session.lastCast();
         SpellAbility againSa = stack.isEmpty() ? repeatable(legal, last) : null;
@@ -285,6 +292,25 @@ public final class BridgeController extends PlayerControllerAi {
         List<SpellAbility> chosen = new ArrayList<>(1);
         chosen.add(sa);
         return chosen;
+    }
+
+    /**
+     * In another player's declare-attackers or declare-blockers step: who attacks this seat (or its planeswalkers and
+     * battles) and with how many creatures, as a sentence for the prompt; null when nobody does.
+     */
+    private String attackOnMe(PhaseHandler ph, PhaseType phase) {
+        if (phase != PhaseType.COMBAT_DECLARE_ATTACKERS && phase != PhaseType.COMBAT_DECLARE_BLOCKERS) return null;
+        if (ph.isPlayerTurn(player)) return null;
+        Combat combat = game.getCombat();
+        if (combat == null) return null;
+        int n = 0;
+        for (Card a : combat.getAttackers()) if (combat.getDefenderPlayerByAttacker(a) == player) n++;
+        if (n == 0) return null;
+        Player attacker = combat.getAttackingPlayer();
+        String who = attacker == null ? "An opponent" : attacker.getName();
+        String count = n == 1 ? "1 creature" : n + " creatures";
+        if (phase == PhaseType.COMBAT_DECLARE_BLOCKERS) return "Blocks are declared: " + who + "'s " + count + " attacking you " + (n == 1 ? "deals" : "deal") + " damage next";
+        return who + " attacks you with " + count;
     }
 
     /** Everything this seat could legally play or activate right now, mana permitting. */
