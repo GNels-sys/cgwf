@@ -371,6 +371,15 @@ describe("engine tables (relay to the rules engine)", () => {
     const ran = await engine.waitFor((f) => f.type === "answer" && f.promptId === 72);
     expect(ran).toMatchObject({ seat: 0, loop: 500 });
     expect(ran).not.toHaveProperty("confirm");
+    // one yes/no question: the two labels come along, and "then the other answer" travels back
+    engine.send({
+      type: "prompt", gameId, seat: 0, promptId: 74, prompt: "confirm", title: "Pay 1 life?", detail: null, mode: null, options: ["Yes", "No"], source: null,
+      loop: { steps: 1, seen: 3, max: 500, key: "9f", titles: ["Pay 1 life?"], flip: { now: "Yes", then: "No" } },
+    });
+    const flip = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 74, ma)).view;
+    expect(flip.engine?.prompt).toMatchObject({ loop: { steps: 1, seen: 3, flip: { now: "Yes", then: "No" } } });
+    alex.send({ t: "engine", answer: { promptId: 74, loop: 67, then: "other" } });
+    expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 74)).toMatchObject({ seat: 0, loop: 67, then: "other" });
     // a paused loop says why; "stop the loop" rides on the seat's own answer
     engine.send({ type: "prompt", gameId, seat: 0, promptId: 73, prompt: "confirm", title: "Pay 1 life?", detail: null, mode: null, options: ["Yes", "No"], source: null, loopPaused: { reason: "Blair is no longer a choice", done: 4, left: 496 } });
     const paused = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 73, ma)).view;

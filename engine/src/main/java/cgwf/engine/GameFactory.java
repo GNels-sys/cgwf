@@ -1,5 +1,6 @@
 package cgwf.engine;
 
+import cgwf.engine.bridge.TriggerRepeatGuard;
 import forge.LobbyPlayer;
 import forge.ai.LobbyPlayerAi;
 import forge.deck.Deck;
@@ -43,6 +44,7 @@ public final class GameFactory {
         }
         Match match = new Match(rules, players, "CGwF");
         Game game = match.createGame();
+        TriggerRepeatGuard.install(game); // many triggers of one card are not an endless loop (2026-11-21)
         return new Created(match, game);
     }
 }

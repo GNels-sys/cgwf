@@ -1733,6 +1733,44 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   after two rounds, 18 questions become 5, one new target when the first opponent is out, the human wins), relay
   `engine.test.ts` (offer out, `{loop}` back clamped, `loopPaused`, `stopLoop`), client `loopPrompt.test.tsx`.
   Needs an ENGINE deploy and a web deploy.
+- **Many triggers are not a draw; "Yes for N, then No for the rest" (owner, 2026-11-21).** "The bot accepted it
+  was a draw, but I would have won with the next turn." The game (room read with the owner's OK): Glarb bot's 120
+  Scute Swarm landfall triggers were resolving one by one; each token triggered the owner's Authority of the
+  Consuls (gain life), then Niv-Mizzet, Ghost Counsel ("you may pay that much life; if you do, draw that many
+  cards"), answered 130 times by hand. Nobody chose the draw. **Forge's `MagicStack.isRepeatingTrigger`** counts
+  how often one mandatory, untargeted trigger goes on the stack with no player action, life loss or empty stack
+  in between, and past 50 ends the game as a draw (rule 104.4b; every player "has accepted that the game is a
+  draw"). While the owner answered "Yes" the life paid reset the count; fifty "No" in a row did not, and the 51st
+  Authority trigger ended the game with a finite stack still to resolve. Three fixes, all engine-side:
+  - `engine/.../bridge/TriggerRepeatGuard.java` (installed by `GameFactory.create` on every game): Forge keeps
+    the count in a private map (`triggerRepeats`) and asks it with `merge(triggerId, 1, sum)`. The guard puts a
+    map in its place (reflection) that counts a trigger PER STACK SIZE at the moment it is added. A real loop on
+    a stack that does not grow comes back to the same trigger at the same size every round, so it still reaches
+    the limit and is still a draw; a draining stack (Scute Swarm) or sixty tokens entering at once meet each size
+    once. A loop that grows the stack without end still hits Forge's other limit (more than 999 stack items =
+    draw, which is NOT lifted: a single event that puts 1,000 triggers on the stack still ends the game).
+    Everything that clears Forge's count clears this one. If a Forge bump renames the field the guard logs and
+    leaves Forge's count in place, and `TriggerRepeatGuardTest` fails (`installed`).
+  - **A running loop goes on over an opponent's older triggers.** `LoopReplay.stackMark` = the newest stack id
+    when the loop began (`BridgeSession.setLoopStackMark`). At the seat's priority with a loop running: own item
+    on top = pass; an opponent's TRIGGER that was on the stack before the loop began = pass (the seat had its say
+    on those); an opponent's spell or activated ability = the loop ends ("an opponent responded", or "...is next
+    on the stack" for an old one); an opponent's NEW trigger = the seat's own stops decide (asked, the loop ends;
+    passed, it goes on); empty stack = the loop ends. Before this, the first Scute trigger on top ended the loop.
+  - **Then the other answer.** When the round is one yes/no question the offer carries `flip {now, then}` (the
+    two button labels) and the pop-up adds: `or "Yes" this many more times [N]`, `then "No" for the rest`,
+    `then ask me again`. The answer `{loop: N, then: "other"}` answers the recorded way N more times, flips the
+    answer and goes on until the loop ends (up to 500 more); the notice reads `The loop answered "Yes" 5 times,
+    then "No" 52 times; it stopped because nothing was left on the stack.` Rounds of several questions have no
+    "other" answer: answer the new way by hand until the loop is offered again.
+  - **Library guard.** A loop also ends before a round that would draw more cards than the library holds (it
+    measures what the last round drew), not only on an empty library.
+  Tests: engine `TriggerRepeatGuardTest` (real games: sixty Scute Swarms against Authority of the Consuls is a
+  draw on Forge's own count and plays out with the guard; Polyraptor + Marauding Raptor, a real mandatory loop,
+  is still a draw), `LoopShortcutTest.yesForSomeTriggersThenNoForTheRestOverAnOpponentsStack` (the owner's
+  board: three by hand, "5 more then the other", nobody asked again, 8 cards drawn, 52 life net, no draw),
+  `LoopReplayTest` (flip, the library guard), relay `engine.test.ts` (`flip` out, `then` back), client
+  `loopPrompt.test.tsx`. Needs an ENGINE deploy and a web deploy.
 - **Mana: automatic, with "Pay with" (Stage 2 M5, owner's option 1).** Mana is still paid by
   Forge's AI payer, but a long-press on a glowing spell or ability opens the **Pay with** sheet
   (`PayWithSheet` in `EnginePrompts.tsx`): the card, the cost pips, and every untapped permanent

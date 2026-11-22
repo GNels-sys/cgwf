@@ -180,4 +180,123 @@ class LoopShortcutTest {
         // rounds that show it (4) and one new target per opponent after the first
         assertTrue(byHand[0] <= 6, "questions answered by hand: " + byHand[0] + why);
     }
+
+    /**
+     * Owner request 2026-11-21, from a game an opponent's Scute Swarms ended as a draw: "have a response to X amount
+     * of triggers to do one thing and the rest to do another". The human has Authority of the Consuls and Niv-Mizzet,
+     * Ghost Counsel; the AI's sixty Scute Swarms see a land enter. Sixty times: a token, 1 life, "pay that much life
+     * and draw that many cards?". Yes three times by hand, then the offer: "Yes for 5 more, then No for the rest".
+     * The loop runs on top of the opponent's triggers that were already on the stack, and nobody is asked again.
+     */
+    @Test
+    void yesForSomeTriggersThenNoForTheRestOverAnOpponentsStack() throws Exception {
+        final int swarms = 60;
+        Deck deck = new Deck("Consuls");
+        deck.getOrCreate(DeckSection.Commander).add(card("Krenko, Mob Boss"), 1);
+        deck.getMain().add(card("Mountain"), 99);
+        LinkedBlockingQueue<JsonObject> queue = new LinkedBlockingQueue<>();
+        BridgeSession human = new BridgeSession(0, 60_000);
+        List<String> notices = new ArrayList<>();
+        Player[] meRef = new Player[1];
+        int[] lifeAtStart = {0}, handAtStart = {0}, lifeAtEnd = {-1}, handAtEnd = {-1};
+        human.attach(frame -> {
+            String type = frame.has("type") ? frame.get("type").getAsString() : "";
+            if ("prompt".equals(type)) queue.add(frame);
+            if ("notice".equals(type) && frame.has("text") && "Loop".equals(frame.get("title").getAsString())) {
+                // the loop is over (game thread): read the result and end the game here
+                notices.add(frame.get("text").getAsString());
+                lifeAtEnd[0] = meRef[0].getLife();
+                handAtEnd[0] = meRef[0].getCardsIn(ZoneType.Hand).size();
+                human.requestConcede();
+            }
+        });
+        GameFactory.Created created = GameFactory.create(List.of(
+                new GameFactory.Seat("Georgie", deck, new BridgeLobbyPlayer("Georgie", human)),
+                new GameFactory.Seat("Glarb", spikeDecks.get(0).deck(), GameFactory.ai("Glarb"))), 4242L);
+        Game game = created.game();
+        human.setViewBuilder(p -> SeatView.build(game, p));
+        Player opp = null;
+        for (Player p : game.getRegisteredPlayers()) {
+            if (p.getController() instanceof BridgeController) meRef[0] = p;
+            else opp = p;
+        }
+        final Player my = meRef[0];
+        final Player them = opp;
+        boolean[] setUp = {false}, landed = {false}, offered = {false};
+        int[] byHand = {0}, afterOffer = {0};
+        JsonObject[] offer = new JsonObject[1];
+        List<String> trace = new ArrayList<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread answerer = new Thread(() -> {
+            try {
+                while (true) {
+                    JsonObject p = queue.poll(120, TimeUnit.SECONDS);
+                    if (p == null) return;
+                    String kind = p.get("prompt").getAsString();
+                    JsonObject a = new JsonObject();
+                    switch (kind) {
+                        case "mulligan" -> {
+                            if (!setUp[0]) {
+                                setUp[0] = true;
+                                put(game, my, "Authority of the Consuls");
+                                put(game, my, "Niv-Mizzet, Ghost Counsel");
+                                for (int i = 0; i < swarms; i++) put(game, them, "Scute Swarm");
+                            }
+                            a.addProperty("keep", true);
+                        }
+                        case "priority" -> {
+                            if (!landed[0] && p.get("myTurn").getAsBoolean() && p.get("stackEmpty").getAsBoolean()) {
+                                landed[0] = true;
+                                lifeAtStart[0] = my.getLife();
+                                handAtStart[0] = my.getCardsIn(ZoneType.Hand).size();
+                                put(game, them, "Forest"); // landfall, sixty times
+                            }
+                            if (offered[0]) trace.add("priority after the offer: stackEmpty " + p.get("stackEmpty"));
+                            a.add("option", null);
+                        }
+                        case "confirm" -> {
+                            if (offered[0]) afterOffer[0]++;
+                            if (p.has("loop") && !offered[0]) {
+                                offered[0] = true;
+                                offer[0] = p.getAsJsonObject("loop").deepCopy();
+                                a.addProperty("loop", 5);
+                                a.addProperty("then", "other");
+                                trace.add("confirm: " + p.get("title").getAsString() + " [offer " + offer[0] + "]");
+                            } else {
+                                byHand[0]++;
+                                a.addProperty("confirm", true);
+                                trace.add("confirm by hand: " + p.get("title").getAsString());
+                            }
+                        }
+                        default -> a = ScriptedSeat.answer(p, my.getId());
+                    }
+                    a.add("promptId", p.get("promptId"));
+                    human.answer(a);
+                }
+            } catch (InterruptedException stop) {
+                // the game is over
+            } catch (Throwable t) {
+                failure.set(t);
+            }
+        }, "consuls-loop-human");
+        answerer.setDaemon(true);
+        answerer.start();
+        created.match().startGame(game);
+        answerer.interrupt();
+        answerer.join(10_000);
+        if (failure.get() != null) throw new AssertionError(String.join("\n", trace), failure.get());
+        String why = "\n" + String.join("\n", trace) + "\nnotices: " + notices;
+
+        assertTrue(offered[0], "the fourth identical answer carries the offer" + why);
+        assertEquals(1, offer[0].get("steps").getAsInt(), why);
+        assertTrue(offer[0].has("flip"), "a single yes/no question can be answered one way, then the other" + why);
+        assertEquals(3, byHand[0], "three by hand, then the loop" + why);
+        assertEquals(0, afterOffer[0], "nobody is asked again" + why);
+        assertEquals(1, notices.size(), why);
+        assertTrue(notices.get(0).contains(" 5 times, then ") && notices.get(0).contains(" 52 times"), "yes for 5 more, then no for the other 52: " + notices.get(0) + why);
+        assertTrue(notices.get(0).contains("nothing was left on the stack"), "it ran until the stack was empty: " + notices.get(0) + why);
+        assertEquals(8, handAtEnd[0] - handAtStart[0], "eight cards drawn (3 by hand + 5)" + why);
+        assertEquals(swarms - 8, lifeAtEnd[0] - lifeAtStart[0], "sixty life gained, eight paid" + why);
+        assertTrue(game.getOutcome() == null || !game.getOutcome().isDraw(), "and the game is not a draw" + why);
+    }
 }

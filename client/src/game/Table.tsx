@@ -863,7 +863,7 @@ export function Table({ room, view, printings, sock }: { room: RoomInfo; view: P
       {/* ---- overlays ---- */}
       {engineMode && prompt && me && (prompt.loop || prompt.loopPaused) &&
         (prompt.loop && !prompt.loopPaused && loopLater !== prompt.loop.key ? (
-          <LoopOfferDialog offer={prompt.loop} onRun={(times) => answerEngine({ promptId: prompt.promptId, loop: times })} onLater={() => setLoopLater(prompt.loop!.key)} />
+          <LoopOfferDialog offer={prompt.loop} onRun={(times, thenOther) => answerEngine({ promptId: prompt.promptId, loop: times, ...(thenOther ? { then: "other" as const } : {}) })} onLater={() => setLoopLater(prompt.loop!.key)} />
         ) : (
           <LoopBanner offer={prompt.loop ?? null} pause={prompt.loopPaused ?? null} stopping={loopStop} onOpen={() => setLoopLater(null)} onStop={setLoopStop} />
         ))}

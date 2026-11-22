@@ -16,6 +16,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntSupplier;
 
 /**
  * One human seat's link to the outside world. The game thread calls {@link #ask} and blocks;
@@ -199,6 +200,11 @@ public final class BridgeSession {
     /** Where "X runs a loop" lines go (the game log); set by the seat's controller. */
     public void setLoopLog(Consumer<String> log) { this.loopLog = log; }
 
+    private volatile IntSupplier loopStackMark;
+
+    /** The newest stack item's id right now (-1 for an empty stack); set by the seat's controller. */
+    public void setLoopStackMark(IntSupplier newestStackId) { this.loopStackMark = newestStackId; }
+
     /** The loop this seat is running, or null. */
     public LoopReplay loop() { return loop; }
 
@@ -285,6 +291,9 @@ public final class BridgeSession {
             try { times = answered.get("loop").getAsInt(); } catch (RuntimeException e) { times = 0; }
             if (cycle != null && times >= 1) {
                 LoopReplay started = new LoopReplay(cycle, times, LoopReplay.libraryOf(prompt));
+                IntSupplier mark = loopStackMark;
+                if (mark != null) started.stackMark(mark.getAsInt());
+                if ("other".equals(CastReplay.str(answered, "then"))) started.thenOther();
                 JsonObject auto = started.answerFor(prompt);
                 if (auto != null) {
                     loop = started;

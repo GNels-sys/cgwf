@@ -308,4 +308,71 @@ class LoopReplayTest {
         assertEquals(List.of("The loop ran 1 time; it stopped because you stopped it."), notices);
         assertEquals(List.of("runs a loop of 3 choices, up to 3 times.", "ran a loop 1 time."), log);
     }
+
+    private static List<CastReplay.Step> yesThreeTimes() {
+        LoopReplay.Watch w = new LoopReplay.Watch();
+        for (int i = 0; i < 3; i++) w.add(confirm(), yes());
+        return w.cycleFor(confirm());
+    }
+
+    private static JsonObject confirmWithLibrary(int cards) {
+        JsonObject p = confirm();
+        JsonObject view = new JsonObject();
+        view.addProperty("viewer", 3);
+        JsonArray players = new JsonArray();
+        JsonObject me = new JsonObject();
+        me.addProperty("id", 3);
+        me.addProperty("libraryCount", cards);
+        players.add(me);
+        view.add("players", players);
+        p.add("view", view);
+        return p;
+    }
+
+    /** Owner, 2026-11-21: "a response to X amount of triggers to do one thing and the rest to do another". */
+    @Test
+    void aYesNoRoundCanBeAnsweredOneWayForSomeRoundsAndTheOtherWayForTheRest() {
+        List<CastReplay.Step> cycle = yesThreeTimes();
+        JsonObject offer = LoopReplay.offerJson(cycle, 3);
+        assertEquals("Yes", offer.getAsJsonObject("flip").get("now").getAsString());
+        assertEquals("No", offer.getAsJsonObject("flip").get("then").getAsString());
+
+        LoopReplay l = new LoopReplay(cycle, 2, -1);
+        l.thenOther();
+        assertTrue(l.answerFor(confirm()).get("confirm").getAsBoolean());
+        assertFalse(l.flipped());
+        assertTrue(l.answerFor(confirm()).get("confirm").getAsBoolean());
+        assertTrue(l.flipped(), "the two rounds asked for are done: the other answer from here");
+        assertTrue(l.active());
+        for (int i = 0; i < 3; i++) assertFalse(l.answerFor(confirm()).get("confirm").getAsBoolean());
+        l.stop("nothing was left on the stack");
+        assertEquals("The loop answered \"Yes\" 2 times, then \"No\" 3 times; it stopped because nothing was left on the stack.", l.summary());
+    }
+
+    @Test
+    void onlyASingleYesNoQuestionHasAnOtherAnswer() {
+        LoopReplay.Watch w = new LoopReplay.Watch();
+        round(w, 0);
+        round(w, 0);
+        List<CastReplay.Step> cycle = w.cycleFor(order(TRIGGERS));
+        assertFalse(LoopReplay.offerJson(cycle, 2).has("flip"));
+        LoopReplay l = new LoopReplay(cycle, 1, -1);
+        l.thenOther(); // ignored: three questions have no "other" answer
+        l.answerFor(order(TRIGGERS));
+        l.answerFor(targets("Daretti bot", "Captain bot", "Nethroi bot"));
+        l.answerFor(confirm());
+        assertTrue(l.finished());
+        assertFalse(l.flipped());
+    }
+
+    @Test
+    void aRoundThatWouldDrawMoreCardsThanAreLeftEndsTheLoop() {
+        LoopReplay l = new LoopReplay(yesThreeTimes(), 500, 7);
+        assertNotNull(l.answerFor(confirmWithLibrary(7)));
+        assertNotNull(l.answerFor(confirmWithLibrary(5)), "each round draws two");
+        assertNotNull(l.answerFor(confirmWithLibrary(3)));
+        assertNull(l.answerFor(confirmWithLibrary(1)), "one card left, two would be drawn");
+        assertFalse(l.active());
+        assertEquals("your library has only 1 card left", l.stopReason());
+    }
 }

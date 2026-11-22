@@ -460,7 +460,14 @@ function loopOffer(v: unknown): EngineLoopOffer | null {
     max: typeof r.max === "number" && r.max >= 1 ? r.max : 500,
     titles: Array.isArray(r.titles) ? r.titles.slice(0, 8).map((t) => cleanEngineText(String(t))) : [],
     key: typeof r.key === "string" ? r.key : "",
+    ...(flipOf(r.flip) ? { flip: flipOf(r.flip) } : {}),
   };
+}
+
+function flipOf(v: unknown): { now: string; then: string } | null {
+  if (!v || typeof v !== "object") return null;
+  const f = v as Record<string, unknown>;
+  return typeof f.now === "string" && typeof f.then === "string" && f.now && f.then ? { now: f.now.slice(0, 40), then: f.then.slice(0, 40) } : null;
 }
 
 function loopPause(v: unknown): EngineLoopPause | null {
@@ -589,6 +596,7 @@ export function toEngineAnswer(answer: EngineAnswer, ctx: ConvertContext): Recor
   if (answer.stopLoop) out.stopLoop = true;
   if ("loop" in answer) {
     out.loop = Math.max(1, Math.min(500, Math.floor(Number(answer.loop))));
+    if (answer.then === "other") out.then = "other";
   } else if ("attacks" in answer) {
     out.attacks = answer.attacks.map((a) => ({ cardId: Number(a.iid), defender: ref(a.defender) }));
   } else if ("blocks" in answer) {
@@ -638,7 +646,7 @@ export function isEngineAnswer(v: unknown): v is EngineAnswer {
   const a = v as Record<string, unknown>;
   if (typeof a.promptId !== "number") return false;
   if (a.stopLoop !== undefined && typeof a.stopLoop !== "boolean") return false;
-  if ("loop" in a) return typeof a.loop === "number" && Number.isFinite(a.loop) && a.loop >= 1;
+  if ("loop" in a) return typeof a.loop === "number" && Number.isFinite(a.loop) && a.loop >= 1 && (a.then === undefined || a.then === "other");
   if ("attacks" in a) return Array.isArray(a.attacks);
   if ("blocks" in a) return Array.isArray(a.blocks);
   if ("options" in a) return Array.isArray(a.options) && (a.options as unknown[]).every((n) => typeof n === "number");
