@@ -612,6 +612,7 @@ export class EngineTable {
       respondTo: respondModeOf(stops),
       convoke: convokeModeOf(stops),
       autoPassEmpty: stops.autoPassEmpty !== false,
+      attacked: stops.attacked !== false,
     };
     this.stops.set(seat, clean);
     this.client.trySend({ type: "setStops", gameId: this.room.id, seat, stops: clean });

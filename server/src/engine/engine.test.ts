@@ -349,6 +349,12 @@ describe("engine tables (relay to the rules engine)", () => {
     await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 170, ma);
     alex.send({ t: "engine", answer: { promptId: 170, option: null, passStack: true } });
     expect(await engine.waitFor((f) => f.type === "answer" && f.promptId === 170)).toMatchObject({ seat: 0, option: null, passStack: true });
+    // attacked (2026-11-21): the reason for a stop in another player's combat reaches the seat, without Forge's ids
+    engine.send({ type: "prompt", gameId, seat: 0, promptId: 171, prompt: "priority", title: "You have priority", phase: "COMBAT_DECLARE_BLOCKERS", myTurn: false, stackEmpty: true, stackTopMine: false, attack: "Blocks are declared: Blair's 3 creatures attacking you deal damage next", options: [] });
+    const attackedView = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.prompt?.promptId === 171, ma)).view;
+    expect(attackedView.engine?.prompt).toMatchObject({ kind: "priority", attack: "Blocks are declared: Blair's 3 creatures attacking you deal damage next" });
+    alex.send({ t: "engine", answer: { promptId: 171, option: null } });
+    await engine.waitFor((f) => f.type === "answer" && f.promptId === 171);
     // "Repeat this cast N times" (2026-11-04): the engine's offer reaches the seat, and the count travels back
     engine.send({
       type: "prompt", gameId, seat: 0, promptId: 71, prompt: "priority", title: "You have priority", phase: "MAIN1", myTurn: true, stackEmpty: true, stackTopMine: false,
@@ -501,7 +507,7 @@ describe("engine tables (relay to the rules engine)", () => {
     const m3 = alex.mark();
     alex.send({ t: "stops", stops: { myTurn: ["MAIN1"], theirTurn: [], respond: false } });
     const setStops = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { respond: boolean }).respond === false);
-    expect(setStops.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: false, respondTo: "never", convoke: "needed", autoPassEmpty: true });
+    expect(setStops.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: false, respondTo: "never", convoke: "needed", autoPassEmpty: true, attacked: true });
     const withStops = (await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.stops.respond === false, m3)).view;
     expect(withStops.engine?.stops.myTurn).toEqual(["MAIN1"]);
     const saved = (await ctx.app.inject({ method: "GET", url: "/api/me/settings", headers: auth(alex.token) })).json() as { settings: { engineStops: { respond: boolean } } };
@@ -509,7 +515,7 @@ describe("engine tables (relay to the rules engine)", () => {
     // the three-way mode (owner, 2026-10-29): "threats" is the default, and an explicit mode rides to the engine with the boolean kept in step
     alex.send({ t: "stops", stops: { myTurn: ["MAIN1"], theirTurn: [], respond: true, respondTo: "always", convoke: "ask" } });
     const always = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { respondTo?: string }).respondTo === "always");
-    expect(always.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: true, respondTo: "always", convoke: "ask", autoPassEmpty: true });
+    expect(always.stops).toEqual({ myTurn: ["MAIN1"], theirTurn: [], respond: true, respondTo: "always", convoke: "ask", autoPassEmpty: true, attacked: true });
     alex.send({ t: "stops", stops: { myTurn: ["DRAW", "MAIN1"], theirTurn: [], respond: true } }); // no respondTo: an older client
     const threats = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { myTurn: string[] }).myTurn.includes("DRAW"));
     expect(threats.stops).toMatchObject({ respond: true, respondTo: "threats" });
@@ -740,10 +746,16 @@ describe("engine tables (relay to the rules engine)", () => {
     const m3 = alex.mark();
     alex.send({ t: "stops", stops: { myTurn: ["MAIN1", "MAIN2"], theirTurn: ["END_OF_TURN"], respond: true, autoPassEmpty: false } });
     const sent = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { autoPassEmpty: boolean }).autoPassEmpty === false);
-    expect(sent.stops).toEqual({ myTurn: ["MAIN1", "MAIN2"], theirTurn: ["END_OF_TURN"], respond: true, respondTo: "threats", convoke: "needed", autoPassEmpty: false });
+    expect(sent.stops).toEqual({ myTurn: ["MAIN1", "MAIN2"], theirTurn: ["END_OF_TURN"], respond: true, respondTo: "threats", convoke: "needed", autoPassEmpty: false, attacked: true });
     expect((await alex.waitFor((f): f is Extract<ServerMessage, { t: "state" }> => f.t === "state" && f.view.engine?.stops.autoPassEmpty === false, m3)).view.engine?.stops.myTurn).toEqual(["MAIN1", "MAIN2"]);
     const saved = (await ctx.app.inject({ method: "GET", url: "/api/me/settings", headers: auth(alex.token) })).json() as { settings: { engineStops: { autoPassEmpty: boolean } } };
     expect(saved.settings.engineStops.autoPassEmpty).toBe(false);
+    // "ask me when I am attacked" (2026-11-21) is on unless the player switches it off; off travels and is saved
+    alex.send({ t: "stops", stops: { myTurn: ["MAIN1"], theirTurn: ["END_OF_TURN"], respond: true, autoPassEmpty: true, attacked: false } });
+    const off = await engine.waitFor((f) => f.type === "setStops" && f.seat === 0 && (f.stops as { attacked?: boolean }).attacked === false);
+    expect(off.stops).toMatchObject({ attacked: false, autoPassEmpty: true });
+    const savedOff = (await ctx.app.inject({ method: "GET", url: "/api/me/settings", headers: auth(alex.token) })).json() as { settings: { engineStops: { attacked?: boolean } } };
+    expect(savedOff.settings.engineStops.attacked).toBe(false);
   });
 
   it("seats a Phase 7 bot user as a Forge AI seat in createGame", async () => {

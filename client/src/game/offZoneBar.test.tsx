@@ -56,6 +56,16 @@ describe("the priority bar lists cards playable from an opponent's exile", () =>
     expect(played.map((c) => c.iid)).toEqual(["217"]);
     expect(answers).toEqual([]); // the table's tap handler answers (one option) or opens the ability picker
   });
+
+  it("says why it stopped in another player's combat (owner report 2026-11-21: attacked with a Fog in hand)", () => {
+    const attacked = { ...prompt, myTurn: false, stackEmpty: true, attack: "Blocks are declared: Blair's 10 creatures attacking you deal damage next" };
+    act(() => root.render(<EngineBar prompt={attacked} view={view} printings={{}} members={[]} me="me" pick={NO_PICK} setPick={() => {}} answer={() => {}} onZoom={() => {}} openList={() => {}} />));
+    expect(host.querySelector(".engine-bar-head strong")?.textContent).toBe("Blocks are declared: Blair's 10 creatures attacking you deal damage next. Respond?");
+    // a threat on the stack keeps its own headline
+    const both = { ...attacked, stackEmpty: false, stackTopMine: false, threat: "Blair's Lightning Bolt targets you" };
+    act(() => root.render(<EngineBar prompt={both} view={view} printings={{}} members={[]} me="me" pick={NO_PICK} setPick={() => {}} answer={() => {}} onZoom={() => {}} openList={() => {}} />));
+    expect(host.querySelector(".engine-bar-head strong")?.textContent).toBe("Blair's Lightning Bolt targets you: respond?");
+  });
 });
 
 describe("the top of my library when a card lets me play it (owner report 2026-11-18, Bolas's Citadel)", () => {

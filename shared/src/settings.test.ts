@@ -19,6 +19,15 @@ describe("engine stops: respond mode", () => {
     expect(on.engineStops.respond).toBe(true);
   });
 
+  it("asks when the player is attacked unless they switched it off; settings saved before it existed have it on (2026-11-21)", () => {
+    expect(DEFAULT_ENGINE_STOPS.attacked).toBe(true);
+    const old = sanitizeSettings({ ...DEFAULT_SETTINGS, engineStops: { myTurn: ["MAIN1"], theirTurn: [], respond: true, autoPassEmpty: true } });
+    expect(old.engineStops.attacked).toBe(true);
+    const off = sanitizeSettings({ ...DEFAULT_SETTINGS, engineStops: { ...DEFAULT_ENGINE_STOPS, attacked: false } });
+    expect(off.engineStops.attacked).toBe(false);
+    expect(sanitizeSettings({ ...DEFAULT_SETTINGS, engineStops: { ...DEFAULT_ENGINE_STOPS, attacked: "no" } }).engineStops.attacked).toBe(true);
+  });
+
   it("convoke asks only when needed unless the player says otherwise (2026-11-04)", () => {
     expect(DEFAULT_ENGINE_STOPS.convoke).toBe("needed");
     expect(convokeModeOf({})).toBe("needed");

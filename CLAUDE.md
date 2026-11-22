@@ -1771,6 +1771,27 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   board: three by hand, "5 more then the other", nobody asked again, 8 cards drawn, 52 life net, no draw),
   `LoopReplayTest` (flip, the library guard), relay `engine.test.ts` (`flip` out, `then` back), client
   `loopPrompt.test.tsx`. Needs an ENGINE deploy and a web deploy.
+- **Asked when attacked (owner, 2026-11-21).** "I was going to get hit by a lot of damage but had an instant in my
+  hand that would have prevented all combat damage. The game did not let me play the card when I declared no
+  blockers." The record (room and decision snapshot read with the owner's OK): Hazel bot attacked with ten
+  creatures; the owner held Tangle with four lands untapped and their stops were the defaults (other players'
+  turns: end step only). The only question was "blockers"; damage followed. Forge did offer priority in the
+  declare-attackers and declare-blockers steps, and the bridge passed it for the seat: an attack does not use
+  the stack, the attack triggers on the stack were not "threats", and those steps are not stops by default. Not a
+  rules fault, a gap in the stops. Now `EngineStops.attacked` (default ON, absent in older saved settings = on;
+  Menu -> Stops "Ask me when I am attacked"): in another player's declare-attackers or declare-blockers step,
+  when a creature attacks this seat or one of its planeswalkers or battles (`BridgeController.attackOnMe`:
+  `Combat.getDefenderPlayerByAttacker`), the seat is offered priority ONCE per step
+  (`BridgeSession.attackStops` / `attackAsked`, keyed by turn and phase), whatever the phase stops say. So: once
+  after attackers are declared and once after blocks, the last moment before damage. "Pass automatically when I
+  have nothing to do" still skips it; later priorities in the same step follow the ordinary stops; a running
+  loop and "Resolve all" are not interrupted. The prompt carries `attack` ("Hazel attacks you with 10 creatures"
+  / "Blocks are declared: Hazel's 10 creatures attacking you deal damage next") and the bar's headline shows it
+  ("... Respond?"), unless a threat on the stack has its own headline. Tests: engine `AttackedStopTest` (real
+  games: five Craw Wurms attack, no blocks, asked in both steps, Tangle cast after blocks, life unchanged; with
+  the setting off no question and the damage is dealt; the default and an older relay), relay `engine.test.ts`
+  (the setting on the wire and saved, `attack` on the prompt), `shared/src/settings.test.ts`, client
+  `offZoneBar.test.tsx` (the headline). Needs an ENGINE deploy and a web deploy.
 - **Mana: automatic, with "Pay with" (Stage 2 M5, owner's option 1).** Mana is still paid by
   Forge's AI payer, but a long-press on a glowing spell or ability opens the **Pay with** sheet
   (`PayWithSheet` in `EnginePrompts.tsx`): the card, the cost pips, and every untapped permanent
