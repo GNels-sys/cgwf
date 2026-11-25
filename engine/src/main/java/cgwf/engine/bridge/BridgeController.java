@@ -56,6 +56,7 @@ import forge.game.player.Player;
 import forge.game.player.PlayerActionConfirmMode;
 import forge.game.replacement.ReplacementEffect;
 import forge.game.spellability.AbilitySub;
+import forge.game.spellability.OptionalCost;
 import forge.game.spellability.OptionalCostValue;
 import forge.game.spellability.AbilityManaPart;
 import forge.game.spellability.SpellAbility;
@@ -363,9 +364,34 @@ public final class BridgeController extends PlayerControllerAi {
                 for (SpellAbility alt : GameActionUtil.getAlternativeCosts(sa, player, false)) {
                     if (alt != null && alt.getHostCard() != null && seen.add(alt.getHostCard().getId() + "|" + alt)) out.add(alt);
                 }
+                if (host.isInZone(ZoneType.Graveyard)) {
+                    for (SpellAbility fromGraveyard : graveyardCasts(sa)) {
+                        if (seen.add(host.getId() + "|graveyard|" + fromGraveyard.getOptionalCosts() + "|" + fromGraveyard)) out.add(fromGraveyard);
+                    }
+                }
             } catch (RuntimeException e) {
                 if (DEBUG_PRIORITY) System.err.println("[priority]   " + host.getName() + " alternative costs: " + e);
             }
+        }
+        return out;
+    }
+
+    /**
+     * Retrace and jump-start are OPTIONAL costs in Forge, not alternative ones: the plain spell of a card in a
+     * graveyard can never be cast, and only the copy with the cost added (`addOptionalCosts`, which also moves
+     * the spell's zone to the graveyard) can. Forge's human interface builds that copy when a graveyard card is
+     * clicked; the AI's candidate list never has it. So a card with retrace (owner report 2026-11-25: Six, "During
+     * your turn, nonland permanent cards in your graveyard have retrace") or jump-start was never offered. One
+     * entry per such cost; whether it may be cast now (a land card in hand to discard, timing) is decided by the
+     * same checks as every other entry. `chooseOptionalCosts` drops the cost from Forge's later question, since
+     * it is already part of the spell.
+     */
+    private List<SpellAbility> graveyardCasts(SpellAbility sa) {
+        List<SpellAbility> out = new ArrayList<>();
+        for (OptionalCostValue v : GameActionUtil.getOptionalCostValues(sa)) {
+            if (v.getType() != OptionalCost.Retrace && v.getType() != OptionalCost.Jumpstart) continue;
+            SpellAbility cast = GameActionUtil.addOptionalCosts(sa, List.of(v));
+            if (cast != null && cast != sa) out.add(cast);
         }
         return out;
     }
@@ -1244,6 +1270,18 @@ public final class BridgeController extends PlayerControllerAi {
 
     @Override
     public List<OptionalCostValue> chooseOptionalCosts(SpellAbility chosen, List<OptionalCostValue> optionalCostValues) {
+        if (optionalCostValues != null && chosen != null) {
+            // a cost the chosen spell already carries (a retrace or jump-start cast picked from the priority list)
+            // is not asked or added a second time
+            java.util.Set<OptionalCost> already = java.util.EnumSet.noneOf(OptionalCost.class);
+            for (OptionalCost c : chosen.getOptionalCosts()) already.add(c);
+            if (!already.isEmpty()) {
+                List<OptionalCostValue> left = new ArrayList<>();
+                for (OptionalCostValue v : optionalCostValues) if (!already.contains(v.getType())) left.add(v);
+                if (left.isEmpty()) return new ArrayList<>();
+                optionalCostValues = left;
+            }
+        }
         if (autopilot() || optionalCostValues == null || optionalCostValues.isEmpty()) return super.chooseOptionalCosts(chosen, optionalCostValues);
         List<String> labels = new ArrayList<>();
         for (OptionalCostValue v : optionalCostValues) labels.add(v.toString());
