@@ -1415,6 +1415,20 @@ the engine service itself (Java, GPL-3.0, own LICENSE + NOTICE crediting Forge):
   Pay 1 life"; tap = the same as tapping a glowing card, long-press = Pay with), my Exile / Grave / Cmd buttons get
   an "N to play" badge, and zone card lists glow like the table. Tests: `offZonePlays.test.ts`,
   `offZoneBar.test.tsx` (a real render: the row, the cost, a tap plays it).
+- **Retrace and jump-start from the graveyard (owner report 2026-11-25, a Hearthull deck with Six).** Six gives
+  "nonland permanent cards in your graveyard" retrace during its controller's turn (cast it from the graveyard by
+  discarding a land card in addition to its other costs). It was never offered. Forge models retrace and jump-start
+  as OPTIONAL costs: the plain spell of a graveyard card fails Forge's zone check, and only the copy with the cost
+  added (`GameActionUtil.addOptionalCosts`, which also moves the spell's zone to the graveyard) can be cast. Forge's
+  desktop interface builds that copy when a graveyard card is clicked; the AI candidate list the bridge starts from
+  never has it. Now `withAlternativeCosts` adds, for every spell of a graveyard card, one entry per retrace /
+  jump-start cost (`graveyardCasts`); the usual checks decide whether it may be cast now (a land card in hand,
+  timing, Six's "during your turn"). Casting asks which land (or card) to discard through the cost decider.
+  `chooseOptionalCosts` drops a cost the chosen spell already carries, so Forge's later optional-cost question
+  neither asks nor adds it twice. Flashback, escape and disturb are alternative costs and were already offered.
+  Test: engine `SixRetraceTest` (a real game: Hill Giant offered from the graveyard with the discard in its cost,
+  a land asked for and discarded, Hill Giant on the battlefield; Lightning Bolt in the graveyard not offered; Risk
+  Factor's own jump-start offered; no second optional-cost question). Engine deploy only.
 - **Looking at and playing the top of the library (owner report 2026-11-18, a Y'shtola deck with Bolas's Citadel).**
   "It won't let me look at the top card and play it by paying life." The engine was right again: with the Citadel
   out the priority list had the top card ("Play land by Bolas's Citadel", "{0}, Pay 4 life"). But `SeatView` never
